@@ -5,6 +5,7 @@ import com.ooc.dto.AuthResponse;
 import com.ooc.dto.RegisterRequest;
 import com.ooc.entity.User;
 import com.ooc.security.JwtTokenProvider;
+import com.ooc.security.RsaKeyProvider;
 import com.ooc.service.UserService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -14,6 +15,8 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Map;
+
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
@@ -22,11 +25,20 @@ public class AuthController {
     private final AuthenticationManager authenticationManager;
     private final JwtTokenProvider jwtTokenProvider;
     private final UserService userService;
+    private final RsaKeyProvider rsaKeyProvider;
+
+    @GetMapping("/public-key")
+    public ResponseEntity<Map<String, String>> getPublicKey() {
+        return ResponseEntity.ok(Map.of("publicKey", rsaKeyProvider.getPublicKeyBase64()));
+    }
 
     @PostMapping("/login")
     public ResponseEntity<AuthResponse> login(@Valid @RequestBody AuthRequest request) {
+        // 解密密码
+        String decryptedPassword = rsaKeyProvider.decrypt(request.getPassword());
+        
         Authentication authentication = authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(request.getUsername(), request.getPassword()));
+                new UsernamePasswordAuthenticationToken(request.getUsername(), decryptedPassword));
 
         String token = jwtTokenProvider.generateToken(authentication);
         User user = userService.getUserByUsername(request.getUsername());
@@ -43,10 +55,17 @@ public class AuthController {
 
     @PostMapping("/register")
     public ResponseEntity<AuthResponse> register(@Valid @RequestBody RegisterRequest request) {
-        User user = userService.registerUser(request);
+        // 解密密码
+        String decryptedPassword = rsaKeyProvider.decrypt(request.getPassword());
+        RegisterRequest decryptedRequest = new RegisterRequest();
+        decryptedRequest.setUsername(request.getUsername());
+        decryptedRequest.setEmail(request.getEmail());
+        decryptedRequest.setPassword(decryptedPassword);
+        
+        User user = userService.registerUser(decryptedRequest);
         
         Authentication authentication = authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(request.getUsername(), request.getPassword()));
+                new UsernamePasswordAuthenticationToken(user.getUsername(), decryptedPassword));
         String token = jwtTokenProvider.generateToken(authentication);
 
         return ResponseEntity.ok(AuthResponse.builder()

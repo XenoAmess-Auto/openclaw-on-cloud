@@ -1,4 +1,5 @@
 import apiClient from './client'
+import { getPublicKey, encryptWithPublicKey } from './crypto'
 import type { AuthResponse } from '@/types'
 
 export interface LoginRequest {
@@ -13,11 +14,24 @@ export interface RegisterRequest {
 }
 
 export const authApi = {
-  login: (data: LoginRequest) => 
-    apiClient.post<AuthResponse>('/auth/login', data),
+  login: async (data: LoginRequest) => {
+    const key = await getPublicKey()
+    const encryptedPassword = encryptWithPublicKey(data.password, key)
+    return apiClient.post<AuthResponse>('/auth/login', {
+      username: data.username,
+      password: encryptedPassword
+    })
+  },
   
-  register: (data: RegisterRequest) => 
-    apiClient.post<AuthResponse>('/auth/register', data),
+  register: async (data: RegisterRequest) => {
+    const key = await getPublicKey()
+    const encryptedPassword = encryptWithPublicKey(data.password, key)
+    return apiClient.post<AuthResponse>('/auth/register', {
+      username: data.username,
+      email: data.email,
+      password: encryptedPassword
+    })
+  },
   
   refresh: () => 
     apiClient.post<AuthResponse>('/auth/refresh')
