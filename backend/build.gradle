@@ -8,7 +8,8 @@ group = 'com.ooc'
 version = '1.0.0'
 
 java {
-    sourceCompatibility = '17'
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
 }
 
 configurations {
