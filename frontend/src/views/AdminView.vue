@@ -66,7 +66,7 @@
         
         <div class="form-group">
           <label>用户名 *</label>
-          <input v-model="newUser.username" placeholder="用户名" />
+          <input v-model="newUser.username" type="text" placeholder="用户名" />
         </div>
         
         <div class="form-group">
