@@ -28,6 +28,10 @@ export const useChatStore = defineStore('chat', () => {
   }
 
   function connect(roomId: string) {
+    // 先找到当前房间信息
+    currentRoom.value = rooms.value.find(r => r.id === roomId) || null
+    messages.value = []
+    
     const wsUrl = `ws://${window.location.host}/ws/chat`
     const socket = new WebSocket(wsUrl)
     
@@ -59,6 +63,8 @@ export const useChatStore = defineStore('chat', () => {
       ws.value.close()
       ws.value = null
       isConnected.value = false
+      currentRoom.value = null
+      messages.value = []
     }
   }
 

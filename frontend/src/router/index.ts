@@ -25,7 +25,7 @@ const router = createRouter({
     {
       path: '/chat/:roomId',
       name: 'Chat',
-      component: () => import('@/views/ChatView.vue'),
+      component: () => import('@/views/HomeView.vue'),
       meta: { requiresAuth: true }
     },
     {
