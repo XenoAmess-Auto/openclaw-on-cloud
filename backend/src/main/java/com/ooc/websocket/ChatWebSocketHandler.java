@@ -183,10 +183,10 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                         })
                         .flatMap(newSession -> {
                             // 更新房间的 OpenClaw 会话
-                            chatRoomService.updateOpenClawSession(roomId, newSession.getSessionId());
+                            chatRoomService.updateOpenClawSession(roomId, newSession.sessionId());
                             // 发送消息
                             return openClawPluginService.sendMessage(
-                                    newSession.getSessionId(), content, userInfo.getUserId(), userInfo.getUserName());
+                                    newSession.sessionId(), content, userInfo.getUserId(), userInfo.getUserName());
                         })
                         .subscribe(
                                 response -> handleOpenClawResponse(roomId, response),
@@ -227,7 +227,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                 .id(UUID.randomUUID().toString())
                 .senderId("openclaw")
                 .senderName("OpenClaw")
-                .content(response.getContent())
+                .content(response.content())
                 .timestamp(Instant.now())
                 .fromOpenClaw(true)
                 .build());
@@ -237,7 +237,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                 .id(UUID.randomUUID().toString())
                 .senderId("openclaw")
                 .senderName("OpenClaw")
-                .content(response.getContent())
+                .content(response.content())
                 .timestamp(Instant.now())
                 .openclawMentioned(false)
                 .fromOpenClaw(true)

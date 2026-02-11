@@ -56,14 +56,14 @@ public class OpenClawPluginService {
                 .retrieve()
                 .bodyToMono(OpenClawSession.class)
                 .doOnNext(session -> {
-                    sessionStates.put(session.getSessionId(), 
+                    sessionStates.put(session.sessionId(), 
                         OpenClawSessionState.builder()
-                            .sessionId(session.getSessionId())
+                            .sessionId(session.sessionId())
                             .instanceName(instanceName)
                             .createdAt(Instant.now())
                             .lastActivity(Instant.now())
                             .build());
-                    log.info("Created OpenClaw session: {}", session.getSessionId());
+                    log.info("Created OpenClaw session: {}", session.sessionId());
                 });
     }
 
@@ -133,26 +133,12 @@ public class OpenClawPluginService {
                 .bodyValue(request)
                 .retrieve()
                 .bodyToMono(SummarizeResponse.class)
-                .map(SummarizeResponse::getSummary);
+                .map(SummarizeResponse::summary);
     }
 
-    @Data
-    public static class OpenClawSession {
-        private String sessionId;
-        private String instanceName;
-        private Instant createdAt;
-    }
+    public record OpenClawSession(String sessionId, String instanceName, Instant createdAt) {}
 
-    @Data
-    public static class OpenClawResponse {
-        private String messageId;
-        private String content;
-        private Instant timestamp;
-        private boolean completed;
-    }
+    public record OpenClawResponse(String messageId, String content, Instant timestamp, boolean completed) {}
 
-    @Data
-    public static class SummarizeResponse {
-        private String summary;
-    }
+    public record SummarizeResponse(String summary) {}
 }
