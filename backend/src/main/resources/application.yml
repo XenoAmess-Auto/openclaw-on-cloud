@@ -1,0 +1,28 @@
+spring:
+  application:
+    name: ooc-backend
+
+  data:
+    mongodb:
+      uri: mongodb://localhost:27017/ooc
+      database: ooc
+      auto-index-creation: true
+
+server:
+  port: 8081
+
+jwt:
+  secret: ${JWT_SECRET:b3BlbmNsYXctb24tY2xvdWQtc2VjcmV0LWtleS1jaGFuZ2UtaW4tcHJvZHVjdGlvbg==}
+  expiration: 86400000
+
+openclaw:
+  gateway-url: ${OPENCLAW_URL:http://localhost:8080}
+  api-key: ${OPENCLAW_API_KEY:}
+  session-timeout-ms: 300000
+  max-session-messages: 50
+  auto-summarize: true
+  summarize-threshold: 30
+
+logging:
+  level:
+    com.ooc: DEBUG

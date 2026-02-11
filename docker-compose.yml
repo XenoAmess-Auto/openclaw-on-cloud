@@ -1,0 +1,36 @@
+version: '3.8'
+
+services:
+  mongo:
+    image: mongo:7
+    restart: always
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    environment:
+      MONGO_INITDB_DATABASE: ooc
+
+  backend:
+    build: ./backend
+    restart: always
+    ports:
+      - "8081:8081"
+    environment:
+      - SPRING_DATA_MONGODB_URI=mongodb://mongo:27017/ooc
+      - JWT_SECRET=${JWT_SECRET:-changeme}
+      - OPENCLAW_URL=${OPENCLAW_URL:-http://host.docker.internal:8080}
+      - OPENCLAW_API_KEY=${OPENCLAW_API_KEY:-}
+    depends_on:
+      - mongo
+
+  frontend:
+    build: ./frontend
+    restart: always
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+
+volumes:
+  mongo_data:
