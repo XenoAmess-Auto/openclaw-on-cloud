@@ -3,6 +3,7 @@
     <header class="header">
       <div class="logo">OOC</div>
       <div class="user-info">
+        <router-link v-if="authStore.user?.roles?.includes('ROLE_ADMIN')" to="/admin" class="admin-link">管理</router-link>
         <span>{{ authStore.user?.username }}</span>
         <button @click="logout">退出</button>
       </div>
@@ -141,6 +142,15 @@ function logout() {
   border: 1px solid var(--border-color);
   border-radius: 6px;
   cursor: pointer;
+}
+
+.admin-link {
+  padding: 0.5rem 1rem;
+  background: var(--primary-color);
+  color: white;
+  text-decoration: none;
+  border-radius: 6px;
+  font-size: 0.875rem;
 }
 
 .container {
