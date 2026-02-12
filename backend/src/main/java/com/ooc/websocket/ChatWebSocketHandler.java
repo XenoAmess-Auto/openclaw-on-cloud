@@ -107,10 +107,14 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
         String content = payload.getContent();
 
         // 检查是否@OpenClaw
-        boolean mentionedOpenClaw = content.contains("@openclaw") || content.contains("@OpenClaw");
+        boolean mentionedOpenClaw = content.toLowerCase().contains("@openclaw");
 
         // 获取房间成员数
         int memberCount = roomSessions.getOrDefault(roomId, Collections.emptySet()).size();
+
+        log.info("Message received: room={}, sender={}, content={}, memberCount={}, mentionedOpenClaw={}",
+                roomId, userInfo.getUserName(), content.substring(0, Math.min(50, content.length())),
+                memberCount, mentionedOpenClaw);
 
         // 保存消息到聊天室
         ChatRoom.Message message = ChatRoom.Message.builder()
@@ -133,6 +137,8 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
 
         // 决定是否触发 OpenClaw
         boolean shouldTriggerOpenClaw = shouldTriggerOpenClaw(memberCount, mentionedOpenClaw);
+        log.info("OpenClaw trigger decision: shouldTrigger={}, memberCount={}, mentionedOpenClaw={}",
+                shouldTriggerOpenClaw, memberCount, mentionedOpenClaw);
 
         if (shouldTriggerOpenClaw) {
             triggerOpenClaw(roomId, content, userInfo);
@@ -149,8 +155,10 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
     }
 
     private void triggerOpenClaw(String roomId, String content, WebSocketUserInfo userInfo) {
+        log.info("Triggering OpenClaw for room: {}, content: {}", roomId, content.substring(0, Math.min(50, content.length())));
+
         // 异步处理 OpenClaw 调用
-        chatRoomService.getChatRoom(roomId).ifPresent(room -> {
+        chatRoomService.getChatRoom(roomId).ifPresentOrElse(room -> {
             String openClawSessionId = room.getOpenClawSessions().stream()
                     .filter(ChatRoom.OpenClawSession::isActive)
                     .findFirst()
@@ -160,12 +168,14 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
             // 检查会话是否存活
             if (openClawSessionId != null && !openClawPluginService.isSessionAlive(openClawSessionId)) {
                 // 会话已死，需要恢复
+                log.info("OpenClaw session {} is not alive, will create new", openClawSessionId);
                 openClawSessionId = null;
             }
 
             final String finalSessionId = openClawSessionId;
 
             if (finalSessionId == null) {
+                log.info("Creating new OpenClaw session for room: {}", roomId);
                 // 需要创建新会话，先获取或创建 OOC 会话记忆
                 oocSessionService.getOrCreateSession(roomId, room.getName())
                         .flatMap(oocSession -> {
@@ -179,28 +189,37 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                         .flatMap(oocSession -> {
                             // 创建 OpenClaw 会话，带上 OOC 上下文
                             List<Map<String, Object>> context = convertToContext(oocSession);
+                            log.info("Creating OpenClaw session with {} context messages", context.size());
                             return openClawPluginService.createSession("ooc-" + roomId, context);
                         })
                         .flatMap(newSession -> {
                             // 更新房间的 OpenClaw 会话
                             chatRoomService.updateOpenClawSession(roomId, newSession.sessionId());
+                            log.info("OpenClaw session created: {}", newSession.sessionId());
                             // 发送消息
                             return openClawPluginService.sendMessage(
                                     newSession.sessionId(), content, userInfo.getUserId(), userInfo.getUserName());
                         })
                         .subscribe(
-                                response -> handleOpenClawResponse(roomId, response),
-                                error -> log.error("OpenClaw error", error)
+                                response -> {
+                                    log.info("OpenClaw response received: {}", response.content().substring(0, Math.min(50, response.content().length())));
+                                    handleOpenClawResponse(roomId, response);
+                                },
+                                error -> log.error("OpenClaw error in create flow", error)
                         );
             } else {
+                log.info("Using existing OpenClaw session: {}", finalSessionId);
                 // 会话存活，直接发送消息
                 openClawPluginService.sendMessage(finalSessionId, content, userInfo.getUserId(), userInfo.getUserName())
                         .subscribe(
-                                response -> handleOpenClawResponse(roomId, response),
-                                error -> log.error("OpenClaw error", error)
+                                response -> {
+                                    log.info("OpenClaw response received: {}", response.content().substring(0, Math.min(50, response.content().length())));
+                                    handleOpenClawResponse(roomId, response);
+                                },
+                                error -> log.error("OpenClaw error in send flow", error)
                         );
             }
-        });
+        }, () -> log.error("Chat room not found: {}", roomId));
     }
 
     private List<Map<String, Object>> convertToContext(OocSession session) {

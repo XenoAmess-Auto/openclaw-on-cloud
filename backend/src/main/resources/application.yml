@@ -16,7 +16,7 @@ jwt:
   expiration: 86400000
 
 openclaw:
-  gateway-url: ${OPENCLAW_URL:http://localhost:8080}
+  gateway-url: ${OPENCLAW_URL:http://localhost:18888}
   api-key: ${OPENCLAW_API_KEY:}
   session-timeout-ms: 300000
   max-session-messages: 50
