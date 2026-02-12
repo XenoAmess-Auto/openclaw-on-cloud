@@ -125,6 +125,12 @@
         </div>
       </div>
     </div>
+    
+    <SessionManager 
+      v-if="showSessions && currentRoomId" 
+      :room-id="currentRoomId"
+      @close="showSessions = false"
+    />
   </div>
 </template>
 
@@ -133,6 +139,7 @@ import { ref, reactive, onMounted, onUnmounted, watch, nextTick, computed } from
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useChatStore } from '@/stores/chat'
+import SessionManager from '@/components/SessionManager.vue'
 
 const router = useRouter()
 const route = useRoute()
