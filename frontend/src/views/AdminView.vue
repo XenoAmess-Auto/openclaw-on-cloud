@@ -89,7 +89,7 @@
         
         <div class="modal-actions">
           <button @click="showCreateDialog = false">取消</button>
-          <button @click="createUser" class="btn-primary" :disabled="!isValidNewUser">创建</button>
+          <button @click="createUser" class="btn-primary">创建</button>
         </div>
       </div>
     </div>
@@ -168,9 +168,10 @@ const editForm = ref({
 })
 
 const isValidNewUser = computed(() => {
-  return newUser.value.username.length >= 3 &&
-         newUser.value.email.includes('@') &&
-         newUser.value.password.length >= 6
+  const u = newUser.value.username?.trim() || ''
+  const e = newUser.value.email?.trim() || ''
+  const p = newUser.value.password || ''
+  return u.length >= 3 && e.includes('@') && p.length >= 6
 })
 
 const filteredUsers = computed(() => {
@@ -203,6 +204,8 @@ async function loadUsers() {
 }
 
 async function createUser() {
+  console.log('createUser called', newUser.value)
+  console.log('isValidNewUser:', isValidNewUser.value)
   try {
     await apiClient.post('/admin/users', {
       username: newUser.value.username,
@@ -215,6 +218,7 @@ async function createUser() {
     newUser.value = { username: '', email: '', password: '', isAdmin: false, enabled: true }
     loadUsers()
   } catch (err: any) {
+    console.error('createUser error:', err)
     alert('创建失败: ' + (err.response?.data?.message || '未知错误'))
   }
 }
