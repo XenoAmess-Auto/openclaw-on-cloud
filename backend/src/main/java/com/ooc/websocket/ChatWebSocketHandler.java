@@ -160,11 +160,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
     }
 
     private boolean shouldTriggerOpenClaw(int memberCount, boolean mentionedOpenClaw) {
-        // 私聊（只有用户和OpenClaw）或 @OpenClaw 时触发
-        // 注意：这里假设如果有2人（用户+OpenClaw）算私聊
-        if (memberCount <= 2) {
-            return true;
-        }
+        // 只有 @OpenClaw 时才触发回复
         return mentionedOpenClaw;
     }
 
