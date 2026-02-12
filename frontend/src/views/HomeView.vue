@@ -129,7 +129,7 @@
     <MemberManager
       v-if="showMembers && currentRoomId && chatStore.currentRoom"
       :room-id="currentRoomId"
-      :current-user-id="authStore.user?.id || ''"
+      :current-user-id="authStore.user?.username || ''"
       :creator-id="chatStore.currentRoom?.creatorId || ''"
       @close="showMembers = false"
       @update="chatStore.fetchRooms()"
