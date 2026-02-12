@@ -8,6 +8,7 @@ import com.ooc.entity.User;
 import com.ooc.service.ChatRoomService;
 import com.ooc.service.UserService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -15,8 +16,10 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Set;
+import java.util.HashSet;
 import java.util.stream.Collectors;
 
+@Slf4j
 @RestController
 @RequestMapping("/api/chat-rooms")
 @RequiredArgsConstructor
@@ -52,19 +55,32 @@ public class ChatRoomController {
     public ResponseEntity<List<MemberDto>> getChatRoomMembers(@PathVariable String roomId) {
         ChatRoom room = chatRoomService.getChatRoom(roomId)
                 .orElseThrow(() -> new RuntimeException("Chat room not found"));
-        
-        List<MemberDto> members = room.getMemberIds().stream()
+
+        log.info("Getting members for room: {}, memberIds: {}, creatorId: {}", roomId, room.getMemberIds(), room.getCreatorId());
+
+        // Ensure memberIds is not null and creator is included
+        Set<String> memberIds = room.getMemberIds() != null ? new HashSet<>(room.getMemberIds()) : new HashSet<>();
+        if (room.getCreatorId() != null) {
+            memberIds.add(room.getCreatorId());
+        }
+
+        log.info("Processing {} memberIds for room: {}", memberIds.size(), roomId);
+
+        List<MemberDto> members = memberIds.stream()
                 .map(userId -> {
                     try {
-                        User user = userService.getUserById(userId);
+                        // memberIds stores username, not userId
+                        User user = userService.getUserByUsername(userId);
                         return MemberDto.fromEntity(user, room.getCreatorId());
                     } catch (Exception e) {
+                        log.warn("Failed to get user by username: {}", userId, e);
                         return null;
                     }
                 })
                 .filter(member -> member != null)
                 .collect(Collectors.toList());
-        
+
+        log.info("Returning {} members for room: {}", members.size(), roomId);
         return ResponseEntity.ok(members);
     }
 
@@ -77,11 +93,11 @@ public class ChatRoomController {
         ChatRoom room = chatRoomService.getChatRoom(roomId)
                 .orElseThrow(() -> new RuntimeException("Chat room not found"));
         String currentUserId = getUserIdFromAuth(authentication);
-        
+
         if (!room.getCreatorId().equals(currentUserId)) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
-        
+
         ChatRoom updatedRoom = chatRoomService.addMember(roomId, userId);
         return ResponseEntity.ok(ChatRoomDto.fromEntity(updatedRoom));
     }
@@ -95,16 +111,16 @@ public class ChatRoomController {
         ChatRoom room = chatRoomService.getChatRoom(roomId)
                 .orElseThrow(() -> new RuntimeException("Chat room not found"));
         String currentUserId = getUserIdFromAuth(authentication);
-        
+
         if (!room.getCreatorId().equals(currentUserId)) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
-        
+
         // Cannot remove creator
         if (userId.equals(room.getCreatorId())) {
             return ResponseEntity.badRequest().build();
         }
-        
+
         ChatRoom updatedRoom = chatRoomService.removeMember(roomId, userId);
         return ResponseEntity.ok(ChatRoomDto.fromEntity(updatedRoom));
     }
@@ -116,11 +132,11 @@ public class ChatRoomController {
         ChatRoom room = chatRoomService.getChatRoom(roomId)
                 .orElseThrow(() -> new RuntimeException("Chat room not found"));
         String currentUserId = getUserIdFromAuth(authentication);
-        
+
         if (!room.getCreatorId().equals(currentUserId)) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
-        
+
         chatRoomService.deleteChatRoom(roomId);
         return ResponseEntity.ok().build();
     }

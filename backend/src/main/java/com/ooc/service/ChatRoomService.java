@@ -6,9 +6,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
+import java.util.*;
 
 @Service
 @RequiredArgsConstructor
@@ -17,18 +15,34 @@ public class ChatRoomService {
     private final ChatRoomRepository chatRoomRepository;
 
     public ChatRoom createChatRoom(String name, String description, String creatorId) {
+        Set<String> memberIds = new HashSet<>();
+        memberIds.add(creatorId);
         ChatRoom room = ChatRoom.builder()
                 .id(UUID.randomUUID().toString())
                 .name(name)
                 .description(description)
                 .creatorId(creatorId)
+                .memberIds(memberIds)
                 .build();
-        room.getMemberIds().add(creatorId);
         return chatRoomRepository.save(room);
     }
 
     public Optional<ChatRoom> getChatRoom(String roomId) {
-        return chatRoomRepository.findById(roomId);
+        return chatRoomRepository.findById(roomId)
+                .map(this::ensureCreatorInMembers);
+    }
+
+    private ChatRoom ensureCreatorInMembers(ChatRoom room) {
+        // Ensure memberIds is not null
+        if (room.getMemberIds() == null) {
+            room.setMemberIds(new HashSet<>());
+        }
+        // Ensure creator is always in memberIds (for old data compatibility)
+        if (room.getCreatorId() != null && !room.getMemberIds().contains(room.getCreatorId())) {
+            room.getMemberIds().add(room.getCreatorId());
+            return chatRoomRepository.save(room);
+        }
+        return room;
     }
 
     public List<ChatRoom> getUserChatRooms(String userId) {
