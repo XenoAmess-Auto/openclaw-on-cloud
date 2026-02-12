@@ -5,10 +5,10 @@ let publicKey: string | null = null
 
 export async function getPublicKey(): Promise<string> {
   if (publicKey) return publicKey
-  
+
   const response = await apiClient.get('/auth/public-key')
   publicKey = response.data.publicKey
-  return publicKey
+  return publicKey!
 }
 
 export function encryptWithPublicKey(data: string, key: string): string {

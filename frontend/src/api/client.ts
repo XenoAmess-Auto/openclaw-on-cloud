@@ -1,4 +1,4 @@
-import axios, { type AxiosInstance, type AxiosRequestConfig } from 'axios'
+import axios, { type AxiosInstance } from 'axios'
 
 const apiClient: AxiosInstance = axios.create({
   baseURL: '/api',
