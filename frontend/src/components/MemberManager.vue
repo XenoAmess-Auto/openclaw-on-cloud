@@ -28,7 +28,7 @@
 
           <div class="member-actions" v-if="isCreator && !member.creator">
             <button
-              @click="removeMember(member.id)"
+              @click="removeMember(member.username)"
               class="btn-remove"
               title="移除成员"
             >
@@ -127,12 +127,8 @@ async function addMember() {
   addError.value = ''
 
   try {
-    // First find user by username
-    const userResponse = await apiClient.get(`/users/by-username/${username}`)
-    const userId = userResponse.data.id
-
-    // Then add to room
-    await apiClient.post(`/chat-rooms/${props.roomId}/members?userId=${userId}`)
+    // Directly add by username (backend uses username as identifier)
+    await apiClient.post(`/chat-rooms/${props.roomId}/members?userId=${username}`)
 
     newMemberUsername.value = ''
     await loadMembers()
@@ -144,11 +140,11 @@ async function addMember() {
   }
 }
 
-async function removeMember(userId: string) {
+async function removeMember(username: string) {
   if (!confirm('确定要移除该成员吗？')) return
 
   try {
-    await apiClient.delete(`/chat-rooms/${props.roomId}/members/${userId}`)
+    await apiClient.delete(`/chat-rooms/${props.roomId}/members/${username}`)
     await loadMembers()
     emit('update')
   } catch (err: any) {

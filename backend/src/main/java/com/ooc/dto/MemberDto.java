@@ -24,7 +24,7 @@ public class MemberDto {
                 .username(user.getUsername())
                 .email(user.getEmail())
                 .avatar(user.getAvatar())
-                .isCreator(user.getId().equals(creatorId))
+                .isCreator(user.getUsername().equals(creatorId))
                 .build();
     }
 }
