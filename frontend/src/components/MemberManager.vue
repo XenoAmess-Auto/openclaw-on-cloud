@@ -5,11 +5,11 @@
         <h3>成员管理</h3>
         <button class="btn-close" @click="$emit('close')">×</button>
       </div>
-      
+
       <div class="member-list" v-if="members.length > 0">
-        <div 
-          v-for="member in members" 
-          :key="member.id" 
+        <div
+          v-for="member in members"
+          :key="member.id"
           class="member-item"
           :class="{ creator: member.creator }"
         >
@@ -17,7 +17,7 @@
             <img v-if="member.avatar" :src="member.avatar" :alt="member.username" />
             <span v-else>{{ member.username[0].toUpperCase() }}</span>
           </div>
-          
+
           <div class="member-info">
             <div class="member-header">
               <span class="member-name">{{ member.username }}</span>
@@ -25,10 +25,10 @@
             </div>
             <div class="member-email">{{ member.email }}</div>
           </div>
-          
+
           <div class="member-actions" v-if="isCreator && !member.creator">
-            <button 
-              @click="removeMember(member.id)" 
+            <button
+              @click="removeMember(member.id)"
               class="btn-remove"
               title="移除成员"
             >
@@ -37,33 +37,33 @@
           </div>
         </div>
       </div>
-      
+
       <div v-else class="empty-state">
         <p>暂无成员</p>
       </div>
-      
+
       <!-- 添加成员 (仅群主可见) -->
       <div v-if="isCreator" class="add-member-section">
         <h4>添加成员</h4>
         <div class="add-member-form">
-          <input 
-            v-model="newMemberUsername" 
-            type="text" 
+          <input
+            v-model="newMemberUsername"
+            type="text"
             placeholder="输入用户名"
             @keyup.enter="addMember"
           />
-          <button 
-            @click="addMember" 
+          <button
+            @click="addMember"
             class="btn-add"
             :disabled="!newMemberUsername.trim() || adding"
           >
             {{ adding ? '添加中...' : '添加' }}
           </button>
         </div>
-        
+
         <div v-if="addError" class="error-message">{{ addError }}</div>
       </div>
-      
+
       <div v-if="loading" class="loading-overlay">
         <span>加载中...</span>
       </div>
@@ -109,7 +109,7 @@ onMounted(() => {
 async function loadMembers() {
   loading.value = true
   try {
-    const response = await apiClient.get(`/api/chat-rooms/${props.roomId}/members`)
+    const response = await apiClient.get(`/chat-rooms/${props.roomId}/members`)
     members.value = response.data
   } catch (err: any) {
     console.error('Failed to load members:', err)
@@ -122,18 +122,18 @@ async function loadMembers() {
 async function addMember() {
   const username = newMemberUsername.value.trim()
   if (!username) return
-  
+
   adding.value = true
   addError.value = ''
-  
+
   try {
     // First find user by username
-    const userResponse = await apiClient.get(`/api/users/by-username/${username}`)
+    const userResponse = await apiClient.get(`/users/by-username/${username}`)
     const userId = userResponse.data.id
-    
+
     // Then add to room
-    await apiClient.post(`/api/chat-rooms/${props.roomId}/members?userId=${userId}`)
-    
+    await apiClient.post(`/chat-rooms/${props.roomId}/members?userId=${userId}`)
+
     newMemberUsername.value = ''
     await loadMembers()
     emit('update')
@@ -146,9 +146,9 @@ async function addMember() {
 
 async function removeMember(userId: string) {
   if (!confirm('确定要移除该成员吗？')) return
-  
+
   try {
-    await apiClient.delete(`/api/chat-rooms/${props.roomId}/members/${userId}`)
+    await apiClient.delete(`/chat-rooms/${props.roomId}/members/${userId}`)
     await loadMembers()
     emit('update')
   } catch (err: any) {

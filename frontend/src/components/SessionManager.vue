@@ -5,11 +5,11 @@
         <h3>会话管理</h3>
         <button class="btn-close" @click="$emit('close')">×</button>
       </div>
-      
+
       <div class="session-list" v-if="sessions.length > 0">
-        <div 
-          v-for="session in sessions" 
-          :key="session.id" 
+        <div
+          v-for="session in sessions"
+          :key="session.id"
           class="session-item"
           :class="{ archived: session.archived, active: isActive(session) }"
         >
@@ -28,18 +28,18 @@
               {{ truncate(session.summary, 100) }}
             </div>
           </div>
-          
+
           <div class="session-actions">
-            <button 
-              v-if="!session.archived && isActive(session)" 
+            <button
+              v-if="!session.archived && isActive(session)"
               @click="archiveSession(session.id)"
               class="btn-archive"
               title="归档会话"
             >
               归档
             </button>
-            <button 
-              @click="copySession(session.id)" 
+            <button
+              @click="copySession(session.id)"
               class="btn-copy"
               title="复制会话到新聊天室"
             >
@@ -48,12 +48,12 @@
           </div>
         </div>
       </div>
-      
+
       <div v-else class="empty-state">
         <p>暂无会话记录</p>
         <p class="hint">在此聊天室中发送消息将自动创建会话</p>
       </div>
-      
+
       <div v-if="loading" class="loading-overlay">
         <span>加载中...</span>
       </div>
@@ -100,7 +100,7 @@ function isActive(session: Session): boolean {
 async function loadSessions() {
   loading.value = true
   try {
-    const response = await apiClient.get(`/api/sessions/chat-room/${props.roomId}`)
+    const response = await apiClient.get(`/sessions/chat-room/${props.roomId}`)
     sessions.value = response.data
   } catch (err: any) {
     console.error('Failed to load sessions:', err)
@@ -112,9 +112,9 @@ async function loadSessions() {
 
 async function archiveSession(sessionId: string) {
   if (!confirm('确定要归档此会话吗？归档后将无法继续在此会话中对话。')) return
-  
+
   try {
-    await apiClient.post(`/api/sessions/${sessionId}/archive`)
+    await apiClient.post(`/sessions/${sessionId}/archive`)
     await loadSessions()
   } catch (err: any) {
     alert('归档失败: ' + (err.response?.data?.message || '未知错误'))
@@ -123,7 +123,7 @@ async function archiveSession(sessionId: string) {
 
 async function copySession(sessionId: string) {
   try {
-    await apiClient.post(`/api/sessions/${sessionId}/copy?newChatRoomId=${props.roomId}`)
+    await apiClient.post(`/sessions/${sessionId}/copy?newChatRoomId=${props.roomId}`)
     emit('copy', sessionId)
     await loadSessions()
     alert('会话复制成功')
