@@ -170,10 +170,10 @@ const inputRef = ref<HTMLTextAreaElement>()
 const showMembers = ref(false)
 const showSessions = ref(false)
 
-onMounted(() => {
-  chatStore.fetchRooms()
+onMounted(async () => {
+  await chatStore.fetchRooms()
   if (currentRoomId.value) {
-    chatStore.connect(currentRoomId.value)
+    await chatStore.connect(currentRoomId.value)
   }
 })
 
@@ -182,10 +182,10 @@ onUnmounted(() => {
 })
 
 // 监听路由变化，切换聊天室
-watch(() => route.params.roomId, (newRoomId) => {
+watch(() => route.params.roomId, async (newRoomId) => {
   if (newRoomId) {
     chatStore.disconnect()
-    chatStore.connect(newRoomId as string)
+    await chatStore.connect(newRoomId as string)
   } else {
     chatStore.disconnect()
   }

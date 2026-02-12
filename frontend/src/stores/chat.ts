@@ -28,11 +28,23 @@ export const useChatStore = defineStore('chat', () => {
     return response.data
   }
 
-  function connect(roomId: string) {
+  async function connect(roomId: string) {
     const authStore = useAuthStore()
     
-    // 先找到当前房间信息
-    currentRoom.value = rooms.value.find(r => r.id === roomId) || null
+    // 先找到当前房间信息（如果已经在列表中）
+    let room = rooms.value.find(r => r.id === roomId)
+    
+    // 如果列表中没有，通过 API 获取
+    if (!room) {
+      try {
+        const response = await chatRoomApi.getRoom(roomId)
+        room = response.data
+      } catch (err) {
+        console.error('Failed to get room:', err)
+      }
+    }
+    
+    currentRoom.value = room || null
     messages.value = []
     
     const wsUrl = `ws://${window.location.host}/ws/chat`
