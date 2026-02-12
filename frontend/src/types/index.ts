@@ -1,6 +1,7 @@
 export interface User {
   id: string
   username: string
+  nickname: string
   email: string
   avatar?: string
   roles: string[]
@@ -52,6 +53,7 @@ export interface AuthResponse {
   token: string
   userId: string
   username: string
+  nickname: string
   email: string
   avatar?: string
   roles: string[]

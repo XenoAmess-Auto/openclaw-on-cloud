@@ -15,6 +15,15 @@
         </div>
         
         <div class="form-group">
+          <label>昵称（可选）</label>
+          <input
+            v-model="form.nickname"
+            type="text"
+            placeholder="默认为用户名"
+          />
+        </div>
+        
+        <div class="form-group">
           <label>邮箱</label>
           <input
             v-model="form.email"
@@ -60,6 +69,7 @@ const error = ref('')
 
 const form = reactive({
   username: '',
+  nickname: '',
   email: '',
   password: ''
 })
@@ -69,7 +79,7 @@ async function handleRegister() {
   loading.value = true
   
   try {
-    await authStore.register(form.username, form.email, form.password)
+    await authStore.register(form.username, form.email, form.password, form.nickname || undefined)
     router.push('/')
   } catch (err: any) {
     error.value = err.response?.data?.message || '注册失败'

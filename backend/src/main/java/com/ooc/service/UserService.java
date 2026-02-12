@@ -24,8 +24,15 @@ public class UserService {
             throw new RuntimeException("Email already exists");
         }
 
+        // Use nickname if provided, otherwise use username
+        String nickname = request.getNickname();
+        if (nickname == null || nickname.isBlank()) {
+            nickname = request.getUsername();
+        }
+
         User user = User.builder()
                 .username(request.getUsername())
+                .nickname(nickname)
                 .email(request.getEmail())
                 .password(passwordEncoder.encode(request.getPassword()))
                 .enabled(true)

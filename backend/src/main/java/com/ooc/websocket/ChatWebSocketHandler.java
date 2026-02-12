@@ -3,10 +3,12 @@ package com.ooc.websocket;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ooc.entity.ChatRoom;
 import com.ooc.entity.OocSession;
+import com.ooc.entity.User;
 import com.ooc.openclaw.OpenClawPluginService;
 import com.ooc.openclaw.OpenClawSessionState;
 import com.ooc.service.ChatRoomService;
 import com.ooc.service.OocSessionService;
+import com.ooc.service.UserService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -28,6 +30,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
     private final ChatRoomService chatRoomService;
     private final OocSessionService oocSessionService;
     private final OpenClawPluginService openClawPluginService;
+    private final UserService userService;
     private final ObjectMapper objectMapper;
 
     // roomId -> Set<WebSocketSession>
@@ -70,9 +73,20 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
         String userId = payload.getUserId();
         String userName = payload.getUserName();
 
+        // Get user's nickname from database
+        String nickname = userName;
+        try {
+            User user = userService.getUserByUsername(userName);
+            if (user.getNickname() != null && !user.getNickname().isEmpty()) {
+                nickname = user.getNickname();
+            }
+        } catch (Exception e) {
+            log.warn("Failed to get user nickname for {}", userName);
+        }
+
         WebSocketUserInfo userInfo = WebSocketUserInfo.builder()
                 .userId(userId)
-                .userName(userName)
+                .userName(nickname)
                 .roomId(roomId)
                 .build();
 
@@ -95,7 +109,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
         broadcastToRoom(roomId, WebSocketMessage.builder()
                 .type("user_joined")
                 .userId(userId)
-                .userName(userName)
+                .userName(nickname)
                 .build());
     }
 

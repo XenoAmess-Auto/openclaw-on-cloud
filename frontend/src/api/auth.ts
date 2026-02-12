@@ -9,6 +9,7 @@ export interface LoginRequest {
 
 export interface RegisterRequest {
   username: string
+  nickname?: string
   email: string
   password: string
 }
@@ -28,6 +29,7 @@ export const authApi = {
     const encryptedPassword = encryptWithPublicKey(data.password, key)
     return apiClient.post<AuthResponse>('/auth/register', {
       username: data.username,
+      nickname: data.nickname,
       email: data.email,
       password: encryptedPassword
     })

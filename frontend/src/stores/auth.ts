@@ -25,6 +25,7 @@ export const useAuthStore = defineStore('auth', () => {
     user.value = {
       id: data.userId,
       username: data.username,
+      nickname: data.nickname || data.username,
       email: data.email,
       avatar: data.avatar,
       roles: data.roles
@@ -51,10 +52,10 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  async function register(username: string, email: string, password: string) {
+  async function register(username: string, email: string, password: string, nickname?: string) {
     loading.value = true
     try {
-      const response = await authApi.register({ username, email, password })
+      const response = await authApi.register({ username, email, password, nickname })
       setAuth(response.data)
       return response.data
     } finally {

@@ -23,6 +23,7 @@ describe('Auth Store', () => {
       token: 'test-token',
       userId: 'user-123',
       username: 'testuser',
+      nickname: 'Test User',
       email: 'test@example.com',
       avatar: undefined,
       roles: ['ROLE_USER']
@@ -32,6 +33,7 @@ describe('Auth Store', () => {
 
     expect(store.token).toBe('test-token')
     expect(store.user?.username).toBe('testuser')
+    expect(store.user?.nickname).toBe('Test User')
     expect(store.user?.email).toBe('test@example.com')
     expect(store.isAuthenticated).toBe(true)
     expect(localStorage.getItem('token')).toBe('test-token')
@@ -43,6 +45,7 @@ describe('Auth Store', () => {
       token: 'test-token',
       userId: 'user-123',
       username: 'testuser',
+      nickname: 'Test User',
       email: 'test@example.com',
       avatar: undefined,
       roles: ['ROLE_USER']
@@ -63,6 +66,7 @@ describe('Auth Store', () => {
       token: 'test-token',
       userId: 'user-123',
       username: 'testuser',
+      nickname: 'Test User',
       email: 'test@example.com',
       avatar: undefined,
       roles: ['ROLE_USER']

@@ -47,6 +47,7 @@ public class AuthController {
                 .token(token)
                 .userId(user.getId())
                 .username(user.getUsername())
+                .nickname(user.getNickname())
                 .email(user.getEmail())
                 .avatar(user.getAvatar())
                 .roles(user.getRoles())
@@ -59,6 +60,7 @@ public class AuthController {
         String decryptedPassword = rsaKeyProvider.decrypt(request.getPassword());
         RegisterRequest decryptedRequest = new RegisterRequest();
         decryptedRequest.setUsername(request.getUsername());
+        decryptedRequest.setNickname(request.getNickname());
         decryptedRequest.setEmail(request.getEmail());
         decryptedRequest.setPassword(decryptedPassword);
         
@@ -72,6 +74,7 @@ public class AuthController {
                 .token(token)
                 .userId(user.getId())
                 .username(user.getUsername())
+                .nickname(user.getNickname())
                 .email(user.getEmail())
                 .avatar(user.getAvatar())
                 .roles(user.getRoles())
@@ -89,6 +92,7 @@ public class AuthController {
                 .token(token)
                 .userId(user.getId())
                 .username(user.getUsername())
+                .nickname(user.getNickname())
                 .email(user.getEmail())
                 .avatar(user.getAvatar())
                 .roles(user.getRoles())

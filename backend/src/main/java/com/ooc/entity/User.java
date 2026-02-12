@@ -34,6 +34,8 @@ public class User {
 
     private String avatar;
 
+    private String nickname;
+
     @Builder.Default
     private Set<String> roles = new HashSet<>();
 
