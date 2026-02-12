@@ -1,53 +1,92 @@
 #!/bin/bash
 set -e
 
-cd /home/xenoamess/.openclaw/workspace/openclaw-on-cloud
+GREEN='\033[0;32m'
+RED='\033[0;31m'
+YELLOW='\033[1;33m'
+NC='\033[0m'
 
-# Kill existing processes
-pkill -f "ooc-backend-1.0.0.jar" 2>/dev/null || true
-pkill -f "vite" 2>/dev/null || true
+echo -e "${YELLOW}========================================${NC}"
+echo -e "${YELLOW}  OOC Auto Deploy Script${NC}"
+echo -e "${YELLOW}========================================${NC}"
+echo ""
 
-sleep 2
+# Deploy Backend
+echo -e "${YELLOW}>>> Deploying Backend...${NC}"
+cd /home/xenoamess/.openclaw/workspace/openclaw-on-cloud/backend
 
-# Start backend with Java 25
-export JAVA_HOME=/tmp/jdk-25.0.2+10
-export PATH="$JAVA_HOME/bin:$PATH"
-
-echo "Starting backend on port 8081..."
-nohup java -jar backend/build/libs/ooc-backend-1.0.0.jar > backend.log 2>&1 &
-echo $! > backend.pid
-
-sleep 3
-
-# Check if backend started
-if ps -p $(cat backend.pid) > /dev/null 2>&1; then
-    echo "Backend started successfully (PID: $(cat backend.pid))"
+echo "  [1/3] Compiling..."
+if mvn clean compile -q -DskipTests; then
+    echo -e "  ${GREEN}✓ Compilation successful${NC}"
 else
-    echo "Backend failed to start, check backend.log"
+    echo -e "  ${RED}✗ Compilation failed${NC}"
     exit 1
 fi
 
-# Start frontend
-echo "Starting frontend on port 3000..."
-cd frontend
-nohup pnpm dev > ../frontend.log 2>&1 &
-echo $! > ../frontend.pid
-cd ..
-
-sleep 2
-
-# Check if frontend started
-if ps -p $(cat frontend.pid) > /dev/null 2>&1; then
-    echo "Frontend started successfully (PID: $(cat frontend.pid))"
+echo "  [2/3] Packaging..."
+if mvn package -q -DskipTests; then
+    echo -e "  ${GREEN}✓ Packaging successful${NC}"
 else
-    echo "Frontend may have failed, check frontend.log"
+    echo -e "  ${RED}✗ Packaging failed${NC}"
+    exit 1
+fi
+
+echo "  [3/3] Restarting service..."
+if [ -f "../backend.pid" ]; then
+    OLD_PID=$(cat ../backend.pid 2>/dev/null)
+    if [ -n "$OLD_PID" ]; then
+        kill $OLD_PID 2>/dev/null || true
+        sleep 2
+    fi
+fi
+
+nohup java -jar target/ooc-backend-1.0.0.jar > ../backend.log 2>&1 &
+NEW_PID=$!
+echo $NEW_PID > ../backend.pid
+
+# Wait for backend to start
+sleep 5
+if curl -s http://localhost:8081/actuator/health > /dev/null; then
+    echo -e "  ${GREEN}✓ Backend started (PID: $NEW_PID)${NC}"
+else
+    echo -e "  ${RED}✗ Backend failed to start${NC}"
+    exit 1
 fi
 
 echo ""
-echo "Services deployed:"
-echo "  Backend:  http://0.0.0.0:8081"
-echo "  Frontend: http://0.0.0.0:3000"
+
+# Deploy Frontend
+echo -e "${YELLOW}>>> Deploying Frontend...${NC}"
+cd /home/xenoamess/.openclaw/workspace/openclaw-on-cloud/frontend
+
+echo "  [1/2] Building..."
+if pnpm build 2>/dev/null | grep -q "built"; then
+    echo -e "  ${GREEN}✓ Build successful${NC}"
+else
+    echo -e "  ${RED}✗ Build failed${NC}"
+    exit 1
+fi
+
+echo "  [2/2] Restarting service..."
+# Kill existing vite processes
+pkill -9 -f "vite" 2>/dev/null || true
+sleep 2
+
+nohup pnpm dev --port 3000 > frontend.log 2>&1 &
+sleep 3
+
+if curl -s -o /dev/null -w "%{http_code}" http://localhost:3000 | grep -q "200"; then
+    echo -e "  ${GREEN}✓ Frontend started on port 3000${NC}"
+else
+    echo -e "  ${RED}✗ Frontend failed to start${NC}"
+    exit 1
+fi
+
 echo ""
-echo "Logs:"
-echo "  Backend:  tail -f backend.log"
-echo "  Frontend: tail -f frontend.log"
+echo -e "${GREEN}========================================${NC}"
+echo -e "${GREEN}  Deployment Complete!${NC}"
+echo -e "${GREEN}========================================${NC}"
+echo ""
+echo "  Backend: http://localhost:8081"
+echo "  Frontend: http://localhost:3000"
+echo ""
