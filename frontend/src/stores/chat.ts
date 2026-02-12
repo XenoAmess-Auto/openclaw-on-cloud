@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import type { ChatRoom, Message } from '@/types'
 import { chatRoomApi } from '@/api/chatRoom'
+import { useAuthStore } from './auth'
 
 export const useChatStore = defineStore('chat', () => {
   const rooms = ref<ChatRoom[]>([])
@@ -28,6 +29,8 @@ export const useChatStore = defineStore('chat', () => {
   }
 
   function connect(roomId: string) {
+    const authStore = useAuthStore()
+    
     // 先找到当前房间信息
     currentRoom.value = rooms.value.find(r => r.id === roomId) || null
     messages.value = []
@@ -41,8 +44,8 @@ export const useChatStore = defineStore('chat', () => {
       socket.send(JSON.stringify({
         type: 'join',
         roomId,
-        userId: localStorage.getItem('userId'),
-        userName: localStorage.getItem('username')
+        userId: authStore.user?.id,
+        userName: authStore.user?.username
       }))
     }
 
