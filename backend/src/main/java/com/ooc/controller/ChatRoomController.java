@@ -2,14 +2,19 @@ package com.ooc.controller;
 
 import com.ooc.dto.ChatRoomCreateRequest;
 import com.ooc.dto.ChatRoomDto;
+import com.ooc.dto.MemberDto;
 import com.ooc.entity.ChatRoom;
+import com.ooc.entity.User;
 import com.ooc.service.ChatRoomService;
+import com.ooc.service.UserService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @RestController
@@ -18,6 +23,7 @@ import java.util.stream.Collectors;
 public class ChatRoomController {
 
     private final ChatRoomService chatRoomService;
+    private final UserService userService;
 
     @PostMapping
     public ResponseEntity<ChatRoomDto> createChatRoom(
@@ -42,24 +48,79 @@ public class ChatRoomController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
+    @GetMapping("/{roomId}/members")
+    public ResponseEntity<List<MemberDto>> getChatRoomMembers(@PathVariable String roomId) {
+        ChatRoom room = chatRoomService.getChatRoom(roomId)
+                .orElseThrow(() -> new RuntimeException("Chat room not found"));
+        
+        List<MemberDto> members = room.getMemberIds().stream()
+                .map(userId -> {
+                    try {
+                        User user = userService.getUserById(userId);
+                        return MemberDto.fromEntity(user, room.getCreatorId());
+                    } catch (Exception e) {
+                        return null;
+                    }
+                })
+                .filter(member -> member != null)
+                .collect(Collectors.toList());
+        
+        return ResponseEntity.ok(members);
+    }
+
     @PostMapping("/{roomId}/members")
     public ResponseEntity<ChatRoomDto> addMember(
             @PathVariable String roomId,
-            @RequestParam String userId) {
-        ChatRoom room = chatRoomService.addMember(roomId, userId);
-        return ResponseEntity.ok(ChatRoomDto.fromEntity(room));
+            @RequestParam String userId,
+            Authentication authentication) {
+        // Check if current user is creator
+        ChatRoom room = chatRoomService.getChatRoom(roomId)
+                .orElseThrow(() -> new RuntimeException("Chat room not found"));
+        String currentUserId = getUserIdFromAuth(authentication);
+        
+        if (!room.getCreatorId().equals(currentUserId)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
+        
+        ChatRoom updatedRoom = chatRoomService.addMember(roomId, userId);
+        return ResponseEntity.ok(ChatRoomDto.fromEntity(updatedRoom));
     }
 
     @DeleteMapping("/{roomId}/members/{userId}")
     public ResponseEntity<ChatRoomDto> removeMember(
             @PathVariable String roomId,
-            @PathVariable String userId) {
-        ChatRoom room = chatRoomService.removeMember(roomId, userId);
-        return ResponseEntity.ok(ChatRoomDto.fromEntity(room));
+            @PathVariable String userId,
+            Authentication authentication) {
+        // Check if current user is creator
+        ChatRoom room = chatRoomService.getChatRoom(roomId)
+                .orElseThrow(() -> new RuntimeException("Chat room not found"));
+        String currentUserId = getUserIdFromAuth(authentication);
+        
+        if (!room.getCreatorId().equals(currentUserId)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
+        
+        // Cannot remove creator
+        if (userId.equals(room.getCreatorId())) {
+            return ResponseEntity.badRequest().build();
+        }
+        
+        ChatRoom updatedRoom = chatRoomService.removeMember(roomId, userId);
+        return ResponseEntity.ok(ChatRoomDto.fromEntity(updatedRoom));
     }
 
     @DeleteMapping("/{roomId}")
-    public ResponseEntity<Void> deleteChatRoom(@PathVariable String roomId) {
+    public ResponseEntity<Void> deleteChatRoom(
+            @PathVariable String roomId,
+            Authentication authentication) {
+        ChatRoom room = chatRoomService.getChatRoom(roomId)
+                .orElseThrow(() -> new RuntimeException("Chat room not found"));
+        String currentUserId = getUserIdFromAuth(authentication);
+        
+        if (!room.getCreatorId().equals(currentUserId)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
+        
         chatRoomService.deleteChatRoom(roomId);
         return ResponseEntity.ok().build();
     }

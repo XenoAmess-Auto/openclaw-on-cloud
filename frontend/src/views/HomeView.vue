@@ -126,6 +126,15 @@
       </div>
     </div>
     
+    <MemberManager
+      v-if="showMembers && currentRoomId && chatStore.currentRoom"
+      :room-id="currentRoomId"
+      :current-user-id="authStore.user?.id || ''"
+      :creator-id="chatStore.currentRoom?.creatorId || ''"
+      @close="showMembers = false"
+      @update="chatStore.fetchRooms()"
+    />
+    
     <SessionManager 
       v-if="showSessions && currentRoomId" 
       :room-id="currentRoomId"
@@ -140,6 +149,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useChatStore } from '@/stores/chat'
 import SessionManager from '@/components/SessionManager.vue'
+import MemberManager from '@/components/MemberManager.vue'
 
 const router = useRouter()
 const route = useRoute()
