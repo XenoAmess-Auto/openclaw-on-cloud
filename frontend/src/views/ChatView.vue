@@ -72,17 +72,44 @@
           <span v-if="mentionQuery">搜索 "{{ mentionQuery }}"</span>
           <span v-else>选择要@的人</span>
         </div>
+        
+        <!-- 快捷选项 - 始终显示 -->
+        <div class="mention-shortcuts">
+          <div 
+            class="mention-item shortcut" 
+            :class="{ active: mentionSelectedIndex === 0 }"
+            @click="insertMentionAll"
+            @mouseenter="mentionSelectedIndex = 0"
+          >
+            <span class="shortcut-icon">👥</span>
+            <span>@所有人</span>
+          </div>
+          <div 
+            class="mention-item shortcut" 
+            :class="{ active: mentionSelectedIndex === 1 }"
+            @click="insertMentionHere"
+            @mouseenter="mentionSelectedIndex = 1"
+          >
+            <span class="shortcut-icon">🟢</span>
+            <span>@在线</span>
+          </div>
+        </div>
+        
+        <!-- 分隔线 -->
+        <div v-if="roomMembers.length > 0 || mentionQuery" class="mention-divider"></div>
+        
         <!-- 加载中状态 -->
         <div v-if="roomMembers.length === 0 && !mentionQuery" class="mention-loading">
           正在加载成员列表...
         </div>
+        
         <!-- 用户列表 -->
         <div
           v-for="(user, index) in filteredMentionUsers"
           :key="user.id"
-          :class="['mention-item', { active: index === mentionSelectedIndex }]"
+          :class="['mention-item', { active: index + 2 === mentionSelectedIndex }]"
           @click="insertMention(user)"
-          @mouseenter="mentionSelectedIndex = index"
+          @mouseenter="mentionSelectedIndex = index + 2"
         >
           <img v-if="user.avatar" :src="user.avatar" class="mention-avatar" />
           <div v-else class="mention-avatar-placeholder">{{ getInitials(user.nickname || user.username) }}</div>
@@ -94,17 +121,6 @@
         </div>
         <div v-if="filteredMentionUsers.length === 0 && mentionQuery" class="mention-empty">
           未找到用户
-        </div>
-        <!-- 快捷选项 -->
-        <div class="mention-shortcuts">
-          <div class="mention-item shortcut" @click="insertMentionAll">
-            <span class="shortcut-icon">👥</span>
-            <span>@所有人</span>
-          </div>
-          <div class="mention-item shortcut" @click="insertMentionHere">
-            <span class="shortcut-icon">🟢</span>
-            <span>@在线</span>
-          </div>
         </div>
       </div>
     </div>
@@ -206,6 +222,22 @@ const filteredMentionUsers = computed(() => {
   })
 })
 
+// 所有可选项（快捷选项 + 用户）用于键盘导航
+type MentionOption = 
+  | { type: 'shortcut'; key: 'all' | 'here'; label: string; icon: string }
+  | { type: 'user'; user: MemberDto }
+
+const allMentionOptions = computed<MentionOption[]>(() => {
+  const options: MentionOption[] = [
+    { type: 'shortcut', key: 'all', label: '@所有人', icon: '👥' },
+    { type: 'shortcut', key: 'here', label: '@在线', icon: '🟢' }
+  ]
+  filteredMentionUsers.value.forEach(user => {
+    options.push({ type: 'user', user })
+  })
+  return options
+})
+
 onMounted(() => {
   chatStore.connect(roomId.value)
   loadRoomMembers()
@@ -287,22 +319,32 @@ function sendMessage() {
 
 function handleKeydown(event: KeyboardEvent) {
   if (showMentionList.value) {
+    const options = allMentionOptions.value
+    
     switch (event.key) {
       case 'ArrowDown':
         event.preventDefault()
-        mentionSelectedIndex.value = (mentionSelectedIndex.value + 1) % filteredMentionUsers.value.length
+        mentionSelectedIndex.value = (mentionSelectedIndex.value + 1) % options.length
         scrollMentionIntoView()
         return
       case 'ArrowUp':
         event.preventDefault()
-        mentionSelectedIndex.value = (mentionSelectedIndex.value - 1 + filteredMentionUsers.value.length) % filteredMentionUsers.value.length
+        mentionSelectedIndex.value = (mentionSelectedIndex.value - 1 + options.length) % options.length
         scrollMentionIntoView()
         return
       case 'Enter':
         event.preventDefault()
-        const selectedUser = filteredMentionUsers.value[mentionSelectedIndex.value]
-        if (selectedUser) {
-          insertMention(selectedUser)
+        const selectedOption = options[mentionSelectedIndex.value]
+        if (selectedOption) {
+          if (selectedOption.type === 'shortcut') {
+            if (selectedOption.key === 'all') {
+              insertMentionAll()
+            } else {
+              insertMentionHere()
+            }
+          } else {
+            insertMention(selectedOption.user)
+          }
         }
         return
       case 'Escape':
@@ -787,8 +829,13 @@ textarea:focus {
 }
 
 .mention-shortcuts {
-  border-top: 1px solid var(--border-color);
   background: rgba(59, 130, 246, 0.05);
+}
+
+.mention-divider {
+  height: 1px;
+  background: var(--border-color);
+  margin: 0;
 }
 
 .mention-item.shortcut {
