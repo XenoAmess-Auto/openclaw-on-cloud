@@ -201,12 +201,24 @@ import { mentionApi } from '@/api/mention'
 import type { MemberDto, Message, MentionRecord } from '@/types'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
+import hljs from 'highlight.js'
+import 'highlight.js/styles/github-dark.css'
 
 // 配置 marked 选项
 marked.setOptions({
   breaks: true, // 将换行符转换为 <br>
   gfm: true,    // GitHub Flavored Markdown
 })
+
+// 自定义 renderer 添加代码高亮
+const renderer = new marked.Renderer()
+renderer.code = function({ text, lang }: { text: string; lang?: string }): string {
+  const language = lang || 'plaintext'
+  const validLang = hljs.getLanguage(language) ? language : 'plaintext'
+  const highlighted = hljs.highlight(text, { language: validLang }).value
+  return `<pre class="hljs language-${validLang}"><code class="language-${validLang}">${highlighted}</code></pre>`
+}
+marked.use({ renderer })
 
 const route = useRoute()
 const router = useRouter()
@@ -297,6 +309,10 @@ onUnmounted(() => {
 watch(() => chatStore.messages.length, () => {
   nextTick(() => {
     scrollToBottom()
+    // 为新增的代码块添加复制按钮
+    if (messageContainer.value) {
+      addCodeCopyButtons(messageContainer.value)
+    }
   })
 })
 
@@ -489,6 +505,38 @@ function adjustTextareaHeight() {
 function formatTime(timestamp: string) {
   const date = new Date(timestamp)
   return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+}
+
+// 复制代码到剪贴板
+async function copyCode(button: HTMLElement, code: string) {
+  try {
+    await navigator.clipboard.writeText(code)
+    const originalText = button.textContent
+    button.textContent = '已复制!'
+    button.classList.add('copied')
+    setTimeout(() => {
+      button.textContent = originalText
+      button.classList.remove('copied')
+    }, 2000)
+  } catch (err) {
+    console.error('Failed to copy code:', err)
+  }
+}
+
+// 为代码块添加复制按钮
+function addCodeCopyButtons(container: HTMLElement) {
+  const codeBlocks = container.querySelectorAll('pre code')
+  codeBlocks.forEach((codeBlock) => {
+    const pre = codeBlock.parentElement as HTMLPreElement
+    if (pre.querySelector('.code-copy-btn')) return // 已添加过
+
+    const code = codeBlock.textContent || ''
+    const btn = document.createElement('button')
+    btn.className = 'code-copy-btn'
+    btn.textContent = '复制'
+    btn.onclick = () => copyCode(btn, code)
+    pre.appendChild(btn)
+  })
 }
 
 function renderContent(msg: Message) {
@@ -991,6 +1039,121 @@ function removeAttachment(id: string) {
   background: #1e1e2e;
   border-radius: 8px;
   overflow-x: auto;
+  position: relative;
+}
+
+.message-content :deep(pre:hover .code-copy-btn) {
+  opacity: 1;
+}
+
+.message-content :deep(.code-copy-btn) {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  padding: 0.25rem 0.75rem;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  color: #cdd6f4;
+  font-size: 0.75rem;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.2s, background 0.2s;
+}
+
+.message-content :deep(.code-copy-btn:hover) {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.message-content :deep(.code-copy-btn.copied) {
+  background: #22c55e;
+  border-color: #22c55e;
+  opacity: 1;
+}
+
+/* 代码语言标签 */
+.message-content :deep(pre[class*="language-"])::before {
+  content: attr(data-language);
+  position: absolute;
+  top: 0;
+  right: 0;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.625rem;
+  color: #6c7086;
+  text-transform: uppercase;
+}
+
+/* 为不同语言添加标签 */
+.message-content :deep(pre:has(code[class*="language-js"]))::before,
+.message-content :deep(pre:has(code[class*="language-javascript"]))::before {
+  content: "JS";
+}
+
+.message-content :deep(pre:has(code[class*="language-ts"]))::before,
+.message-content :deep(pre:has(code[class*="language-typescript"]))::before {
+  content: "TS";
+}
+
+.message-content :deep(pre:has(code[class*="language-vue"]))::before {
+  content: "VUE";
+}
+
+.message-content :deep(pre:has(code[class*="language-html"]))::before {
+  content: "HTML";
+}
+
+.message-content :deep(pre:has(code[class*="language-css"]))::before {
+  content: "CSS";
+}
+
+.message-content :deep(pre:has(code[class*="language-python"]))::before,
+.message-content :deep(pre:has(code[class*="language-py"]))::before {
+  content: "PYTHON";
+}
+
+.message-content :deep(pre:has(code[class*="language-java"]))::before {
+  content: "JAVA";
+}
+
+.message-content :deep(pre:has(code[class*="language-go"]))::before {
+  content: "GO";
+}
+
+.message-content :deep(pre:has(code[class*="language-rust"]))::before {
+  content: "RUST";
+}
+
+.message-content :deep(pre:has(code[class*="language-bash"]))::before,
+.message-content :deep(pre:has(code[class*="language-sh"]))::before,
+.message-content :deep(pre:has(code[class*="language-shell"]))::before {
+  content: "BASH";
+}
+
+.message-content :deep(pre:has(code[class*="language-json"]))::before {
+  content: "JSON";
+}
+
+.message-content :deep(pre:has(code[class*="language-yaml"]))::before,
+.message-content :deep(pre:has(code[class*="language-yml"]))::before {
+  content: "YAML";
+}
+
+.message-content :deep(pre:has(code[class*="language-markdown"]))::before,
+.message-content :deep(pre:has(code[class*="language-md"]))::before {
+  content: "MD";
+}
+
+.message-content :deep(pre:has(code[class*="language-sql"]))::before {
+  content: "SQL";
+}
+
+.message-content :deep(pre:has(code[class*="language-dockerfile"]))::before {
+  content: "DOCKER";
+}
+
+.message-content :deep(pre:has(code[class*="language-plaintext"]))::before,
+.message-content :deep(pre:has(code[class*="language-text"]))::before {
+  content: "TEXT";
 }
 
 .message-content :deep(code) {
