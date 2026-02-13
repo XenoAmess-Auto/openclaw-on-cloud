@@ -30,7 +30,7 @@ openclaw:
   summarize-threshold: 30
 
 file:
-  upload-dir: ${FILE_UPLOAD_DIR:./uploads}
+  upload-dir: ${FILE_UPLOAD_DIR:/home/xenoamess/.openclaw/workspace/openclaw-on-cloud/uploads}
   allowed-types: image/jpeg,image/png,image/gif,image/webp,application/pdf,text/plain
   max-size: 10
   url-prefix: /uploads

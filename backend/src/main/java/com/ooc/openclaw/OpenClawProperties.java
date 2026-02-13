@@ -9,7 +9,7 @@ import org.springframework.stereotype.Component;
 @ConfigurationProperties(prefix = "openclaw")
 public class OpenClawProperties {
 
-    private String gatewayUrl = "http://localhost:8080";
+    private String gatewayUrl = "http://localhost:18789";
     private String apiKey = "";
     private long sessionTimeoutMs = 300000; // 5 minutes
     private int maxSessionMessages = 50;
