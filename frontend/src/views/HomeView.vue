@@ -113,17 +113,26 @@
                 <div 
                   class="mention-item shortcut" 
                   :class="{ active: mentionSelectedIndex === 0 }"
-                  @click="insertMentionAll"
+                  @click="insertMentionOpenClaw"
                   @mouseenter="mentionSelectedIndex = 0"
+                >
+                  <span class="shortcut-icon">🤖</span>
+                  <span>@openclaw</span>
+                </div>
+                <div 
+                  class="mention-item shortcut" 
+                  :class="{ active: mentionSelectedIndex === 1 }"
+                  @click="insertMentionAll"
+                  @mouseenter="mentionSelectedIndex = 1"
                 >
                   <span class="shortcut-icon">👥</span>
                   <span>@所有人</span>
                 </div>
                 <div 
                   class="mention-item shortcut" 
-                  :class="{ active: mentionSelectedIndex === 1 }"
+                  :class="{ active: mentionSelectedIndex === 2 }"
                   @click="insertMentionHere"
-                  @mouseenter="mentionSelectedIndex = 1"
+                  @mouseenter="mentionSelectedIndex = 2"
                 >
                   <span class="shortcut-icon">🟢</span>
                   <span>@在线</span>
@@ -142,9 +151,9 @@
               <div
                 v-for="(user, index) in filteredMentionUsers"
                 :key="user.id"
-                :class="['mention-item', { active: index + 2 === mentionSelectedIndex }]"
+                :class="['mention-item', { active: index + 3 === mentionSelectedIndex }]"
                 @click="insertMention(user)"
-                @mouseenter="mentionSelectedIndex = index + 2"
+                @mouseenter="mentionSelectedIndex = index + 3"
               >
                 <img v-if="user.avatar" :src="user.avatar" class="mention-avatar" />
                 <div v-else class="mention-avatar-placeholder">{{ getInitials(user.nickname || user.username) }}</div>
@@ -262,12 +271,13 @@ const isCreator = computed(() => {
 })
 
 // 所有可选项（快捷选项 + 用户）用于键盘导航
-type MentionOption = 
-  | { type: 'shortcut'; key: 'all' | 'here'; label: string; icon: string }
+type MentionOption =
+  | { type: 'shortcut'; key: 'openclaw' | 'all' | 'here'; label: string; icon: string }
   | { type: 'user'; user: MemberDto }
 
 const allMentionOptions = computed<MentionOption[]>(() => {
   const options: MentionOption[] = [
+    { type: 'shortcut', key: 'openclaw', label: '@openclaw', icon: '🤖' },
     { type: 'shortcut', key: 'all', label: '@所有人', icon: '👥' },
     { type: 'shortcut', key: 'here', label: '@在线', icon: '🟢' }
   ]
@@ -410,7 +420,9 @@ function handleKeydown(event: KeyboardEvent) {
         const selectedOption = options[mentionSelectedIndex.value]
         if (selectedOption) {
           if (selectedOption.type === 'shortcut') {
-            if (selectedOption.key === 'all') {
+            if (selectedOption.key === 'openclaw') {
+              insertMentionOpenClaw()
+            } else if (selectedOption.key === 'all') {
               insertMentionAll()
             } else {
               insertMentionHere()
@@ -480,6 +492,14 @@ function insertMention(user: MemberDto) {
     const newPos = mentionStartIndex.value + (user.nickname || user.username).length + 2
     inputRef.value?.setSelectionRange(newPos, newPos)
   })
+}
+
+function insertMentionOpenClaw() {
+  const beforeMention = inputMessage.value.slice(0, mentionStartIndex.value)
+  const afterCursor = inputMessage.value.slice(inputRef.value?.selectionStart || 0)
+  inputMessage.value = beforeMention + '@openclaw ' + afterCursor
+  showMentionList.value = false
+  inputRef.value?.focus()
 }
 
 function insertMentionAll() {
