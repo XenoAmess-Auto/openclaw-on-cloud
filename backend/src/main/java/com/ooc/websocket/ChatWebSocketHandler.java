@@ -150,12 +150,15 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
             for (Attachment att : attachments) {
                 // 将类型转换为大写以保持一致性
                 String typeUpper = att.getType() != null ? att.getType().toUpperCase() : "FILE";
+                String mimeType = att.getMimeType() != null ? att.getMimeType() : "image/png";
+                log.info("Processing attachment: type={}, mimeType={}, contentLength={}",
+                        typeUpper, mimeType, att.getContent() != null ? att.getContent().length() : 0);
                 messageAttachments.add(ChatRoom.Message.Attachment.builder()
                         .id(UUID.randomUUID().toString())
                         .type(typeUpper)
-                        .contentType(att.getMimeType())
+                        .contentType(mimeType)
                         .name("image.png")
-                        .url("data:" + att.getMimeType() + ";base64," + att.getContent())
+                        .url("data:" + mimeType + ";base64," + att.getContent())
                         .size(att.getContent() != null ? att.getContent().length() * 3 / 4 : 0)
                         .build());
             }

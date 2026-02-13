@@ -510,8 +510,21 @@ function renderContent(msg: Message) {
   if (msg.attachments && msg.attachments.length > 0) {
     attachmentsHtml = '<div class="message-attachments">' +
       msg.attachments.map(att => {
-        // 检查 type 字段（支持大小写）或 contentType
-        const isImage = att.type?.toUpperCase() === 'IMAGE' || att.contentType?.startsWith('image/')
+        // 更可靠的图片检测：检查 type、contentType 或 url
+        const typeStr = (att.type || '').toUpperCase()
+        const contentTypeStr = (att.contentType || '').toLowerCase()
+        const urlStr = (att.url || '').toLowerCase()
+
+        // 多种方式检测图片
+        const isImage = typeStr === 'IMAGE' ||
+                       contentTypeStr.startsWith('image/') ||
+                       urlStr.startsWith('data:image/') ||
+                       urlStr.endsWith('.png') ||
+                       urlStr.endsWith('.jpg') ||
+                       urlStr.endsWith('.jpeg') ||
+                       urlStr.endsWith('.gif') ||
+                       urlStr.endsWith('.webp')
+
         if (isImage) {
           return `<img src="${att.url}" alt="${att.name || '图片'}" class="message-image" loading="lazy" />`
         }
