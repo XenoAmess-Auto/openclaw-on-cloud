@@ -463,6 +463,28 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
         }
     }
 
+    /**
+     * 发送系统消息到指定房间（用于测试）
+     */
+    public void sendSystemMessage(String roomId, String content) {
+        ChatRoom.Message message = ChatRoom.Message.builder()
+                .id(UUID.randomUUID().toString())
+                .senderId("system")
+                .senderName("System")
+                .content(content)
+                .timestamp(Instant.now())
+                .openclawMentioned(false)
+                .fromOpenClaw(false)
+                .build();
+
+        chatRoomService.addMessage(roomId, message);
+
+        broadcastToRoom(roomId, WebSocketMessage.builder()
+                .type("message")
+                .message(message)
+                .build());
+    }
+
     @lombok.Data
     @lombok.Builder
     public static class WebSocketUserInfo {

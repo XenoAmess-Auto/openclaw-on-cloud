@@ -543,6 +543,9 @@ function renderContent(msg: Message) {
   // 防御性处理：确保 content 不为 null/undefined
   let content = msg.content || ''
 
+  // 处理转义字符：将字符串 \n \t 转为真正的换行和制表符
+  content = content.replace(/\\n/g, '\n').replace(/\\t/g, '\t')
+
   // Step 1: 先渲染 Markdown（在 HTML 转义之前）
   // 临时替换 @提及，防止 Markdown 解析器破坏它们
   const mentionPlaceholders: string[] = []
