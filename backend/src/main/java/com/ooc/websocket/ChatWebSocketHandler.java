@@ -297,19 +297,50 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
     private void handleOpenClawResponse(String roomId, OpenClawPluginService.OpenClawResponse response) {
         String content = response.content();
         List<ChatRoom.Message.ToolCall> toolCalls = new ArrayList<>();
-        
+
         // 解析 **Tools used:** 部分
         if (content.contains("**Tools used:**")) {
             int toolsStart = content.indexOf("**Tools used:**");
-            int toolsEnd = content.indexOf("\n\n", toolsStart);
-            if (toolsEnd == -1) {
-                toolsEnd = content.length();
+            int toolsEnd = content.length();
+
+            // 找到 Tools used 部分的结束位置（下一个空行或内容结束）
+            String[] lines = content.substring(toolsStart).split("\n", -1);
+            int lineCount = 0;
+            for (int i = 1; i < lines.length; i++) {
+                String line = lines[i];
+                // 如果遇到空行，说明 Tools used 部分结束
+                if (line.trim().isEmpty()) {
+                    // 继续跳过所有连续的空行
+                    int j = i + 1;
+                    while (j < lines.length && lines[j].trim().isEmpty()) {
+                        j++;
+                    }
+                    // 计算实际字符位置
+                    toolsEnd = toolsStart;
+                    for (int k = 0; k < j; k++) {
+                        toolsEnd += lines[k].length() + 1; // +1 for \n
+                    }
+                    break;
+                }
+                // 如果行不以 - 开头且不是工具调用行，说明 Tools used 部分结束
+                if (!line.trim().startsWith("- ") && !line.trim().isEmpty()) {
+                    int j = i;
+                    while (j < lines.length && lines[j].trim().isEmpty()) {
+                        j++;
+                    }
+                    toolsEnd = toolsStart;
+                    for (int k = 0; k < j; k++) {
+                        toolsEnd += lines[k].length() + 1;
+                    }
+                    break;
+                }
             }
-            String toolsSection = content.substring(toolsStart, toolsEnd);
-            
+
+            String toolsSection = content.substring(toolsStart, Math.min(toolsEnd, content.length()));
+
             // 解析每个工具调用
-            String[] lines = toolsSection.split("\n");
-            for (String line : lines) {
+            String[] toolLines = toolsSection.split("\n");
+            for (String line : toolLines) {
                 line = line.trim();
                 if (line.startsWith("- `") && line.contains("`")) {
                     int nameStart = line.indexOf("`") + 1;
@@ -321,7 +352,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                         if (descStart != -1 && descStart + 1 < line.length()) {
                             description = line.substring(descStart + 1).trim();
                         }
-                        
+
                         toolCalls.add(ChatRoom.Message.ToolCall.builder()
                                 .id(UUID.randomUUID().toString())
                                 .name(toolName)
@@ -332,9 +363,11 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                     }
                 }
             }
-            
+
             // 移除 Tools used 部分，只保留实际回复内容
-            content = content.substring(0, toolsStart).trim() + content.substring(toolsEnd).trim();
+            String beforeTools = content.substring(0, toolsStart).trim();
+            String afterTools = toolsEnd < content.length() ? content.substring(toolsEnd).trim() : "";
+            content = beforeTools + (beforeTools.isEmpty() || afterTools.isEmpty() ? "" : "\n\n") + afterTools;
         }
         
         // 解析代码块作为工具结果

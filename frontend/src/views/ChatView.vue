@@ -484,7 +484,8 @@ function formatTime(timestamp: string) {
 }
 
 function renderContent(msg: Message) {
-  let content = msg.content
+  // 防御性处理：确保 content 不为 null/undefined
+  let content = (msg.content || '')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
