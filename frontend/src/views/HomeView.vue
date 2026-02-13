@@ -67,13 +67,35 @@
             <div
               v-for="msg in chatStore.messages"
               :key="msg.id"
-              :class="['message', { 'from-me': msg.senderId === authStore.user?.id, 'from-openclaw': msg.fromOpenClaw }]"
+              :class="[
+                'message',
+                {
+                  'from-me': msg.senderId === authStore.user?.id,
+                  'from-openclaw': msg.fromOpenClaw,
+                  'mentioned-me': isMentionedMe(msg)
+                }
+              ]"
             >
-              <div class="message-header">
-                <span class="sender">{{ msg.senderName }}</span>
-                <span class="time">{{ formatTime(msg.timestamp) }}</span>
+              <!-- 头像 -->
+              <div class="message-avatar">
+                <img v-if="msg.senderAvatar" :src="msg.senderAvatar" :alt="msg.senderName" />
+                <div v-else class="avatar-placeholder">{{ getInitials(msg.senderName) }}</div>
               </div>
-              <div class="message-content" v-html="renderContent(msg.content)"></div>
+              
+              <div class="message-body">
+                <div class="message-header">
+                  <span class="sender">{{ msg.senderName }}</span>
+                  <span v-if="msg.mentionAll" class="mention-tag mention-all">@所有人</span>
+                  <span v-else-if="msg.mentionHere" class="mention-tag mention-here">@在线</span>
+                  <span class="time">{{ formatTime(msg.timestamp) }}</span>
+                </div>
+                <div class="message-content" v-html="renderContent(msg)"></div>
+                
+                <!-- 被@提示 -->
+                <div v-if="isMentionedMe(msg) && msg.senderId !== authStore.user?.id" class="mention-notice">
+                  👤 @了你
+                </div>
+              </div>
             </div>
             
             <div v-if="chatStore.messages.length === 0" class="empty-messages">
@@ -235,7 +257,7 @@ import { useChatStore } from '@/stores/chat'
 import { chatRoomApi } from '@/api/chatRoom'
 import SessionManager from '@/components/SessionManager.vue'
 import MemberManager from '@/components/MemberManager.vue'
-import type { MemberDto } from '@/types'
+import type { MemberDto, Message } from '@/types'
 
 const router = useRouter()
 const route = useRoute()
@@ -530,12 +552,36 @@ function formatTime(timestamp: string) {
   return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
 }
 
-function renderContent(content: string) {
-  return content
-    .replace(/@openclaw/g, '<span class="mention">@openclaw</span>')
+function isMentionedMe(msg: Message): boolean {
+  if (!authStore.user) return false
+  if (msg.mentionAll) return true
+  if (msg.mentions?.some(m => m.userId === authStore.user?.id)) return true
+  return false
+}
+
+function renderContent(msg: Message) {
+  let content = msg.content
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+
+  // 高亮 @所有人 和 @在线
+  content = content
     .replace(/@所有人|@everyone|@all/gi, '<span class="mention mention-all">$&</span>')
     .replace(/@在线|@here/gi, '<span class="mention mention-here">$&</span>')
-    .replace(/\n/g, '<br>')
+
+  // 高亮 @openclaw
+  content = content.replace(/@openclaw/gi, '<span class="mention">@openclaw</span>')
+
+  // 高亮具体用户@
+  if (msg.mentions) {
+    msg.mentions.forEach(mention => {
+      const regex = new RegExp(`@${mention.userName}`, 'g')
+      content = content.replace(regex, `<span class="mention">@${mention.userName}</span>`)
+    })
+  }
+
+  return content.replace(/\n/g, '<br>')
 }
 
 function getInitials(name: string): string {
@@ -784,20 +830,66 @@ function getInitials(name: string): string {
 }
 
 .message {
-  max-width: 70%;
-  padding: 0.75rem 1rem;
-  border-radius: 12px;
-  background: var(--bg-color);
+  display: flex;
+  gap: 0.75rem;
+  max-width: 80%;
   align-self: flex-start;
 }
 
 .message.from-me {
   align-self: flex-end;
+  flex-direction: row-reverse;
+}
+
+.message.mentioned-me .message-body {
+  background: #fef3c7;
+  border: 2px solid #f59e0b;
+}
+
+.message.from-me.mentioned-me .message-body {
+  background: var(--primary-color);
+  border: 2px solid #f59e0b;
+}
+
+.message-avatar {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+}
+
+.message-avatar img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.avatar-placeholder {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: var(--primary-color);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.message-body {
+  background: var(--bg-color);
+  padding: 0.75rem 1rem;
+  border-radius: 12px;
+  min-width: 0;
+}
+
+.message.from-me .message-body {
   background: var(--primary-color);
   color: white;
 }
 
-.message.from-openclaw {
+.message.from-openclaw .message-body {
   background: #e0e7ff;
   border: 1px solid var(--primary-color);
 }
@@ -820,6 +912,29 @@ function getInitials(name: string): string {
 
 .sender {
   font-weight: 500;
+}
+
+.mention-tag {
+  font-size: 0.625rem;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+}
+
+.mention-tag.mention-all {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.mention-tag.mention-here {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.message.from-me .mention-tag.mention-all,
+.message.from-me .mention-tag.mention-here {
+  background: rgba(255,255,255,0.3);
+  color: white;
 }
 
 .message-content {
@@ -846,8 +961,19 @@ function getInitials(name: string): string {
 }
 
 .message.from-me .message-content :deep(.mention) {
-  color: rgba(255,255,255,0.9);
+  color: rgba(255,255,255,0.95);
   background: rgba(255,255,255,0.2);
+}
+
+.mention-notice {
+  font-size: 0.75rem;
+  color: #f59e0b;
+  margin-top: 0.5rem;
+  font-weight: 500;
+}
+
+.message.from-me .mention-notice {
+  color: rgba(255,255,255,0.9);
 }
 
 .empty-messages {
