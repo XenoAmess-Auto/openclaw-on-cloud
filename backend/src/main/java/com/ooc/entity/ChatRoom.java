@@ -65,6 +65,8 @@ public class ChatRoom {
         private List<Mention> mentions = new ArrayList<>();
         private boolean mentionAll;
         private boolean mentionHere;
+        @Builder.Default
+        private List<Attachment> attachments = new ArrayList<>();
 
         @Data
         @Builder
@@ -73,6 +75,19 @@ public class ChatRoom {
         public static class Mention {
             private String userId;
             private String userName;
+        }
+        
+        @Data
+        @Builder
+        @NoArgsConstructor
+        @AllArgsConstructor
+        public static class Attachment {
+            private String id;
+            private String url;
+            private String name;
+            private String type;
+            private String contentType;
+            private long size;
         }
     }
 

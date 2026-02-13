@@ -35,6 +35,7 @@ export interface Message {
   mentions?: Mention[]
   mentionAll?: boolean
   mentionHere?: boolean
+  attachments?: Attachment[]
 }
 
 export interface MentionRecord {
@@ -106,4 +107,22 @@ export interface AuthResponse {
   email: string
   avatar?: string
   roles: string[]
+}
+
+export interface FileUploadResponse {
+  filename: string
+  originalName: string
+  url: string
+  type: 'IMAGE' | 'PDF' | 'TEXT' | 'FILE'
+  contentType: string
+  size: number
+}
+
+export interface Attachment {
+  id: string
+  url: string
+  name: string
+  type: 'IMAGE' | 'PDF' | 'TEXT' | 'FILE'
+  contentType: string
+  size: number
 }

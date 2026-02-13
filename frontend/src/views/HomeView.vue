@@ -128,20 +128,48 @@
           </div>
           
           <div class="input-area">
+            <!-- 附件预览 -->
+            <div v-if="attachments.length > 0" class="attachments-preview">
+              <div v-for="(file, index) in attachments" :key="index" class="attachment-item">
+                <img v-if="file.type === 'IMAGE'" :src="file.previewUrl" class="attachment-preview-img" />
+                <div v-else class="attachment-file">
+                  <span class="file-icon">📎</span>
+                  <span class="file-name">{{ file.originalName }}</span>
+                </div>
+                <button class="remove-attachment" @click="removeAttachment(index)">×</button>
+              </div>
+            </div>
+            
             <div class="input-wrapper">
+              <input
+                type="file"
+                ref="fileInputRef"
+                @change="handleFileSelect"
+                accept="image/*,.pdf,.txt"
+                style="display: none"
+              />
+              <button 
+                class="attach-btn" 
+                @click="fileInputRef?.click()"
+                :disabled="isUploading"
+                title="上传附件"
+              >
+                📎
+              </button>
               <textarea
                 v-model="inputMessage"
                 @keydown="handleKeydown"
                 @input="handleInput"
-                placeholder="输入消息... 使用 @ 提及他人"
+                :placeholder="isUploading ? '上传中...' : '输入消息... 使用 @ 提及他人'"
                 rows="1"
                 ref="inputRef"
+                :disabled="isUploading"
               />
               <button
                 @click="sendMessage"
-                :disabled="!inputMessage.trim() || !chatStore.isConnected"
+                :disabled="(!inputMessage.trim() && attachments.length === 0) || !chatStore.isConnected || isUploading"
               >
-                发送
+                {{ isUploading ? '上传中...' : '发送' }}
               </button>
             </div>
             
@@ -279,7 +307,8 @@ import { useChatStore } from '@/stores/chat'
 import { chatRoomApi } from '@/api/chatRoom'
 import SessionManager from '@/components/SessionManager.vue'
 import MemberManager from '@/components/MemberManager.vue'
-import type { MemberDto, Message } from '@/types'
+import { fileApi } from '@/api/file'
+import type { MemberDto, Message, FileUploadResponse } from '@/types'
 
 const router = useRouter()
 const route = useRoute()
@@ -308,6 +337,11 @@ const mentionSelectedIndex = ref(0)
 const roomMembers = ref<MemberDto[]>([])
 const mentionStartIndex = ref(-1)
 const mentionListRef = ref<HTMLDivElement>()
+
+// 文件上传相关
+const fileInputRef = ref<HTMLInputElement>()
+const attachments = ref<Array<FileUploadResponse & { previewUrl?: string }>>([])
+const isUploading = ref(false)
 
 // 是否为当前聊天室群主
 const isCreator = computed(() => {
@@ -436,12 +470,61 @@ function scrollToBottom() {
 
 function sendMessage() {
   const content = inputMessage.value.trim()
-  if (!content || !chatStore.isConnected || !currentRoomId.value) return
+  if ((!content && attachments.value.length === 0) || !chatStore.isConnected || !currentRoomId.value) return
+
+  // 构建消息内容
+  let messageContent = content
   
-  chatStore.sendMessage(content)
+  // 添加附件信息到消息
+  if (attachments.value.length > 0) {
+    const attachmentUrls = attachments.value.map(a => `[文件: ${a.originalName}](${a.url})`).join('\n')
+    messageContent = content ? `${content}\n${attachmentUrls}` : attachmentUrls
+  }
+
+  chatStore.sendMessage(messageContent)
   inputMessage.value = ''
+  attachments.value = []
   showMentionList.value = false
   adjustTextareaHeight()
+}
+
+// 文件处理
+async function handleFileSelect(event: Event) {
+  const target = event.target as HTMLInputElement
+  const files = target.files
+  if (!files || files.length === 0) return
+
+  isUploading.value = true
+  
+  try {
+    for (const file of Array.from(files)) {
+      // 创建预览URL（图片）
+      const previewUrl = file.type.startsWith('image/') ? URL.createObjectURL(file) : undefined
+      
+      const response = await fileApi.upload(file)
+      attachments.value.push({
+        ...response.data,
+        previewUrl
+      })
+    }
+  } catch (err: any) {
+    console.error('File upload failed:', err)
+    alert('文件上传失败: ' + (err.response?.data?.message || err.message))
+  } finally {
+    isUploading.value = false
+    // 清空input以允许重复选择同一文件
+    if (fileInputRef.value) {
+      fileInputRef.value.value = ''
+    }
+  }
+}
+
+function removeAttachment(index: number) {
+  const attachment = attachments.value[index]
+  if (attachment.previewUrl) {
+    URL.revokeObjectURL(attachment.previewUrl)
+  }
+  attachments.value.splice(index, 1)
 }
 
 function handleKeydown(event: KeyboardEvent) {
@@ -589,6 +672,15 @@ function renderContent(msg: Message) {
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
+
+  // 将附件链接转换为可点击的链接和图片
+  content = content.replace(/\[文件: ([^\]]+)\]\(([^)]+)\)/g, (_match, name, url) => {
+    // 判断是否为图片
+    if (url.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {
+      return `<div class="message-image"><img src="${url}" alt="${name}" loading="lazy" /></div>`
+    }
+    return `<a href="${url}" target="_blank" class="file-link">📎 ${name}</a>`
+  })
 
   // 高亮 @所有人 和 @在线
   content = content
@@ -1032,6 +1124,47 @@ function isSameDay(d1: Date, d2: Date): boolean {
   background: rgba(255,255,255,0.2);
 }
 
+/* 消息中的图片 */
+.message-content :deep(.message-image) {
+  margin-top: 0.5rem;
+  max-width: 100%;
+}
+
+.message-content :deep(.message-image img) {
+  max-width: 100%;
+  max-height: 300px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+
+.message-content :deep(.message-image img:hover) {
+  transform: scale(1.02);
+}
+
+/* 文件链接 */
+.message-content :deep(.file-link) {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--bg-color);
+  border-radius: 6px;
+  color: var(--primary-color);
+  text-decoration: none;
+  font-size: 0.875rem;
+  margin-top: 0.25rem;
+}
+
+.message-content :deep(.file-link:hover) {
+  background: rgba(59, 130, 246, 0.1);
+}
+
+.message.from-me .message-content :deep(.file-link) {
+  background: rgba(255,255,255,0.2);
+  color: white;
+}
+
 .mention-notice {
   font-size: 0.75rem;
   color: #f59e0b;
@@ -1149,9 +1282,101 @@ function isSameDay(d1: Date, d2: Date): boolean {
   position: relative;
 }
 
+/* 附件预览 */
+.attachments-preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+  padding: 0.5rem;
+  background: var(--bg-color);
+  border-radius: 8px;
+}
+
+.attachment-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem 0.5rem;
+  background: var(--surface-color);
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+}
+
+.attachment-preview-img {
+  width: 48px;
+  height: 48px;
+  object-fit: cover;
+  border-radius: 4px;
+}
+
+.attachment-file {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.file-icon {
+  font-size: 1.25rem;
+}
+
+.file-name {
+  font-size: 0.75rem;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-secondary);
+}
+
+.remove-attachment {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: none;
+  background: var(--border-color);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 0.875rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 0.25rem;
+}
+
+.remove-attachment:hover {
+  background: #ef4444;
+  color: white;
+}
+
+.attach-btn {
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--surface-color);
+  cursor: pointer;
+  font-size: 1.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.attach-btn:hover:not(:disabled) {
+  background: var(--bg-color);
+  border-color: var(--primary-color);
+}
+
+.attach-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .input-wrapper {
   display: flex;
-  gap: 0.75rem;
+  gap: 0.5rem;
   align-items: flex-end;
 }
 
@@ -1165,6 +1390,11 @@ textarea {
   font-family: inherit;
   min-height: 44px;
   max-height: 120px;
+}
+
+textarea:disabled {
+  background: var(--bg-color);
+  cursor: not-allowed;
 }
 
 textarea:focus {
