@@ -31,6 +31,7 @@ export interface Message {
   timestamp: string
   openclawMentioned: boolean
   fromOpenClaw: boolean
+  isSystem?: boolean
   mentions?: Mention[]
   mentionAll?: boolean
   mentionHere?: boolean

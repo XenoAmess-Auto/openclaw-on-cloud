@@ -64,44 +64,66 @@
           </div>
           
           <div class="message-container" ref="messageContainer">
-            <div
-              v-for="msg in chatStore.messages"
-              :key="msg.id"
-              :class="[
-                'message',
-                {
-                  'from-me': msg.senderId === authStore.user?.id,
-                  'from-openclaw': msg.fromOpenClaw,
-                  'mentioned-me': isMentionedMe(msg)
-                }
-              ]"
-            >
-              <!-- 头像 -->
-              <div class="message-avatar">
-                <img v-if="msg.senderAvatar" :src="msg.senderAvatar" :alt="msg.senderName" />
-                <div v-else class="avatar-placeholder">{{ getInitials(msg.senderName) }}</div>
+            <template v-for="(msg, index) in chatStore.messages" :key="msg.id">
+              <!-- 时间分隔线 -->
+              <div v-if="shouldShowDateSeparator(index)" class="date-separator">
+                <span>{{ formatDateSeparator(msg.timestamp) }}</span>
               </div>
               
-              <div class="message-body">
-                <div class="message-header">
-                  <span class="sender">{{ msg.senderName }}</span>
-                  <span v-if="msg.mentionAll" class="mention-tag mention-all">@所有人</span>
-                  <span v-else-if="msg.mentionHere" class="mention-tag mention-here">@在线</span>
-                  <span class="time">{{ formatTime(msg.timestamp) }}</span>
+              <!-- 系统消息 -->
+              <div v-if="msg.isSystem" class="system-message">
+                <span class="system-text">{{ msg.content }}</span>
+              </div>
+              
+              <!-- 普通消息 -->
+              <div
+                v-else
+                :class="[
+                  'message',
+                  {
+                    'from-me': msg.senderId === authStore.user?.id,
+                    'from-openclaw': msg.fromOpenClaw,
+                    'mentioned-me': isMentionedMe(msg)
+                  }
+                ]"
+              >
+                <!-- 头像 -->
+                <div class="message-avatar">
+                  <img v-if="msg.senderAvatar" :src="msg.senderAvatar" :alt="msg.senderName" />
+                  <div v-else class="avatar-placeholder">{{ getInitials(msg.senderName) }}</div>
                 </div>
-                <div class="message-content" v-html="renderContent(msg)"></div>
                 
-                <!-- 被@提示 -->
-                <div v-if="isMentionedMe(msg) && msg.senderId !== authStore.user?.id" class="mention-notice">
-                  👤 @了你
+                <div class="message-body">
+                  <div class="message-header">
+                    <span class="sender">{{ msg.senderName }}</span>
+                    <span v-if="msg.mentionAll" class="mention-tag mention-all">@所有人</span>
+                    <span v-else-if="msg.mentionHere" class="mention-tag mention-here">@在线</span>
+                    <span class="time">{{ formatTime(msg.timestamp) }}</span>
+                  </div>
+                  <div class="message-content" v-html="renderContent(msg)"></div>
+                  
+                  <!-- 被@提示 -->
+                  <div v-if="isMentionedMe(msg) && msg.senderId !== authStore.user?.id" class="mention-notice">
+                    👤 @了你
+                  </div>
                 </div>
               </div>
-            </div>
+            </template>
             
             <div v-if="chatStore.messages.length === 0" class="empty-messages">
               发送消息开始对话
               <br/>
               <span>在群聊中使用 @openclaw 召唤 AI</span>
+            </div>
+            
+            <!-- 正在输入提示 -->
+            <div v-if="chatStore.typingUserList.length > 0" class="typing-indicator">
+              <span class="typing-dots">
+                <span></span>
+                <span></span>
+                <span></span>
+              </span>
+              <span class="typing-text">{{ formatTypingUsers(chatStore.typingUserList) }}</span>
             </div>
           </div>
           
@@ -481,6 +503,9 @@ function scrollMentionIntoView() {
 function handleInput() {
   adjustTextareaHeight()
   
+  // 发送正在输入状态
+  chatStore.sendTyping()
+  
   const text = inputMessage.value
   const cursorPos = inputRef.value?.selectionStart || 0
   
@@ -586,6 +611,48 @@ function renderContent(msg: Message) {
 
 function getInitials(name: string): string {
   return name.slice(0, 2).toUpperCase()
+}
+
+// 格式化正在输入提示
+function formatTypingUsers(users: string[]): string {
+  if (users.length === 1) {
+    return `${users[0]} 正在输入...`
+  } else if (users.length === 2) {
+    return `${users[0]} 和 ${users[1]} 正在输入...`
+  } else {
+    return `${users.slice(0, 2).join('、')} 等 ${users.length} 人正在输入...`
+  }
+}
+
+// 判断是否需要显示日期分隔线
+function shouldShowDateSeparator(index: number): boolean {
+  if (index === 0) return true
+  const current = new Date(chatStore.messages[index].timestamp)
+  const prev = new Date(chatStore.messages[index - 1].timestamp)
+  return !isSameDay(current, prev)
+}
+
+// 格式化日期分隔线
+function formatDateSeparator(timestamp: string): string {
+  const date = new Date(timestamp)
+  const now = new Date()
+  const yesterday = new Date(now)
+  yesterday.setDate(yesterday.getDate() - 1)
+
+  if (isSameDay(date, now)) {
+    return '今天'
+  } else if (isSameDay(date, yesterday)) {
+    return '昨天'
+  } else {
+    return date.toLocaleDateString('zh-CN', { month: 'long', day: 'numeric' })
+  }
+}
+
+// 判断是否同一天
+function isSameDay(d1: Date, d2: Date): boolean {
+  return d1.getFullYear() === d2.getFullYear() &&
+         d1.getMonth() === d2.getMonth() &&
+         d1.getDate() === d2.getDate()
 }
 </script>
 
@@ -986,6 +1053,93 @@ function getInitials(name: string): string {
   display: block;
   margin-top: 0.5rem;
   font-size: 0.875rem;
+}
+
+/* 系统消息 */
+.system-message {
+  text-align: center;
+  padding: 0.5rem 1rem;
+  margin: 0.5rem 0;
+}
+
+.system-text {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  background: var(--bg-color);
+  padding: 0.25rem 0.75rem;
+  border-radius: 12px;
+}
+
+/* 时间分隔线 */
+.date-separator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 1rem 0;
+  position: relative;
+}
+
+.date-separator::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--border-color);
+}
+
+.date-separator span {
+  position: relative;
+  background: var(--surface-color);
+  padding: 0 1rem;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  z-index: 1;
+}
+
+/* 正在输入提示 */
+.typing-indicator {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  margin-top: 0.5rem;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}
+
+.typing-dots {
+  display: flex;
+  gap: 3px;
+}
+
+.typing-dots span {
+  width: 6px;
+  height: 6px;
+  background: var(--text-secondary);
+  border-radius: 50%;
+  animation: typing-bounce 1.4s infinite ease-in-out both;
+}
+
+.typing-dots span:nth-child(1) {
+  animation-delay: -0.32s;
+}
+
+.typing-dots span:nth-child(2) {
+  animation-delay: -0.16s;
+}
+
+@keyframes typing-bounce {
+  0%, 80%, 100% {
+    transform: scale(0);
+  }
+  40% {
+    transform: scale(1);
+  }
+}
+
+.typing-text {
+  font-style: italic;
 }
 
 .input-area {
