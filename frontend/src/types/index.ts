@@ -133,7 +133,7 @@ export interface Attachment {
   id: string
   url: string
   name: string
-  type: 'IMAGE' | 'PDF' | 'TEXT' | 'FILE'
+  type: 'IMAGE' | 'PDF' | 'TEXT' | 'FILE' | 'image' | 'pdf' | 'text' | 'file'
   contentType: string
   size: number
 }
