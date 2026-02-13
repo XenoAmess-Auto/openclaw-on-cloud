@@ -72,6 +72,11 @@
           <span v-if="mentionQuery">搜索 "{{ mentionQuery }}"</span>
           <span v-else>选择要@的人</span>
         </div>
+        <!-- 加载中状态 -->
+        <div v-if="roomMembers.length === 0 && !mentionQuery" class="mention-loading">
+          正在加载成员列表...
+        </div>
+        <!-- 用户列表 -->
         <div
           v-for="(user, index) in filteredMentionUsers"
           :key="user.id"
@@ -87,7 +92,7 @@
           </div>
           <span v-if="user.id === authStore.user?.id" class="mention-self">自己</span>
         </div>
-        <div v-if="filteredMentionUsers.length === 0" class="mention-empty">
+        <div v-if="filteredMentionUsers.length === 0 && mentionQuery" class="mention-empty">
           未找到用户
         </div>
         <!-- 快捷选项 -->
@@ -181,19 +186,22 @@ const isPrivateChat = computed(() => {
 
 // 过滤后的用户列表
 const filteredMentionUsers = computed(() => {
+  const members = roomMembers.value || []
+  console.log('[Mention] Filtering users, query:', mentionQuery.value, 'total members:', members.length)
+  
   if (!mentionQuery.value) {
     // 显示所有成员，自己排在最后
     const me = authStore.user
-    return roomMembers.value.sort((a, b) => {
+    return [...members].sort((a, b) => {
       if (a.id === me?.id) return 1
       if (b.id === me?.id) return -1
       return 0
     })
   }
   const query = mentionQuery.value.toLowerCase()
-  return roomMembers.value.filter(user => {
-    const nickname = (user.nickname || user.username).toLowerCase()
-    const username = user.username.toLowerCase()
+  return members.filter(user => {
+    const nickname = (user.nickname || user.username || '').toLowerCase()
+    const username = (user.username || '').toLowerCase()
     return nickname.includes(query) || username.includes(query)
   })
 })
@@ -217,9 +225,11 @@ watch(() => chatStore.messages.length, () => {
 async function loadRoomMembers() {
   try {
     const response = await chatRoomApi.getMembers(roomId.value)
-    roomMembers.value = response.data
+    roomMembers.value = response.data || []
+    console.log('[Mention] Loaded room members:', roomMembers.value.length, roomMembers.value)
   } catch (err) {
     console.error('Failed to load room members:', err)
+    roomMembers.value = []
   }
 }
 
@@ -325,9 +335,13 @@ function handleInput() {
   const text = inputMessage.value
   const cursorPos = inputRef.value?.selectionStart || 0
   
+  console.log('[Mention] Input changed:', { text, cursorPos })
+  
   // 查找光标前最近的 @
   const textBeforeCursor = text.slice(0, cursorPos)
   const lastAtIndex = textBeforeCursor.lastIndexOf('@')
+  
+  console.log('[Mention] Last @ index:', lastAtIndex, 'textBeforeCursor:', textBeforeCursor)
   
   if (lastAtIndex >= 0) {
     // 检查 @ 和光标之间是否有空格
@@ -337,6 +351,7 @@ function handleInput() {
       mentionQuery.value = textBetween
       showMentionList.value = true
       mentionSelectedIndex.value = 0
+      console.log('[Mention] Showing list, query:', mentionQuery.value, 'members:', roomMembers.value.length)
       return
     }
   }
@@ -761,6 +776,14 @@ textarea:focus {
   text-align: center;
   color: var(--text-secondary);
   font-size: 0.875rem;
+}
+
+.mention-loading {
+  padding: 1rem;
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  font-style: italic;
 }
 
 .mention-shortcuts {
