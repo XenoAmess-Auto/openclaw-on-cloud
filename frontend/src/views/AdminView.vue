@@ -503,4 +503,182 @@ h1 {
   background: transparent;
   border: 1px solid var(--border-color);
 }
+
+/* 移动端适配 */
+@media (max-width: 768px) {
+  .admin-view {
+    height: 100dvh;
+  }
+
+  .header {
+    height: 56px;
+    padding: 0 1rem;
+  }
+
+  .back {
+    font-size: 1.25rem;
+    margin-right: 0.75rem;
+  }
+
+  h1 {
+    font-size: 1.125rem;
+  }
+
+  .subtitle {
+    display: none; /* 移动端隐藏副标题 */
+  }
+
+  .container {
+    padding: 1rem;
+  }
+
+  .toolbar {
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+  }
+
+  .search-input {
+    flex: 1 1 100%;
+    max-width: none;
+    padding: 0.625rem 0.875rem;
+    font-size: 16px;
+  }
+
+  .btn-primary,
+  .btn-refresh {
+    flex: 1;
+    padding: 0.625rem 1rem;
+    font-size: 0.875rem;
+    min-height: 44px;
+  }
+
+  /* 表格改为卡片布局 */
+  .user-table {
+    display: block;
+    background: transparent;
+  }
+
+  .user-table thead {
+    display: none;
+  }
+
+  .user-table tbody {
+    display: block;
+  }
+
+  .user-table tr {
+    display: block;
+    background: var(--surface-color);
+    border-radius: 10px;
+    margin-bottom: 0.75rem;
+    padding: 1rem;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  }
+
+  .user-table td {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid var(--border-color);
+    font-size: 0.875rem;
+  }
+
+  .user-table td:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+    margin-top: 0.5rem;
+    justify-content: flex-start;
+  }
+
+  .user-table td::before {
+    content: attr(data-label);
+    font-weight: 600;
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+  }
+
+  .role-badge,
+  .status-badge {
+    font-size: 0.6875rem;
+    padding: 0.25rem 0.5rem;
+  }
+
+  .btn-edit,
+  .btn-delete {
+    flex: 1;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.8125rem;
+    margin-right: 0;
+  }
+
+  .btn-edit {
+    margin-right: 0.5rem;
+  }
+
+  .loading,
+  .empty {
+    padding: 2rem;
+    font-size: 0.875rem;
+  }
+
+  .modal {
+    align-items: flex-end;
+  }
+
+  .modal-content {
+    width: 100%;
+    max-width: none;
+    border-radius: 16px 16px 0 0;
+    padding: 1.25rem;
+    max-height: 85vh;
+    overflow-y: auto;
+  }
+
+  .modal-content h3 {
+    font-size: 1.125rem;
+  }
+
+  .form-group input[type="text"],
+  .form-group input[type="email"],
+  .form-group input[type="password"] {
+    padding: 0.75rem;
+    font-size: 16px;
+  }
+
+  .modal-actions {
+    margin-top: 1.25rem;
+  }
+
+  .modal-actions button {
+    flex: 1;
+    padding: 0.625rem 1rem;
+    min-height: 44px;
+  }
+}
+
+/* 小屏手机 */
+@media (max-width: 380px) {
+  .header {
+    height: 52px;
+    padding: 0 0.75rem;
+  }
+
+  h1 {
+    font-size: 1rem;
+  }
+
+  .container {
+    padding: 0.75rem;
+  }
+
+  .user-table tr {
+    padding: 0.875rem;
+  }
+
+  .user-table td {
+    font-size: 0.8125rem;
+  }
+}
 </style>

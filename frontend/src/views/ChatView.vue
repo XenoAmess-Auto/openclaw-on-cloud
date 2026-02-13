@@ -1812,18 +1812,432 @@ textarea:focus {
   background: var(--bg-color);
 }
 
+/* ============================================
+   移动端适配 - Mobile Responsive Styles
+   ============================================ */
+
 @media (max-width: 768px) {
+  .chat-view {
+    height: 100dvh;
+  }
+
+  /* Header */
+  .header {
+    height: 56px;
+    padding: 0 0.75rem;
+    gap: 0.75rem;
+  }
+
+  .back {
+    font-size: 1.125rem;
+    padding: 0.5rem;
+    min-width: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .room-info h1 {
+    font-size: 0.9375rem;
+  }
+
+  .status {
+    font-size: 0.6875rem;
+  }
+
+  .actions {
+    gap: 0.375rem;
+  }
+
+  .actions button {
+    padding: 0.5rem 0.625rem;
+    font-size: 0.8125rem;
+    min-height: 36px;
+  }
+
+  .mention-btn {
+    font-size: 0.9375rem;
+    min-width: 36px;
+  }
+
+  .mention-badge {
+    font-size: 0.5625rem;
+    padding: 1px 4px;
+    min-width: 14px;
+    top: -4px;
+    right: -4px;
+  }
+
+  /* 消息容器 */
+  .message-container {
+    padding: 0.75rem;
+    gap: 0.75rem;
+    padding-bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px));
+  }
+
   .message {
-    max-width: 85%;
+    max-width: 92%;
+    padding: 0.625rem 0.875rem;
+    border-radius: 10px;
+  }
+
+  .message-header {
+    font-size: 0.6875rem;
+    gap: 0.375rem;
+    margin-bottom: 0.375rem;
+  }
+
+  .mention-tag {
+    font-size: 0.5625rem;
+    padding: 1px 5px;
+  }
+
+  .message-content {
+    font-size: 0.9375rem;
+    line-height: 1.5;
+  }
+
+  /* Markdown 样式移动端调整 */
+  .message-content :deep(h1) { font-size: 1.1rem; }
+  .message-content :deep(h2) { font-size: 1rem; }
+  .message-content :deep(h3) { font-size: 0.95rem; }
+  .message-content :deep(h4),
+  .message-content :deep(h5),
+  .message-content :deep(h6) { font-size: 0.9rem; }
+
+  .message-content :deep(pre) {
+    padding: 0.625rem;
+    font-size: 0.8125rem;
+  }
+
+  .message-content :deep(code) {
+    font-size: 0.8125em;
+  }
+
+  .message-content :deep(table) {
+    font-size: 0.8125rem;
+    display: block;
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+
+  .message-content :deep(th),
+  .message-content :deep(td) {
+    padding: 0.375rem 0.5rem;
+  }
+
+  /* 消息图片 */
+  .message-content :deep(.message-image) {
+    max-width: 100%;
+    max-height: 180px;
+  }
+
+  .message-content :deep(.message-file) {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.8125rem;
+  }
+
+  .empty {
+    padding: 2rem 1rem;
+    font-size: 0.875rem;
+  }
+
+  /* 输入区域 */
+  .input-area {
+    padding: 0.625rem 0.75rem;
+    padding-bottom: calc(0.625rem + env(safe-area-inset-bottom, 8px));
+  }
+
+  /* 附件预览 */
+  .attachments-preview {
+    padding: 0.375rem;
+    margin-bottom: 0.5rem;
+    gap: 0.375rem;
+    max-height: 90px;
+  }
+
+  .attachment-item {
+    width: 64px;
+    height: 64px;
+    border-radius: 6px;
+  }
+
+  .attachment-remove {
+    width: 18px;
+    height: 18px;
+    font-size: 12px;
+    top: 3px;
+    right: 3px;
+  }
+
+  /* 输入框 */
+  .input-wrapper {
+    gap: 0.375rem;
+  }
+
+  .input-actions {
+    gap: 0.375rem;
+  }
+
+  .upload-btn {
+    width: 40px;
+    height: 40px;
+    font-size: 1.125rem;
+    border-radius: 10px;
+  }
+
+  textarea {
+    padding: 0.625rem 0.75rem;
+    font-size: 16px;
+    min-height: 40px;
+    max-height: 100px;
+    border-radius: 10px;
   }
 
   .input-wrapper button {
-    padding: 0.75rem 1rem;
+    padding: 0.625rem 1rem;
+    font-size: 0.8125rem;
+    height: 40px;
+    border-radius: 10px;
   }
 
+  /* @提及列表 */
   .mention-list {
     left: 0.5rem;
     right: 0.5rem;
+    max-height: 220px;
+    border-radius: 10px;
+    margin-bottom: 0.375rem;
+  }
+
+  .mention-list-header {
+    padding: 0.625rem 0.875rem;
+    font-size: 0.6875rem;
+  }
+
+  .mention-item {
+    padding: 0.625rem 0.875rem;
+    gap: 0.625rem;
+  }
+
+  .mention-avatar,
+  .mention-avatar-placeholder {
+    width: 28px;
+    height: 28px;
+  }
+
+  .mention-avatar-placeholder {
+    font-size: 0.6875rem;
+  }
+
+  .mention-name {
+    font-size: 0.8125rem;
+  }
+
+  .mention-username {
+    font-size: 0.6875rem;
+  }
+
+  .mention-self {
+    font-size: 0.5625rem;
+    padding: 1px 4px;
+  }
+
+  .mention-empty,
+  .mention-loading {
+    padding: 0.875rem;
+    font-size: 0.8125rem;
+  }
+
+  .mention-item.shortcut {
+    padding: 0.5rem 0.875rem;
+  }
+
+  .shortcut-icon {
+    font-size: 0.875rem;
+  }
+
+  /* 弹窗 */
+  .modal-overlay {
+    padding: 0.75rem;
+    align-items: flex-end;
+  }
+
+  .modal {
+    max-width: 100%;
+    max-height: 85vh;
+    border-radius: 16px 16px 0 0;
+  }
+
+  .modal-header {
+    padding: 1rem;
+  }
+
+  .modal-header h2 {
+    font-size: 1rem;
+  }
+
+  .close-btn {
+    font-size: 1.5rem;
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .modal-footer {
+    padding: 1rem;
+  }
+
+  .modal-footer button {
+    padding: 0.625rem 1rem;
+    font-size: 0.875rem;
+  }
+
+  .empty-mentions {
+    padding: 2rem 1rem;
+  }
+
+  .mention-record {
+    padding: 0.75rem 1rem;
+  }
+
+  .mention-record-header {
+    font-size: 0.6875rem;
+  }
+
+  .mention-record-content {
+    font-size: 0.8125rem;
+  }
+
+  /* 工具调用消息 */
+  .tool-call-message {
+    max-width: 95% !important;
+    margin: 0.375rem 0.5rem !important;
+  }
+
+  .tool-call-header {
+    padding: 0.625rem 0.875rem;
+  }
+
+  .tool-call-list {
+    padding: 0.625rem 0.875rem;
+  }
+
+  .tool-item {
+    padding: 0.625rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .tool-name code {
+    font-size: 0.75rem;
+  }
+
+  .tool-status {
+    font-size: 0.6875rem;
+  }
+
+  .tool-description {
+    font-size: 0.75rem;
+  }
+
+  .tool-result pre {
+    padding: 0.625rem;
+    font-size: 0.75rem;
+    max-height: 200px;
+  }
+
+  .tool-call-content {
+    padding: 0.75rem;
+  }
+}
+
+/* 小屏手机额外优化 */
+@media (max-width: 380px) {
+  .header {
+    height: 52px;
+    padding: 0 0.625rem;
+  }
+
+  .back {
+    font-size: 1rem;
+    padding: 0.375rem;
+    min-width: 32px;
+  }
+
+  .room-info h1 {
+    font-size: 0.875rem;
+  }
+
+  .actions button {
+    padding: 0.375rem 0.5rem;
+    font-size: 0.75rem;
+    min-height: 32px;
+  }
+
+  .mention-btn {
+    font-size: 0.875rem;
+    min-width: 32px;
+  }
+
+  .message {
+    max-width: 94%;
+    padding: 0.5rem 0.75rem;
+  }
+
+  .message-content {
+    font-size: 0.875rem;
+  }
+
+  .message-header {
+    font-size: 0.625rem;
+  }
+
+  .upload-btn {
+    width: 36px;
+    height: 36px;
+    font-size: 1rem;
+  }
+
+  textarea {
+    padding: 0.5rem 0.625rem;
+    font-size: 16px;
+  }
+
+  .input-wrapper button {
+    padding: 0.5rem 0.875rem;
+    height: 36px;
+    font-size: 0.75rem;
+  }
+
+  .mention-list {
+    max-height: 200px;
+  }
+}
+
+/* 横屏模式优化 */
+@media (max-height: 500px) and (orientation: landscape) {
+  .header {
+    height: 48px;
+  }
+
+  .message-container {
+    padding: 0.5rem;
+    gap: 0.5rem;
+  }
+
+  .message {
+    max-width: 85%;
+    padding: 0.5rem 0.75rem;
+  }
+
+  .input-area {
+    padding: 0.5rem 0.625rem;
+  }
+
+  textarea {
+    max-height: 60px;
   }
 
   .modal {

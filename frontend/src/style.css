@@ -2,11 +2,25 @@
   margin: 0;
   padding: 0;
   box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
 }
 
 html, body, #app {
   height: 100%;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* 移动端优化 */
+html {
+  -webkit-text-size-adjust: 100%;
+  -ms-text-size-adjust: 100%;
+}
+
+body {
+  overflow-x: hidden;
+  overscroll-behavior-y: none;
 }
 
 :root {
@@ -19,4 +33,76 @@ html, body, #app {
   --border-color: #e5e7eb;
   --success-color: #10b981;
   --error-color: #ef4444;
+  
+  /* 安全区域适配 */
+  --safe-area-top: env(safe-area-inset-top, 0px);
+  --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-area-left: env(safe-area-inset-left, 0px);
+  --safe-area-right: env(safe-area-inset-right, 0px);
+}
+
+/* 触摸优化 */
+@media (hover: none) {
+  *:hover {
+    text-decoration: none;
+  }
+}
+
+/* 禁用文本选择（可选元素除外） */
+body {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+input, textarea, [contenteditable] {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+/* 平滑滚动 */
+* {
+  scroll-behavior: smooth;
+}
+
+/* 修复 iOS 输入框焦点问题 */
+input, textarea {
+  -webkit-appearance: none;
+  border-radius: 0;
+}
+
+/* 防止按钮在移动端出现默认样式 */
+button {
+  -webkit-appearance: none;
+  touch-action: manipulation;
+}
+
+/* 滚动条样式优化 */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+/* 移动端隐藏滚动条但保持滚动功能 */
+@media (max-width: 768px) {
+  .hide-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  
+  .hide-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
 }

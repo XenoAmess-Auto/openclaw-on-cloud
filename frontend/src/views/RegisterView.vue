@@ -177,4 +177,91 @@ button:disabled {
   color: var(--primary-color);
   text-decoration: none;
 }
+
+/* 移动端适配 */
+@media (max-width: 768px) {
+  .register-view {
+    height: 100dvh;
+    padding: 1rem;
+    align-items: flex-start;
+    padding-top: 8vh;
+    overflow-y: auto;
+  }
+
+  .register-box {
+    padding: 1.5rem;
+    border-radius: 12px;
+    max-width: 100%;
+  }
+
+  h1 {
+    font-size: 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .form-group {
+    margin-bottom: 1rem;
+  }
+
+  label {
+    font-size: 0.8125rem;
+  }
+
+  input {
+    padding: 0.75rem;
+    font-size: 16px; /* 防止 iOS 缩放 */
+  }
+
+  button {
+    padding: 0.875rem;
+    font-size: 1rem;
+    min-height: 48px;
+    margin-top: 0.5rem;
+  }
+
+  .error {
+    font-size: 0.8125rem;
+  }
+
+  .link {
+    font-size: 0.8125rem;
+    margin-top: 1.25rem;
+  }
+}
+
+/* 小屏手机 */
+@media (max-width: 380px) {
+  .register-view {
+    padding-top: 5vh;
+  }
+
+  .register-box {
+    padding: 1.25rem;
+  }
+
+  h1 {
+    font-size: 1.375rem;
+  }
+}
+
+/* 横屏模式 */
+@media (max-height: 500px) and (orientation: landscape) {
+  .register-view {
+    padding-top: 2vh;
+    align-items: flex-start;
+  }
+
+  .register-box {
+    padding: 1.25rem;
+  }
+
+  h1 {
+    font-size: 1.375rem;
+    margin-bottom: 1rem;
+  }
+
+  .form-group {
+    margin-bottom: 0.625rem;
+  }
+}
 </style>

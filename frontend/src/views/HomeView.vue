@@ -1810,4 +1810,490 @@ textarea:focus {
 .warning-text strong {
   color: #ef4444;
 }
+
+/* ============================================
+   移动端适配 - Mobile Responsive Styles
+   ============================================ */
+
+@media (max-width: 768px) {
+  /* 整体布局调整 */
+  .home-view {
+    height: 100dvh; /* 使用动态视口高度 */
+  }
+
+  .header {
+    height: 56px;
+    padding: 0 1rem;
+  }
+
+  .logo {
+    font-size: 1.25rem;
+  }
+
+  .user-info {
+    gap: 0.5rem;
+    font-size: 0.875rem;
+  }
+
+  .user-info button {
+    padding: 0.375rem 0.75rem;
+    font-size: 0.8125rem;
+  }
+
+  .admin-link {
+    padding: 0.375rem 0.75rem;
+    font-size: 0.8125rem;
+  }
+
+  /* 容器布局 - 移动端侧边栏变为顶部导航 */
+  .container {
+    flex-direction: column;
+  }
+
+  /* 侧边栏变为横向滚动 */
+  .sidebar {
+    width: 100%;
+    height: auto;
+    max-height: 160px;
+    border-right: none;
+    border-bottom: 1px solid var(--border-color);
+    flex-shrink: 0;
+  }
+
+  .section-header {
+    padding: 0.75rem 1rem;
+  }
+
+  .section-header h2 {
+    font-size: 0.9375rem;
+  }
+
+  .btn-add {
+    width: 24px;
+    height: 24px;
+    font-size: 1rem;
+  }
+
+  /* 聊天室列表横向滚动 */
+  .room-list {
+    display: flex;
+    flex-direction: row;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 0.5rem;
+    gap: 0.5rem;
+    flex-wrap: nowrap;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none; /* Firefox */
+  }
+
+  .room-list::-webkit-scrollbar {
+    display: none; /* Chrome/Safari */
+  }
+
+  .room-item {
+    flex: 0 0 auto;
+    min-width: 120px;
+    max-width: 160px;
+    padding: 0.625rem 0.875rem;
+    border-bottom: none;
+    border-radius: 10px;
+    border: 1px solid var(--border-color);
+    margin-right: 0;
+  }
+
+  .room-item.active {
+    border-left: none;
+    border: 2px solid var(--primary-color);
+    background: rgba(59, 130, 246, 0.08);
+  }
+
+  .room-name {
+    font-size: 0.875rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .room-meta {
+    font-size: 0.6875rem;
+  }
+
+  .loading, .empty {
+    padding: 1rem;
+    font-size: 0.875rem;
+  }
+
+  /* 主内容区 */
+  .main-content {
+    flex: 1;
+    min-height: 0;
+  }
+
+  /* 欢迎页面 */
+  .welcome {
+    padding: 1rem;
+  }
+
+  .welcome h2 {
+    font-size: 1.25rem;
+  }
+
+  .welcome p {
+    font-size: 0.9375rem;
+  }
+
+  .hint {
+    font-size: 0.8125rem;
+    padding: 0.625rem;
+  }
+
+  /* 聊天容器 */
+  .chat-container {
+    height: 100%;
+  }
+
+  .chat-header {
+    height: 52px;
+    padding: 0 0.75rem;
+  }
+
+  .room-info h3 {
+    font-size: 0.9375rem;
+  }
+
+  .chat-actions {
+    gap: 0.375rem;
+  }
+
+  .chat-actions button {
+    padding: 0.375rem 0.625rem;
+    font-size: 0.8125rem;
+  }
+
+  /* 消息容器 */
+  .message-container {
+    padding: 0.75rem;
+    gap: 0.75rem;
+    padding-bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  .message {
+    max-width: 90%;
+    gap: 0.5rem;
+  }
+
+  .message-avatar {
+    width: 36px;
+    height: 36px;
+  }
+
+  .avatar-placeholder {
+    font-size: 0.8125rem;
+  }
+
+  .message-body {
+    padding: 0.625rem 0.875rem;
+    border-radius: 10px;
+  }
+
+  .message-header {
+    font-size: 0.6875rem;
+    gap: 0.375rem;
+  }
+
+  .mention-tag {
+    font-size: 0.5625rem;
+    padding: 1px 4px;
+  }
+
+  .message-content {
+    font-size: 0.9375rem;
+    line-height: 1.5;
+  }
+
+  /* 系统消息 */
+  .system-message {
+    padding: 0.375rem 0;
+  }
+
+  .system-text {
+    font-size: 0.6875rem;
+    padding: 0.25rem 0.625rem;
+  }
+
+  /* 工具调用消息 */
+  .tool-call-message {
+    max-width: 95%;
+    padding: 0.75rem;
+    margin: 0.375rem 0.5rem;
+  }
+
+  .tool-icon {
+    font-size: 0.875rem;
+  }
+
+  .tool-title {
+    font-size: 0.8125rem;
+  }
+
+  .tool-name {
+    font-size: 0.8125rem;
+  }
+
+  .tool-name code {
+    font-size: 0.75rem;
+  }
+
+  .tool-status {
+    font-size: 0.6875rem;
+  }
+
+  .tool-description {
+    font-size: 0.75rem;
+  }
+
+  .tool-result pre {
+    font-size: 0.6875rem;
+  }
+
+  /* 日期分隔线 */
+  .date-separator {
+    margin: 0.75rem 0;
+  }
+
+  .date-separator span {
+    font-size: 0.6875rem;
+    padding: 0 0.75rem;
+  }
+
+  /* 正在输入提示 */
+  .typing-indicator {
+    padding: 0.375rem 0.75rem;
+    font-size: 0.8125rem;
+  }
+
+  /* 输入区域 */
+  .input-area {
+    padding: 0.625rem 0.75rem;
+    padding-bottom: calc(0.625rem + env(safe-area-inset-bottom, 8px));
+    border-top: 1px solid var(--border-color);
+    background: var(--surface-color);
+  }
+
+  /* 附件预览 */
+  .attachments-preview {
+    padding: 0.375rem;
+    margin-bottom: 0.5rem;
+    max-height: 80px;
+  }
+
+  .attachment-item {
+    padding: 0.25rem 0.375rem;
+  }
+
+  .attachment-preview-img {
+    width: 40px;
+    height: 40px;
+  }
+
+  .file-name {
+    max-width: 100px;
+    font-size: 0.6875rem;
+  }
+
+  .remove-attachment {
+    width: 18px;
+    height: 18px;
+    font-size: 0.75rem;
+  }
+
+  /* 输入框区域 */
+  .input-wrapper {
+    gap: 0.375rem;
+  }
+
+  .attach-btn {
+    width: 40px;
+    height: 40px;
+    font-size: 1.125rem;
+  }
+
+  textarea {
+    padding: 0.625rem 0.75rem;
+    font-size: 16px; /* 防止 iOS 自动缩放 */
+    min-height: 40px;
+    max-height: 100px;
+    border-radius: 10px;
+  }
+
+  .input-wrapper button {
+    padding: 0.625rem 1rem;
+    font-size: 0.8125rem;
+    height: 40px;
+    border-radius: 10px;
+  }
+
+  /* @提及列表 */
+  .mention-list {
+    left: 0.5rem;
+    right: 0.5rem;
+    max-height: 240px;
+    border-radius: 10px;
+  }
+
+  .mention-list-header {
+    padding: 0.625rem 0.875rem;
+    font-size: 0.6875rem;
+  }
+
+  .mention-item {
+    padding: 0.625rem 0.875rem;
+  }
+
+  .mention-avatar,
+  .mention-avatar-placeholder {
+    width: 28px;
+    height: 28px;
+  }
+
+  .mention-avatar-placeholder {
+    font-size: 0.6875rem;
+  }
+
+  .mention-name {
+    font-size: 0.8125rem;
+  }
+
+  .mention-username {
+    font-size: 0.6875rem;
+  }
+
+  .mention-self {
+    font-size: 0.5625rem;
+    padding: 1px 4px;
+  }
+
+  .shortcut-icon {
+    font-size: 0.875rem;
+  }
+
+  /* 弹窗 */
+  .modal-content {
+    padding: 1.25rem;
+    width: 92%;
+    border-radius: 14px;
+    margin: 1rem;
+  }
+
+  .modal-content h3 {
+    font-size: 1.125rem;
+  }
+
+  .form-group label {
+    font-size: 0.8125rem;
+  }
+
+  .form-group input {
+    padding: 0.625rem;
+    font-size: 16px; /* 防止 iOS 缩放 */
+  }
+
+  .modal-actions {
+    margin-top: 1.25rem;
+  }
+
+  .modal-actions button {
+    padding: 0.5rem 0.875rem;
+    font-size: 0.8125rem;
+  }
+}
+
+/* 小屏手机额外优化 */
+@media (max-width: 380px) {
+  .header {
+    height: 52px;
+  }
+
+  .logo {
+    font-size: 1.125rem;
+  }
+
+  .user-info span {
+    display: none; /* 超小屏隐藏用户名 */
+  }
+
+  .sidebar {
+    max-height: 140px;
+  }
+
+  .room-item {
+    min-width: 100px;
+    padding: 0.5rem 0.75rem;
+  }
+
+  .chat-header {
+    height: 48px;
+  }
+
+  .chat-actions button {
+    padding: 0.375rem 0.5rem;
+    font-size: 0.75rem;
+  }
+
+  .message {
+    max-width: 92%;
+  }
+
+  .message-avatar {
+    width: 32px;
+    height: 32px;
+  }
+
+  .message-body {
+    padding: 0.5rem 0.75rem;
+  }
+
+  .message-content {
+    font-size: 0.875rem;
+  }
+
+  .attach-btn {
+    width: 36px;
+    height: 36px;
+    font-size: 1rem;
+  }
+
+  textarea {
+    padding: 0.5rem 0.625rem;
+  }
+
+  .input-wrapper button {
+    padding: 0.5rem 0.875rem;
+    height: 36px;
+  }
+}
+
+/* 横屏模式优化 */
+@media (max-height: 500px) and (orientation: landscape) {
+  .header {
+    height: 48px;
+  }
+
+  .sidebar {
+    max-height: 100px;
+  }
+
+  .chat-header {
+    height: 44px;
+  }
+
+  .input-area {
+    padding: 0.5rem 0.75rem;
+  }
+
+  .message-container {
+    padding: 0.5rem;
+  }
+}
 </style>

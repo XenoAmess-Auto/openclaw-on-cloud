@@ -164,4 +164,101 @@ button:disabled {
   color: var(--primary-color);
   text-decoration: none;
 }
+
+/* 移动端适配 */
+@media (max-width: 768px) {
+  .login-view {
+    height: 100dvh;
+    padding: 1rem;
+    align-items: flex-start;
+    padding-top: 15vh;
+  }
+
+  .login-box {
+    padding: 1.5rem;
+    border-radius: 12px;
+    max-width: 100%;
+  }
+
+  h1 {
+    font-size: 1.75rem;
+  }
+
+  .subtitle {
+    font-size: 0.9375rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .form-group {
+    margin-bottom: 1rem;
+  }
+
+  label {
+    font-size: 0.8125rem;
+  }
+
+  input {
+    padding: 0.75rem;
+    font-size: 16px; /* 防止 iOS 缩放 */
+  }
+
+  button {
+    padding: 0.875rem;
+    font-size: 1rem;
+    min-height: 48px; /* 更大的触摸目标 */
+  }
+
+  .error {
+    font-size: 0.8125rem;
+  }
+
+  .link {
+    font-size: 0.8125rem;
+    margin-top: 1.25rem;
+  }
+}
+
+/* 小屏手机 */
+@media (max-width: 380px) {
+  .login-view {
+    padding-top: 10vh;
+  }
+
+  .login-box {
+    padding: 1.25rem;
+  }
+
+  h1 {
+    font-size: 1.5rem;
+  }
+
+  .subtitle {
+    font-size: 0.875rem;
+  }
+}
+
+/* 横屏模式 */
+@media (max-height: 500px) and (orientation: landscape) {
+  .login-view {
+    padding-top: 5vh;
+    align-items: center;
+  }
+
+  .login-box {
+    padding: 1.25rem;
+  }
+
+  h1 {
+    font-size: 1.5rem;
+    margin-bottom: 0.25rem;
+  }
+
+  .subtitle {
+    margin-bottom: 1rem;
+  }
+
+  .form-group {
+    margin-bottom: 0.75rem;
+  }
+}
 </style>
