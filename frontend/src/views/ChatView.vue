@@ -1,5 +1,5 @@
 <template>
-  <div class="chat-view" @paste="handlePaste">
+  <div class="chat-view">
     <header class="header">
       <router-link to="/" class="back">←</router-link>
       <div class="room-info">
@@ -82,7 +82,7 @@
           v-model="inputMessage"
           @keydown="handleKeydown"
           @input="handleInput"
-          @paste.stop="handlePaste"
+          @paste="handlePaste"
           placeholder="输入消息... 使用 @ 提及他人，粘贴或点击按钮添加图片"
           rows="1"
           ref="inputRef"
@@ -275,10 +275,15 @@ onMounted(() => {
   chatStore.connect(roomId.value)
   loadRoomMembers()
   loadMentions()
+  
+  // 添加 document 级别的 paste 监听
+  document.addEventListener('paste', handleDocumentPaste)
 })
 
 onUnmounted(() => {
   chatStore.disconnect()
+  // 移除 document 级别的 paste 监听
+  document.removeEventListener('paste', handleDocumentPaste)
 })
 
 watch(() => chatStore.messages.length, () => {
@@ -512,6 +517,16 @@ function isMentionedMe(msg: Message): boolean {
 
 function getInitials(name: string): string {
   return name.slice(0, 2).toUpperCase()
+}
+
+// 处理 document 级别的粘贴事件
+function handleDocumentPaste(e: ClipboardEvent) {
+  // 如果焦点在输入框，让 handlePaste 处理
+  if (inputRef.value && document.activeElement === inputRef.value) {
+    return
+  }
+  // 否则调用 handlePaste
+  handlePaste(e)
 }
 
 // 生成附件唯一ID
