@@ -160,6 +160,7 @@
                 v-model="inputMessage"
                 @keydown="handleKeydown"
                 @input="handleInput"
+                @paste="handlePaste"
                 :placeholder="isUploading ? '上传中...' : '输入消息... 使用 @ 提及他人'"
                 rows="1"
                 ref="inputRef"
@@ -486,6 +487,45 @@ function sendMessage() {
   attachments.value = []
   showMentionList.value = false
   adjustTextareaHeight()
+}
+
+// 处理粘贴事件
+async function handlePaste(event: ClipboardEvent) {
+  const items = event.clipboardData?.items
+  if (!items) return
+
+  const imageFiles: File[] = []
+  
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i]
+    if (item.type.startsWith('image/')) {
+      const file = item.getAsFile()
+      if (file) {
+        imageFiles.push(file)
+      }
+    }
+  }
+
+  if (imageFiles.length === 0) return
+
+  event.preventDefault()
+  isUploading.value = true
+
+  try {
+    for (const file of imageFiles) {
+      const previewUrl = URL.createObjectURL(file)
+      const response = await fileApi.upload(file)
+      attachments.value.push({
+        ...response.data,
+        previewUrl
+      })
+    }
+  } catch (err: any) {
+    console.error('Paste upload failed:', err)
+    alert('图片上传失败: ' + (err.response?.data?.message || err.message))
+  } finally {
+    isUploading.value = false
+  }
 }
 
 // 文件处理
