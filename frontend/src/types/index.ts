@@ -22,6 +22,15 @@ export interface Mention {
   userName: string
 }
 
+export interface ToolCall {
+  id: string
+  name: string
+  description?: string
+  status: 'running' | 'completed' | 'error'
+  result?: string
+  timestamp: string
+}
+
 export interface Message {
   id: string
   senderId: string
@@ -32,6 +41,8 @@ export interface Message {
   openclawMentioned: boolean
   fromOpenClaw: boolean
   isSystem?: boolean
+  isToolCall?: boolean
+  toolCalls?: ToolCall[]
   mentions?: Mention[]
   mentionAll?: boolean
   mentionHere?: boolean

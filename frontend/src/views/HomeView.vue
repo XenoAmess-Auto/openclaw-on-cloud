@@ -75,6 +75,32 @@
                 <span class="system-text">{{ msg.content }}</span>
               </div>
               
+              <!-- 工具调用消息 -->
+              <div v-else-if="msg.isToolCall || msg.toolCalls?.length" class="tool-call-message">
+                <div class="tool-call-header">
+                  <span class="tool-icon">🔧</span>
+                  <span class="tool-title">工具调用</span>
+                </div>
+                <div class="tool-call-list">
+                  <div 
+                    v-for="tool in (msg.toolCalls || [])" 
+                    :key="tool.id" 
+                    :class="['tool-item', tool.status]"
+                  >
+                    <div class="tool-name">
+                      <code>{{ tool.name }}</code>
+                      <span v-if="tool.status === 'running'" class="tool-status running">运行中...</span>
+                      <span v-else-if="tool.status === 'completed'" class="tool-status completed">✓ 完成</span>
+                      <span v-else-if="tool.status === 'error'" class="tool-status error">✗ 错误</span>
+                    </div>
+                    <div v-if="tool.description" class="tool-description">{{ tool.description }}</div>
+                    <div v-if="tool.result" class="tool-result">
+                      <pre>{{ tool.result }}</pre>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
               <!-- 普通消息 -->
               <div
                 v-else
@@ -1241,6 +1267,124 @@ function isSameDay(d1: Date, d2: Date): boolean {
   background: var(--bg-color);
   padding: 0.25rem 0.75rem;
   border-radius: 12px;
+}
+
+/* 工具调用消息 */
+.tool-call-message {
+  background: var(--bg-color);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 1rem;
+  margin: 0.5rem 1rem;
+  max-width: 80%;
+  align-self: flex-start;
+}
+
+.tool-call-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.tool-icon {
+  font-size: 1rem;
+}
+
+.tool-title {
+  font-weight: 600;
+  font-size: 0.875rem;
+  color: var(--text-primary);
+}
+
+.tool-call-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.tool-item {
+  background: var(--surface-color);
+  border-radius: 8px;
+  padding: 0.75rem;
+  border-left: 3px solid var(--border-color);
+}
+
+.tool-item.running {
+  border-left-color: #3b82f6;
+  background: rgba(59, 130, 246, 0.05);
+}
+
+.tool-item.completed {
+  border-left-color: #22c55e;
+}
+
+.tool-item.error {
+  border-left-color: #ef4444;
+  background: rgba(239, 68, 68, 0.05);
+}
+
+.tool-name {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  margin-bottom: 0.25rem;
+}
+
+.tool-name code {
+  background: rgba(0, 0, 0, 0.1);
+  padding: 0.125rem 0.375rem;
+  border-radius: 4px;
+  font-family: monospace;
+  font-size: 0.8rem;
+}
+
+.tool-status {
+  font-size: 0.75rem;
+  padding: 0.125rem 0.375rem;
+  border-radius: 4px;
+  margin-left: auto;
+}
+
+.tool-status.running {
+  color: #3b82f6;
+  background: rgba(59, 130, 246, 0.1);
+}
+
+.tool-status.completed {
+  color: #22c55e;
+  background: rgba(34, 197, 94, 0.1);
+}
+
+.tool-status.error {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.tool-description {
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  margin-top: 0.25rem;
+}
+
+.tool-result {
+  margin-top: 0.5rem;
+  padding: 0.5rem;
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 6px;
+  overflow-x: auto;
+}
+
+.tool-result pre {
+  font-family: monospace;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 /* 时间分隔线 */

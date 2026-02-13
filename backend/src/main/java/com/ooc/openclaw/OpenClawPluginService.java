@@ -88,10 +88,25 @@ public class OpenClawPluginService {
         // 构建消息列表
         List<Map<String, Object>> messages = new ArrayList<>();
         
-        // 添加系统消息
+        // 添加系统消息 - 要求包含工具调用信息
         Map<String, Object> systemMsg = new HashMap<>();
         systemMsg.put("role", "system");
-        systemMsg.put("content", "You are OpenClaw, a helpful AI assistant. Be concise and direct in your responses.");
+        systemMsg.put("content", """
+            You are OpenClaw, a helpful AI assistant. Be concise and direct in your responses.
+            
+            IMPORTANT: When you use tools (read, write, edit, exec, etc.), you MUST include a summary 
+            of the tools you used at the beginning of your response in this format:
+            
+            **Tools used:**
+            - `tool_name`: brief description of what it did
+            
+            For example:
+            **Tools used:**
+            - `read`: viewed file configuration
+            - `exec`: ran git status command
+            
+            Then provide your actual response.
+            """);
         messages.add(systemMsg);
         
         // 添加用户消息（多模态格式）

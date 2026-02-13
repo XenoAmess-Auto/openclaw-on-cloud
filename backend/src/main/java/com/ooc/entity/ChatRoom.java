@@ -61,6 +61,10 @@ public class ChatRoom {
         private Instant timestamp;
         private boolean openclawMentioned;
         private boolean fromOpenClaw;
+        private boolean isSystem;
+        private boolean isToolCall;
+        @Builder.Default
+        private List<ToolCall> toolCalls = new ArrayList<>();
         @Builder.Default
         private List<Mention> mentions = new ArrayList<>();
         private boolean mentionAll;
@@ -88,6 +92,19 @@ public class ChatRoom {
             private String type;
             private String contentType;
             private long size;
+        }
+        
+        @Data
+        @Builder
+        @NoArgsConstructor
+        @AllArgsConstructor
+        public static class ToolCall {
+            private String id;
+            private String name;
+            private String description;
+            private String status; // running, completed, error
+            private String result;
+            private Instant timestamp;
         }
     }
 

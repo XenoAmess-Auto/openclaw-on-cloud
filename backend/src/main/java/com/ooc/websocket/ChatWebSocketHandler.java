@@ -274,12 +274,68 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
     }
 
     private void handleOpenClawResponse(String roomId, OpenClawPluginService.OpenClawResponse response) {
+        String content = response.content();
+        List<ChatRoom.Message.ToolCall> toolCalls = new ArrayList<>();
+        
+        // 解析 **Tools used:** 部分
+        if (content.contains("**Tools used:**")) {
+            int toolsStart = content.indexOf("**Tools used:**");
+            int toolsEnd = content.indexOf("\n\n", toolsStart);
+            if (toolsEnd == -1) {
+                toolsEnd = content.length();
+            }
+            String toolsSection = content.substring(toolsStart, toolsEnd);
+            
+            // 解析每个工具调用
+            String[] lines = toolsSection.split("\n");
+            for (String line : lines) {
+                line = line.trim();
+                if (line.startsWith("- `") && line.contains("`")) {
+                    int nameStart = line.indexOf("`") + 1;
+                    int nameEnd = line.indexOf("`", nameStart);
+                    if (nameEnd > nameStart) {
+                        String toolName = line.substring(nameStart, nameEnd);
+                        String description = "";
+                        int descStart = line.indexOf(":", nameEnd);
+                        if (descStart != -1 && descStart + 1 < line.length()) {
+                            description = line.substring(descStart + 1).trim();
+                        }
+                        
+                        toolCalls.add(ChatRoom.Message.ToolCall.builder()
+                                .id(UUID.randomUUID().toString())
+                                .name(toolName)
+                                .description(description)
+                                .status("completed")
+                                .timestamp(Instant.now())
+                                .build());
+                    }
+                }
+            }
+            
+            // 移除 Tools used 部分，只保留实际回复内容
+            content = content.substring(0, toolsStart).trim() + content.substring(toolsEnd).trim();
+        }
+        
+        // 解析代码块作为工具结果
+        if (content.contains("```") && !toolCalls.isEmpty()) {
+            int codeStart = content.indexOf("```");
+            int codeEnd = content.indexOf("```", codeStart + 3);
+            if (codeEnd != -1) {
+                String codeBlock = content.substring(codeStart, codeEnd + 3);
+                // 将第一个代码块关联到第一个工具
+                if (!toolCalls.isEmpty()) {
+                    ChatRoom.Message.ToolCall firstTool = toolCalls.get(0);
+                    firstTool.setResult(codeBlock);
+                }
+            }
+        }
+        
         // 保存 OpenClaw 回复到 OOC 会话
         oocSessionService.addMessage(roomId, OocSession.SessionMessage.builder()
                 .id(UUID.randomUUID().toString())
                 .senderId("openclaw")
                 .senderName("OpenClaw")
-                .content(response.content())
+                .content(content)
                 .timestamp(Instant.now())
                 .fromOpenClaw(true)
                 .build());
@@ -289,10 +345,12 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                 .id(UUID.randomUUID().toString())
                 .senderId("openclaw")
                 .senderName("OpenClaw")
-                .content(response.content())
+                .content(content)
                 .timestamp(Instant.now())
                 .openclawMentioned(false)
                 .fromOpenClaw(true)
+                .toolCalls(toolCalls)
+                .isToolCall(!toolCalls.isEmpty())
                 .build();
 
         chatRoomService.addMessage(roomId, message);
