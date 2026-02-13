@@ -199,6 +199,14 @@ import { useChatStore, type Attachment } from '@/stores/chat'
 import { chatRoomApi } from '@/api/chatRoom'
 import { mentionApi } from '@/api/mention'
 import type { MemberDto, Message, MentionRecord } from '@/types'
+import { marked } from 'marked'
+import DOMPurify from 'dompurify'
+
+// 配置 marked 选项
+marked.setOptions({
+  breaks: true, // 将换行符转换为 <br>
+  gfm: true,    // GitHub Flavored Markdown
+})
 
 const route = useRoute()
 const router = useRouter()
@@ -485,28 +493,73 @@ function formatTime(timestamp: string) {
 
 function renderContent(msg: Message) {
   // 防御性处理：确保 content 不为 null/undefined
-  let content = (msg.content || '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
+  let content = msg.content || ''
 
-  // 高亮 @所有人 和 @在线
-  content = content
-    .replace(/@所有人|@everyone|@all/gi, '<span class="mention mention-all">$\u0026</span>')
-    .replace(/@在线|@here/gi, '<span class="mention mention-here">$\u0026</span>')
+  // Step 1: 先渲染 Markdown（在 HTML 转义之前）
+  // 临时替换 @提及，防止 Markdown 解析器破坏它们
+  const mentionPlaceholders: string[] = []
+  content = content.replace(/(@所有人|@everyone|@all|@在线|@here|@openclaw|@[^\s]+)/gi, (match) => {
+    mentionPlaceholders.push(match)
+    return `\u0000MENTION_${mentionPlaceholders.length - 1}\u0000`
+  })
 
-  // 高亮 @openclaw
-  content = content.replace(/@openclaw/gi, '<span class="mention">@openclaw</span>')
+  // 渲染 Markdown
+  let htmlContent: string
+  try {
+    htmlContent = marked.parse(content) as string
+  } catch (e) {
+    console.error('Markdown parsing error:', e)
+    htmlContent = content.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  }
 
-  // 高亮具体用户@
+  // XSS 清理
+  htmlContent = DOMPurify.sanitize(htmlContent, {
+    ALLOWED_TAGS: [
+      'p', 'br', 'hr',
+      'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+      'ul', 'ol', 'li',
+      'strong', 'em', 'code', 'pre', 'blockquote',
+      'a', 'img', 'table', 'thead', 'tbody', 'tr', 'th', 'td',
+      'del', 'ins', 'sup', 'sub'
+    ],
+    ALLOWED_ATTR: ['href', 'src', 'alt', 'title', 'target']
+  })
+
+  // Step 2: 恢复 @提及并添加高亮
+  htmlContent = htmlContent.replace(/\u0000MENTION_(\d+)\u0000/g, (_, index) => {
+    const mention = mentionPlaceholders[parseInt(index)]
+    if (!mention) return ''
+
+    // 判断提及类型并添加对应的 class
+    if (/@所有人|@everyone|@all/i.test(mention)) {
+      return `<span class="mention mention-all">${mention}</span>`
+    } else if (/@在线|@here/i.test(mention)) {
+      return `<span class="mention mention-here">${mention}</span>`
+    } else if (/@openclaw/i.test(mention)) {
+      return `<span class="mention">${mention}</span>`
+    } else {
+      // 检查是否是已知的用户提及
+      const isKnownMention = msg.mentions?.some(m => mention === `@${m.userName}`)
+      if (isKnownMention) {
+        return `<span class="mention">${mention}</span>`
+      }
+      // 未知的 @xxx 也高亮
+      return `<span class="mention">${mention}</span>`
+    }
+  })
+
+  // Step 3: 处理 msg.mentions 中可能存在的但未在内容中找到的提及
   if (msg.mentions) {
     msg.mentions.forEach(mention => {
       const regex = new RegExp(`@${mention.userName}`, 'g')
-      content = content.replace(regex, `<span class="mention">@${mention.userName}</span>`)
+      // 只替换未被替换过的（即不在 placeholder 中的）
+      if (!mentionPlaceholders.some(p => p === `@${mention.userName}`)) {
+        htmlContent = htmlContent.replace(regex, `<span class="mention">@${mention.userName}</span>`)
+      }
     })
   }
 
-  // 渲染附件图片
+  // Step 4: 渲染附件图片
   let attachmentsHtml = ''
   if (msg.attachments && msg.attachments.length > 0) {
     attachmentsHtml = '<div class="message-attachments">' +
@@ -534,7 +587,7 @@ function renderContent(msg: Message) {
       '</div>'
   }
 
-  return content.replace(/\n/g, '<br>') + attachmentsHtml
+  return htmlContent + attachmentsHtml
 }
 
 function isMentionedMe(msg: Message): boolean {
@@ -876,6 +929,150 @@ function removeAttachment(id: string) {
   background: rgba(255,255,255,0.2);
   border-color: rgba(255,255,255,0.3);
   color: white;
+}
+
+/* Markdown 样式 */
+.message-content :deep(h1),
+.message-content :deep(h2),
+.message-content :deep(h3),
+.message-content :deep(h4),
+.message-content :deep(h5),
+.message-content :deep(h6) {
+  margin: 0.75rem 0 0.5rem;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.message-content :deep(h1) { font-size: 1.25rem; }
+.message-content :deep(h2) { font-size: 1.15rem; }
+.message-content :deep(h3) { font-size: 1.05rem; }
+.message-content :deep(h4),
+.message-content :deep(h5),
+.message-content :deep(h6) { font-size: 1rem; }
+
+.message-content :deep(p) {
+  margin: 0.5rem 0;
+}
+
+.message-content :deep(p:first-child) {
+  margin-top: 0;
+}
+
+.message-content :deep(p:last-child) {
+  margin-bottom: 0;
+}
+
+.message-content :deep(ul),
+.message-content :deep(ol) {
+  margin: 0.5rem 0;
+  padding-left: 1.5rem;
+}
+
+.message-content :deep(li) {
+  margin: 0.25rem 0;
+}
+
+.message-content :deep(blockquote) {
+  margin: 0.5rem 0;
+  padding: 0.5rem 0.75rem;
+  border-left: 3px solid var(--primary-color);
+  background: rgba(59, 130, 246, 0.05);
+  border-radius: 0 6px 6px 0;
+}
+
+.message.from-me .message-content :deep(blockquote) {
+  background: rgba(255,255,255,0.1);
+  border-left-color: rgba(255,255,255,0.5);
+}
+
+.message-content :deep(pre) {
+  margin: 0.5rem 0;
+  padding: 0.75rem;
+  background: #1e1e2e;
+  border-radius: 8px;
+  overflow-x: auto;
+}
+
+.message-content :deep(code) {
+  font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', Monaco, monospace;
+  font-size: 0.875em;
+}
+
+.message-content :deep(pre code) {
+  color: #cdd6f4;
+  background: transparent;
+  padding: 0;
+}
+
+.message-content :deep(:not(pre) > code) {
+  background: rgba(59, 130, 246, 0.1);
+  padding: 0.125rem 0.375rem;
+  border-radius: 4px;
+  color: var(--primary-color);
+}
+
+.message.from-me .message-content :deep(:not(pre) > code) {
+  background: rgba(255,255,255,0.2);
+  color: white;
+}
+
+.message-content :deep(table) {
+  width: 100%;
+  margin: 0.5rem 0;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.message-content :deep(th),
+.message-content :deep(td) {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border-color);
+  text-align: left;
+}
+
+.message-content :deep(th) {
+  background: var(--bg-color);
+  font-weight: 600;
+}
+
+.message.from-me .message-content :deep(th) {
+  background: rgba(255,255,255,0.15);
+}
+
+.message.from-me .message-content :deep(th),
+.message.from-me .message-content :deep(td) {
+  border-color: rgba(255,255,255,0.2);
+}
+
+.message-content :deep(hr) {
+  margin: 1rem 0;
+  border: none;
+  border-top: 1px solid var(--border-color);
+}
+
+.message.from-me .message-content :deep(hr) {
+  border-top-color: rgba(255,255,255,0.2);
+}
+
+.message-content :deep(a) {
+  color: var(--primary-color);
+  text-decoration: underline;
+}
+
+.message.from-me .message-content :deep(a) {
+  color: rgba(255,255,255,0.9);
+}
+
+.message-content :deep(strong) {
+  font-weight: 600;
+}
+
+.message-content :deep(em) {
+  font-style: italic;
+}
+
+.message-content :deep(del) {
+  text-decoration: line-through;
 }
 
 .empty {
