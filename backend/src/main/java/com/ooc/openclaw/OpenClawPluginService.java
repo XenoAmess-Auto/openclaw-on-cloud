@@ -43,19 +43,36 @@ public class OpenClawPluginService {
     }
 
     /**
+     * 将消息中的 /uploads/ 路径转换为 OpenClaw 可读取的绝对路径
+     */
+    private String convertUploadsPath(String message) {
+        if (message == null || !message.contains("/uploads/")) {
+            return message;
+        }
+        
+        // 获取 ooc 项目的绝对路径
+        String oocBasePath = System.getProperty("user.dir");
+        // 替换 /uploads/ 为绝对路径
+        return message.replace("/uploads/", oocBasePath + "/uploads/");
+    }
+
+    /**
      * 发送消息到 OpenClaw 并获取回复（支持附件）
      */
     public Mono<OpenClawResponse> sendMessage(String sessionId, String message, 
             List<ChatWebSocketHandler.Attachment> attachments, String userId, String userName) {
         
+        // 转换消息中的 /uploads/ 路径为绝对路径
+        String processedMessage = convertUploadsPath(message);
+        
         // 构建消息内容块（支持多模态）
         List<Map<String, Object>> contentBlocks = new ArrayList<>();
         
         // 添加文本内容块
-        if (message != null && !message.isEmpty()) {
+        if (processedMessage != null && !processedMessage.isEmpty()) {
             Map<String, Object> textBlock = new HashMap<>();
             textBlock.put("type", "text");
-            textBlock.put("text", userName + ": " + message);
+            textBlock.put("text", userName + ": " + processedMessage);
             contentBlocks.add(textBlock);
         }
         
@@ -122,7 +139,7 @@ public class OpenClawPluginService {
 
         log.info("Sending multimodal request to OpenClaw: sessionId={}, textLength={}, imageCount={}", 
                 sessionId, 
-                message != null ? message.length() : 0,
+                processedMessage != null ? processedMessage.length() : 0,
                 attachments != null ? attachments.size() : 0);
 
         return getWebClient().post()

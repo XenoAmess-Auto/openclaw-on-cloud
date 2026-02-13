@@ -61,6 +61,9 @@ public class FileStorageService {
             Path targetLocation = Paths.get(fileProperties.getUploadDir()).resolve(filename);
             Files.copy(file.getInputStream(), targetLocation, StandardCopyOption.REPLACE_EXISTING);
 
+            // 获取绝对路径供 OpenClaw 读取
+            Path absolutePath = targetLocation.toAbsolutePath().normalize();
+
             // 确定文件类型
             FileType type = determineFileType(contentType);
 
@@ -68,6 +71,7 @@ public class FileStorageService {
                     .filename(filename)
                     .originalName(originalFilename)
                     .url(fileProperties.getUrlPrefix() + "/" + filename)
+                    .localPath(absolutePath.toString())
                     .type(type)
                     .contentType(contentType)
                     .size(file.getSize())
@@ -97,6 +101,7 @@ public class FileStorageService {
         private String filename;
         private String originalName;
         private String url;
+        private String localPath;
         private FileType type;
         private String contentType;
         private long size;
