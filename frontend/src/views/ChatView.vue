@@ -19,25 +19,58 @@
     </header>
     
     <div class="message-container" ref="messageContainer">
+      <!-- 工具调用消息 -->
       <div
         v-for="msg in chatStore.messages"
         :key="msg.id"
         :class="[
-          'message', 
-          { 
-            'from-me': msg.senderId === authStore.user?.id, 
+          'message',
+          {
+            'from-me': msg.senderId === authStore.user?.id,
             'from-openclaw': msg.fromOpenClaw,
-            'mentioned-me': isMentionedMe(msg)
+            'mentioned-me': isMentionedMe(msg),
+            'tool-call-message': msg.isToolCall || msg.toolCalls?.length
           }
         ]"
       >
-        <div class="message-header">
-          <span class="sender">{{ msg.senderName }}</span>
-          <span v-if="msg.mentionAll" class="mention-tag mention-all">@所有人</span>
-          <span v-else-if="msg.mentionHere" class="mention-tag mention-here">@在线</span>
-          <span class="time">{{ formatTime(msg.timestamp) }}</span>
-        </div>
-        <div class="message-content" v-html="renderContent(msg)"></div>
+        <!-- 工具调用展示 -->
+        <template v-if="msg.isToolCall || msg.toolCalls?.length">
+          <div class="tool-call-header">
+            <span class="tool-icon">🔧</span>
+            <span class="tool-title">工具调用</span>
+          </div>
+          <div class="tool-call-list">
+            <div
+              v-for="tool in (msg.toolCalls || [])"
+              :key="tool.id"
+              :class="['tool-item', tool.status]"
+            >
+              <div class="tool-name">
+                <code>{{ tool.name }}</code>
+                <span v-if="tool.status === 'running'" class="tool-status running">运行中...</span>
+                <span v-else-if="tool.status === 'completed'" class="tool-status completed">✓ 完成</span>
+                <span v-else-if="tool.status === 'error'" class="tool-status error">✗ 错误</span>
+              </div>
+              <div v-if="tool.description" class="tool-description">{{ tool.description }}</div>
+              <div v-if="tool.result" class="tool-result">
+                <pre><code v-html="highlightCode(tool.result)"></code></pre>
+              </div>
+            </div>
+          </div>
+          <!-- 工具调用后的回复内容 -->
+          <div v-if="msg.content" class="message-content tool-call-content" v-html="renderContent(msg)"></div>
+        </template>
+        
+        <!-- 普通消息 -->
+        <template v-else>
+          <div class="message-header">
+            <span class="sender">{{ msg.senderName }}</span>
+            <span v-if="msg.mentionAll" class="mention-tag mention-all">@所有人</span>
+            <span v-else-if="msg.mentionHere" class="mention-tag mention-here">@在线</span>
+            <span class="time">{{ formatTime(msg.timestamp) }}</span>
+          </div>
+          <div class="message-content" v-html="renderContent(msg)"></div>
+        </template>
       </div>
       
       <div v-if="chatStore.messages.length === 0" class="empty">
@@ -537,6 +570,15 @@ function addCodeCopyButtons(container: HTMLElement) {
     btn.onclick = () => copyCode(btn, code)
     pre.appendChild(btn)
   })
+}
+
+// 高亮代码块
+function highlightCode(code: string): string {
+  // 简单的高亮处理：转义 HTML 并保留格式
+  return code
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
 }
 
 function renderContent(msg: Message) {
@@ -1639,20 +1681,151 @@ textarea:focus {
   -webkit-box-orient: vertical;
 }
 
+/* 工具调用消息样式 */
+.tool-call-message {
+  background: var(--surface-color) !important;
+  border: 1px solid var(--border-color);
+  max-width: 90% !important;
+  margin: 0.5rem auto !important;
+}
+
+.tool-call-message.from-openclaw {
+  margin-left: 1rem !important;
+  margin-right: auto !important;
+}
+
+.tool-call-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  background: rgba(0,0,0,0.03);
+  border-bottom: 1px solid var(--border-color);
+  border-radius: 8px 8px 0 0;
+}
+
+.tool-icon {
+  font-size: 1rem;
+}
+
+.tool-title {
+  font-weight: 600;
+  font-size: 0.875rem;
+  color: var(--text-primary);
+}
+
+.tool-call-list {
+  padding: 0.75rem 1rem;
+}
+
+.tool-item {
+  margin-bottom: 0.75rem;
+  padding: 0.75rem;
+  background: var(--bg-color);
+  border-radius: 8px;
+  border-left: 3px solid var(--primary-color);
+}
+
+.tool-item:last-child {
+  margin-bottom: 0;
+}
+
+.tool-item.running {
+  border-left-color: #f59e0b;
+}
+
+.tool-item.completed {
+  border-left-color: #10b981;
+}
+
+.tool-item.error {
+  border-left-color: #ef4444;
+}
+
+.tool-name {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.25rem;
+}
+
+.tool-name code {
+  background: rgba(0,0,0,0.05);
+  padding: 0.125rem 0.375rem;
+  border-radius: 4px;
+  font-size: 0.8125rem;
+  font-family: monospace;
+  color: var(--text-primary);
+}
+
+.tool-status {
+  font-size: 0.75rem;
+  padding: 0.125rem 0.375rem;
+  border-radius: 4px;
+}
+
+.tool-status.running {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.tool-status.completed {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.tool-status.error {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.tool-description {
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  margin-top: 0.25rem;
+}
+
+.tool-result {
+  margin-top: 0.5rem;
+  background: rgba(0,0,0,0.03);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.tool-result pre {
+  margin: 0;
+  padding: 0.75rem;
+  font-size: 0.8125rem;
+  overflow-x: auto;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.tool-result code {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  line-height: 1.5;
+}
+
+.tool-call-content {
+  padding: 1rem;
+  border-top: 1px solid var(--border-color);
+  background: var(--bg-color);
+}
+
 @media (max-width: 768px) {
   .message {
     max-width: 85%;
   }
-  
+
   .input-wrapper button {
     padding: 0.75rem 1rem;
   }
-  
+
   .mention-list {
     left: 0.5rem;
     right: 0.5rem;
   }
-  
+
   .modal {
     max-height: 90vh;
     border-radius: 12px;
