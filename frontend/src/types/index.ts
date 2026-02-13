@@ -17,6 +17,11 @@ export interface ChatRoom {
   updatedAt: string
 }
 
+export interface Mention {
+  userId: string
+  userName: string
+}
+
 export interface Message {
   id: string
   senderId: string
@@ -26,6 +31,39 @@ export interface Message {
   timestamp: string
   openclawMentioned: boolean
   fromOpenClaw: boolean
+  mentions?: Mention[]
+  mentionAll?: boolean
+  mentionHere?: boolean
+}
+
+export interface MentionRecord {
+  id: string
+  messageId: string
+  mentionedUserId: string
+  mentionedUserName: string
+  mentionerUserId: string
+  mentionerUserName: string
+  roomId: string
+  roomName: string
+  messageContent: string
+  isRead: boolean
+  readAt?: string
+  createdAt: string
+}
+
+export interface UserMentionSettings {
+  id?: string
+  userId?: string
+  notifyOnMention: boolean
+  notifyOnMentionAll: boolean
+  emailNotification: boolean
+  pushNotification: boolean
+  doNotDisturb: boolean
+  dndStartTime?: string
+  dndEndTime?: string
+  mutedRoomIds: string[]
+  blockedUserIds: string[]
+  updatedAt?: string
 }
 
 export interface OocSession {
@@ -47,6 +85,16 @@ export interface SessionMessage {
   content: string
   timestamp: string
   fromOpenClaw: boolean
+}
+
+export interface MemberDto {
+  id: string
+  username: string
+  nickname?: string
+  email: string
+  avatar?: string
+  isCreator: boolean
+  joinedAt?: string
 }
 
 export interface AuthResponse {

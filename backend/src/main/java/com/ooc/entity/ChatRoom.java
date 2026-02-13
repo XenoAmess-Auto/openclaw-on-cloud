@@ -61,6 +61,19 @@ public class ChatRoom {
         private Instant timestamp;
         private boolean openclawMentioned;
         private boolean fromOpenClaw;
+        @Builder.Default
+        private List<Mention> mentions = new ArrayList<>();
+        private boolean mentionAll;
+        private boolean mentionHere;
+
+        @Data
+        @Builder
+        @NoArgsConstructor
+        @AllArgsConstructor
+        public static class Mention {
+            private String userId;
+            private String userName;
+        }
     }
 
     @Data

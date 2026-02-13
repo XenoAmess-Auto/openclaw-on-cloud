@@ -1,5 +1,5 @@
 import apiClient from './client'
-import type { ChatRoom } from '@/types'
+import type { ChatRoom, MemberDto } from '@/types'
 
 export interface CreateRoomRequest {
   name: string
@@ -15,6 +15,12 @@ export const chatRoomApi = {
   
   create: (data: CreateRoomRequest) => 
     apiClient.post<ChatRoom>('/chat-rooms', data),
+
+  getMembers: (roomId: string) =>
+    apiClient.get<MemberDto[]>(`/chat-rooms/${roomId}/members`),
+
+  searchMembers: (roomId: string, query: string) =>
+    apiClient.get<MemberDto[]>(`/chat-rooms/${roomId}/members/search?q=${encodeURIComponent(query)}`),
   
   addMember: (roomId: string, userId: string) => 
     apiClient.post<ChatRoom>(`/chat-rooms/${roomId}/members?userId=${userId}`),

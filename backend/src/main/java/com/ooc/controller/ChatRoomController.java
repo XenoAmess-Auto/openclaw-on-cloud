@@ -84,6 +84,40 @@ public class ChatRoomController {
         return ResponseEntity.ok(members);
     }
 
+    @GetMapping("/{roomId}/members/search")
+    public ResponseEntity<List<MemberDto>> searchChatRoomMembers(
+            @PathVariable String roomId,
+            @RequestParam String q) {
+        ChatRoom room = chatRoomService.getChatRoom(roomId)
+                .orElseThrow(() -> new RuntimeException("Chat room not found"));
+
+        Set<String> memberIds = room.getMemberIds() != null ? new HashSet<>(room.getMemberIds()) : new HashSet<>();
+        if (room.getCreatorId() != null) {
+            memberIds.add(room.getCreatorId());
+        }
+
+        String query = q.toLowerCase();
+        List<MemberDto> members = memberIds.stream()
+                .map(userId -> {
+                    try {
+                        User user = userService.getUserByUsername(userId);
+                        // 匹配用户名或昵称
+                        if (user.getUsername().toLowerCase().contains(query) ||
+                            (user.getNickname() != null && user.getNickname().toLowerCase().contains(query))) {
+                            return MemberDto.fromEntity(user, room.getCreatorId());
+                        }
+                        return null;
+                    } catch (Exception e) {
+                        log.warn("Failed to get user by username: {}", userId, e);
+                        return null;
+                    }
+                })
+                .filter(member -> member != null)
+                .collect(Collectors.toList());
+
+        return ResponseEntity.ok(members);
+    }
+
     @PostMapping("/{roomId}/members")
     public ResponseEntity<ChatRoomDto> addMember(
             @PathVariable String roomId,

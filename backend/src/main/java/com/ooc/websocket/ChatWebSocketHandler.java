@@ -7,6 +7,7 @@ import com.ooc.entity.User;
 import com.ooc.openclaw.OpenClawPluginService;
 import com.ooc.openclaw.OpenClawSessionState;
 import com.ooc.service.ChatRoomService;
+import com.ooc.service.MentionService;
 import com.ooc.service.OocSessionService;
 import com.ooc.service.UserService;
 import lombok.RequiredArgsConstructor;
@@ -31,6 +32,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
     private final OocSessionService oocSessionService;
     private final OpenClawPluginService openClawPluginService;
     private final UserService userService;
+    private final MentionService mentionService;
     private final ObjectMapper objectMapper;
 
     // roomId -> Set<WebSocketSession>
@@ -123,12 +125,20 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
         // 检查是否@OpenClaw
         boolean mentionedOpenClaw = content.toLowerCase().contains("@openclaw");
 
+        // 解析@提及
+        MentionService.MentionParseResult mentionResult = mentionService.parseMentions(content, roomId);
+
         // 获取房间成员数
         int memberCount = roomSessions.getOrDefault(roomId, Collections.emptySet()).size();
 
-        log.info("Message received: room={}, sender={}, content={}, memberCount={}, mentionedOpenClaw={}",
+        log.info("Message received: room={}, sender={}, content={}, memberCount={}, mentionedOpenClaw={}, mentions={}",
                 roomId, userInfo.getUserName(), content.substring(0, Math.min(50, content.length())),
-                memberCount, mentionedOpenClaw);
+                memberCount, mentionedOpenClaw, mentionResult.getMentions().size());
+
+        // 获取房间名称
+        String roomName = chatRoomService.getChatRoom(roomId)
+                .map(ChatRoom::getName)
+                .orElse("聊天室");
 
         // 保存消息到聊天室
         ChatRoom.Message message = ChatRoom.Message.builder()
@@ -139,9 +149,15 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                 .timestamp(Instant.now())
                 .openclawMentioned(mentionedOpenClaw)
                 .fromOpenClaw(false)
+                .mentions(mentionResult.getMentions())
+                .mentionAll(mentionResult.isMentionAll())
+                .mentionHere(mentionResult.isMentionHere())
                 .build();
 
         chatRoomService.addMessage(roomId, message);
+
+        // 处理@提及（创建通知记录）
+        mentionService.processMentions(message, roomId, roomName);
 
         // 广播消息
         broadcastToRoom(roomId, WebSocketMessage.builder()
