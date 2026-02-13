@@ -148,9 +148,11 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
         List<ChatRoom.Message.Attachment> messageAttachments = new ArrayList<>();
         if (attachments != null) {
             for (Attachment att : attachments) {
+                // 将类型转换为大写以保持一致性
+                String typeUpper = att.getType() != null ? att.getType().toUpperCase() : "FILE";
                 messageAttachments.add(ChatRoom.Message.Attachment.builder()
                         .id(UUID.randomUUID().toString())
-                        .type(att.getType())
+                        .type(typeUpper)
                         .contentType(att.getMimeType())
                         .name("image.png")
                         .url("data:" + att.getMimeType() + ";base64," + att.getContent())
