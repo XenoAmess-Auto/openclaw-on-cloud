@@ -57,6 +57,7 @@
               </span>
             </div>
             <div class="chat-actions">
+              <button v-if="isCreator" class="btn-danger" @click="confirmDismiss">解散</button>
               <button @click="showMembers = true">成员</button>
               <button @click="showSessions = true">会话</button>
             </div>
@@ -126,6 +127,21 @@
       </div>
     </div>
     
+    <!-- 解散群确认弹窗 -->
+    <div v-if="showDismissDialog" class="modal" @click="showDismissDialog = false">
+      <div class="modal-content" @click.stop>
+        <h3>解散聊天室</h3>
+        <p class="warning-text">
+          确定要解散「{{ chatStore.currentRoom?.name }}」吗？<br/>
+          <strong>此操作不可撤销</strong>，所有消息记录将被删除。
+        </p>
+        <div class="modal-actions">
+          <button @click="showDismissDialog = false">取消</button>
+          <button class="btn-danger" @click="dismissRoom">确认解散</button>
+        </div>
+      </div>
+    </div>
+    
     <MemberManager
       v-if="showMembers && currentRoomId && chatStore.currentRoom"
       :room-id="currentRoomId"
@@ -148,6 +164,7 @@ import { ref, reactive, onMounted, onUnmounted, watch, nextTick, computed } from
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useChatStore } from '@/stores/chat'
+import { chatRoomApi } from '@/api/chatRoom'
 import SessionManager from '@/components/SessionManager.vue'
 import MemberManager from '@/components/MemberManager.vue'
 
@@ -169,6 +186,12 @@ const messageContainer = ref<HTMLDivElement>()
 const inputRef = ref<HTMLTextAreaElement>()
 const showMembers = ref(false)
 const showSessions = ref(false)
+const showDismissDialog = ref(false)
+
+// 是否为当前聊天室群主
+const isCreator = computed(() => {
+  return chatStore.currentRoom?.creatorId === authStore.user?.username
+})
 
 onMounted(async () => {
   await chatStore.fetchRooms()
@@ -212,6 +235,26 @@ async function createRoom() {
 function logout() {
   authStore.logout()
   router.push('/login')
+}
+
+// 解散群
+function confirmDismiss() {
+  showDismissDialog.value = true
+}
+
+async function dismissRoom() {
+  if (!currentRoomId.value) return
+  
+  try {
+    await chatRoomApi.deleteRoom(currentRoomId.value)
+    showDismissDialog.value = false
+    // 返回首页并刷新列表
+    router.push('/')
+    await chatStore.fetchRooms()
+  } catch (err) {
+    console.error('Failed to dismiss room:', err)
+    alert('解散群失败，请重试')
+  }
 }
 
 // 聊天功能
@@ -470,6 +513,16 @@ function renderContent(content: string) {
   cursor: pointer;
 }
 
+.chat-actions button.btn-danger {
+  background: #ef4444;
+  color: white;
+  border-color: #ef4444;
+}
+
+.chat-actions button.btn-danger:hover {
+  background: #dc2626;
+}
+
 .message-container {
   flex: 1;
   overflow-y: auto;
@@ -660,5 +713,23 @@ textarea:focus {
   background: var(--primary-color);
   color: white;
   border: none;
+}
+
+.modal-actions button.btn-danger {
+  background: #ef4444 !important;
+}
+
+.modal-actions button.btn-danger:hover {
+  background: #dc2626 !important;
+}
+
+.warning-text {
+  color: var(--text-secondary);
+  line-height: 1.6;
+  margin: 1rem 0;
+}
+
+.warning-text strong {
+  color: #ef4444;
 }
 </style>
