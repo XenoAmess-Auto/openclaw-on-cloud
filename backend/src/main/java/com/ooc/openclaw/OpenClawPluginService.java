@@ -1,6 +1,7 @@
 package com.ooc.openclaw;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.ooc.websocket.ChatWebSocketHandler;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpHeaders;
@@ -42,21 +43,61 @@ public class OpenClawPluginService {
     }
 
     /**
-     * 发送消息到 OpenClaw 并获取回复
+     * 发送消息到 OpenClaw 并获取回复（支持附件）
      */
-    public Mono<OpenClawResponse> sendMessage(String sessionId, String message, String userId, String userName) {
-        List<Map<String, String>> messages = new ArrayList<>();
+    public Mono<OpenClawResponse> sendMessage(String sessionId, String message, 
+            List<ChatWebSocketHandler.Attachment> attachments, String userId, String userName) {
+        
+        // 构建消息内容块（支持多模态）
+        List<Map<String, Object>> contentBlocks = new ArrayList<>();
+        
+        // 添加文本内容块
+        if (message != null && !message.isEmpty()) {
+            Map<String, Object> textBlock = new HashMap<>();
+            textBlock.put("type", "text");
+            textBlock.put("text", userName + ": " + message);
+            contentBlocks.add(textBlock);
+        }
+        
+        // 添加图片附件内容块
+        if (attachments != null && !attachments.isEmpty()) {
+            for (ChatWebSocketHandler.Attachment att : attachments) {
+                if ("image".equals(att.getType()) && att.getContent() != null) {
+                    Map<String, Object> imageBlock = new HashMap<>();
+                    imageBlock.put("type", "image_url");
+                    
+                    Map<String, String> imageUrl = new HashMap<>();
+                    // 构造 data URL: data:image/png;base64,...
+                    String dataUrl = "data:" + att.getMimeType() + ";base64," + att.getContent();
+                    imageUrl.put("url", dataUrl);
+                    
+                    imageBlock.put("image_url", imageUrl);
+                    contentBlocks.add(imageBlock);
+                }
+            }
+        }
+        
+        // 如果没有内容块（纯空消息），添加一个默认文本
+        if (contentBlocks.isEmpty()) {
+            Map<String, Object> textBlock = new HashMap<>();
+            textBlock.put("type", "text");
+            textBlock.put("text", userName + ": [图片]");
+            contentBlocks.add(textBlock);
+        }
+        
+        // 构建消息列表
+        List<Map<String, Object>> messages = new ArrayList<>();
         
         // 添加系统消息
-        Map<String, String> systemMsg = new HashMap<>();
+        Map<String, Object> systemMsg = new HashMap<>();
         systemMsg.put("role", "system");
         systemMsg.put("content", "You are OpenClaw, a helpful AI assistant. Be concise and direct in your responses.");
         messages.add(systemMsg);
         
-        // 添加用户消息
-        Map<String, String> userMsg = new HashMap<>();
+        // 添加用户消息（多模态格式）
+        Map<String, Object> userMsg = new HashMap<>();
         userMsg.put("role", "user");
-        userMsg.put("content", userName + ": " + message);
+        userMsg.put("content", contentBlocks);
         messages.add(userMsg);
 
         Map<String, Object> request = new HashMap<>();
@@ -64,7 +105,10 @@ public class OpenClawPluginService {
         request.put("messages", messages);
         request.put("user", sessionId); // 用于保持会话状态
 
-        log.info("Sending request to OpenClaw: sessionId={}, message={}", sessionId, message.substring(0, Math.min(50, message.length())));
+        log.info("Sending multimodal request to OpenClaw: sessionId={}, textLength={}, imageCount={}", 
+                sessionId, 
+                message != null ? message.length() : 0,
+                attachments != null ? attachments.size() : 0);
 
         return getWebClient().post()
                 .uri("/v1/chat/completions")

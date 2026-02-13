@@ -49,18 +49,47 @@
     </div>
     
     <div class="input-area">
+      <!-- 附件预览区域 -->
+      <div v-if="attachments.length > 0" class="attachments-preview">
+        <div v-for="att in attachments" :key="att.id" class="attachment-item">
+          <img :src="att.dataUrl" alt="附件预览" class="attachment-img" />
+          <button class="attachment-remove" @click="removeAttachment(att.id)" title="移除图片">
+            ×
+          </button>
+        </div>
+      </div>
+      
       <div class="input-wrapper">
+        <div class="input-actions">
+          <button 
+            class="upload-btn" 
+            @click="triggerFileUpload"
+            title="上传图片"
+            :disabled="!chatStore.isConnected"
+          >
+            📷
+          </button>
+          <input
+            ref="fileInputRef"
+            type="file"
+            accept="image/*"
+            multiple
+            style="display: none"
+            @change="handleFileSelect"
+          />
+        </div>
         <textarea
           v-model="inputMessage"
           @keydown="handleKeydown"
           @input="handleInput"
-          placeholder="输入消息... 使用 @ 提及他人"
+          @paste="handlePaste"
+          placeholder="输入消息... 使用 @ 提及他人，粘贴或点击按钮添加图片"
           rows="1"
           ref="inputRef"
         />
         <button
           @click="sendMessage"
-          :disabled="!inputMessage.trim() || !chatStore.isConnected"
+          :disabled="(!inputMessage.trim() && attachments.length === 0) || !chatStore.isConnected"
         >
           发送
         </button>
@@ -166,7 +195,7 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
-import { useChatStore } from '@/stores/chat'
+import { useChatStore, type Attachment } from '@/stores/chat'
 import { chatRoomApi } from '@/api/chatRoom'
 import { mentionApi } from '@/api/mention'
 import type { MemberDto, Message, MentionRecord } from '@/types'
@@ -180,10 +209,14 @@ const roomId = computed(() => route.params.roomId as string)
 const inputMessage = ref('')
 const messageContainer = ref<HTMLDivElement>()
 const inputRef = ref<HTMLTextAreaElement>()
+const fileInputRef = ref<HTMLInputElement>()
 const mentionListRef = ref<HTMLDivElement>()
 const showMembers = ref(false)
 const showSessions = ref(false)
 const showMentions = ref(false)
+
+// 附件相关状态
+const attachments = ref<Attachment[]>([])
 
 // @提及相关状态
 const showMentionList = ref(false)
@@ -309,10 +342,12 @@ function scrollToBottom() {
 
 function sendMessage() {
   const content = inputMessage.value.trim()
-  if (!content || !chatStore.isConnected) return
+  // 允许发送纯附件消息（即使没有文字内容）
+  if ((!content && attachments.value.length === 0) || !chatStore.isConnected) return
   
-  chatStore.sendMessage(content)
+  chatStore.sendMessage(content, attachments.value)
   inputMessage.value = ''
+  attachments.value = [] // 清空附件
   showMentionList.value = false
   adjustTextareaHeight()
 }
@@ -477,6 +512,80 @@ function isMentionedMe(msg: Message): boolean {
 
 function getInitials(name: string): string {
   return name.slice(0, 2).toUpperCase()
+}
+
+// 生成附件唯一ID
+function generateAttachmentId(): string {
+  return `att-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
+}
+
+// 处理粘贴事件
+function handlePaste(e: ClipboardEvent) {
+  const items = e.clipboardData?.items
+  if (!items) return
+
+  const imageItems: DataTransferItem[] = []
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i]
+    if (item.type.startsWith('image/')) {
+      imageItems.push(item)
+    }
+  }
+
+  if (imageItems.length === 0) return
+
+  e.preventDefault()
+
+  for (const item of imageItems) {
+    const file = item.getAsFile()
+    if (!file) continue
+
+    const reader = new FileReader()
+    reader.onload = () => {
+      const dataUrl = reader.result as string
+      attachments.value.push({
+        id: generateAttachmentId(),
+        dataUrl,
+        mimeType: file.type
+      })
+    }
+    reader.readAsDataURL(file)
+  }
+}
+
+// 触发文件选择
+function triggerFileUpload() {
+  fileInputRef.value?.click()
+}
+
+// 处理文件选择
+function handleFileSelect(e: Event) {
+  const input = e.target as HTMLInputElement
+  const files = input.files
+  if (!files || files.length === 0) return
+
+  for (const file of files) {
+    if (!file.type.startsWith('image/')) continue
+
+    const reader = new FileReader()
+    reader.onload = () => {
+      const dataUrl = reader.result as string
+      attachments.value.push({
+        id: generateAttachmentId(),
+        dataUrl,
+        mimeType: file.type
+      })
+    }
+    reader.readAsDataURL(file)
+  }
+
+  // 清空 input 值，允许重复选择相同文件
+  input.value = ''
+}
+
+// 移除附件
+function removeAttachment(id: string) {
+  attachments.value = attachments.value.filter(att => att.id !== id)
 }
 </script>
 
@@ -685,10 +794,91 @@ function getInitials(name: string): string {
   position: relative;
 }
 
+/* 附件预览样式 */
+.attachments-preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+  padding: 0.5rem;
+  background: var(--bg-color);
+  border-radius: 8px;
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+.attachment-item {
+  position: relative;
+  width: 80px;
+  height: 80px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+  flex-shrink: 0;
+}
+
+.attachment-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.attachment-remove {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.6);
+  color: white;
+  border: none;
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  padding: 0;
+}
+
+.attachment-remove:hover {
+  background: rgba(0, 0, 0, 0.8);
+}
+
 .input-wrapper {
   display: flex;
   gap: 0.75rem;
   align-items: flex-end;
+}
+
+.input-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.upload-btn {
+  padding: 0.75rem;
+  background: var(--bg-color);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  font-size: 1.25rem;
+  cursor: pointer;
+  transition: background 0.2s;
+  height: 44px;
+  width: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.upload-btn:hover:not(:disabled) {
+  background: var(--border-color);
+}
+
+.upload-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 textarea {

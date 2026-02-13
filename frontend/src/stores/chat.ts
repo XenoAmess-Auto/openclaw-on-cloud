@@ -4,6 +4,13 @@ import type { ChatRoom, Message } from '@/types'
 import { chatRoomApi } from '@/api/chatRoom'
 import { useAuthStore } from './auth'
 
+// 附件类型定义
+export interface Attachment {
+  id: string
+  dataUrl: string
+  mimeType: string
+}
+
 export const useChatStore = defineStore('chat', () => {
   const rooms = ref<ChatRoom[]>([])
   const currentRoom = ref<ChatRoom | null>(null)
@@ -85,12 +92,21 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
-  function sendMessage(content: string) {
+  function sendMessage(content: string, attachments: Attachment[] = []) {
     if (ws.value && ws.value.readyState === WebSocket.OPEN) {
-      ws.value.send(JSON.stringify({
+      const payload: any = {
         type: 'message',
         content
-      }))
+      }
+      // 如果有附件，添加到消息中
+      if (attachments.length > 0) {
+        payload.attachments = attachments.map(att => ({
+          type: 'image',
+          mimeType: att.mimeType,
+          content: att.dataUrl.replace(/^data:[^;]+;base64,/, '') // 移除 data URL 前缀，只保留 base64 内容
+        }))
+      }
+      ws.value.send(JSON.stringify(payload))
     }
   }
   

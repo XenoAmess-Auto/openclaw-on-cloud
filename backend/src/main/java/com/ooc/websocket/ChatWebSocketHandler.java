@@ -121,18 +121,22 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
 
         String roomId = userInfo.getRoomId();
         String content = payload.getContent();
+        List<Attachment> attachments = payload.getAttachments();
+        boolean hasAttachments = attachments != null && !attachments.isEmpty();
 
         // 检查是否@OpenClaw
-        boolean mentionedOpenClaw = content.toLowerCase().contains("@openclaw");
+        boolean mentionedOpenClaw = content != null && content.toLowerCase().contains("@openclaw");
 
         // 解析@提及
-        MentionService.MentionParseResult mentionResult = mentionService.parseMentions(content, roomId);
+        MentionService.MentionParseResult mentionResult = mentionService.parseMentions(content != null ? content : "", roomId);
 
         // 获取房间成员数
         int memberCount = roomSessions.getOrDefault(roomId, Collections.emptySet()).size();
 
-        log.info("Message received: room={}, sender={}, content={}, memberCount={}, mentionedOpenClaw={}, mentions={}",
-                roomId, userInfo.getUserName(), content.substring(0, Math.min(50, content.length())),
+        log.info("Message received: room={}, sender={}, content={}, attachments={}, memberCount={}, mentionedOpenClaw={}, mentions={}",
+                roomId, userInfo.getUserName(), 
+                content != null ? content.substring(0, Math.min(50, content.length())) : "",
+                hasAttachments ? attachments.size() : 0,
                 memberCount, mentionedOpenClaw, mentionResult.getMentions().size());
 
         // 获取房间名称
@@ -145,7 +149,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                 .id(UUID.randomUUID().toString())
                 .senderId(userInfo.getUserId())
                 .senderName(userInfo.getUserName())
-                .content(content)
+                .content(content != null ? content : "")
                 .timestamp(Instant.now())
                 .openclawMentioned(mentionedOpenClaw)
                 .fromOpenClaw(false)
@@ -171,7 +175,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                 shouldTriggerOpenClaw, memberCount, mentionedOpenClaw);
 
         if (shouldTriggerOpenClaw) {
-            triggerOpenClaw(roomId, content, userInfo);
+            triggerOpenClaw(roomId, content, attachments, userInfo);
         }
     }
 
@@ -180,8 +184,11 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
         return mentionedOpenClaw;
     }
 
-    private void triggerOpenClaw(String roomId, String content, WebSocketUserInfo userInfo) {
-        log.info("Triggering OpenClaw for room: {}, content: {}", roomId, content.substring(0, Math.min(50, content.length())));
+    private void triggerOpenClaw(String roomId, String content, List<Attachment> attachments, WebSocketUserInfo userInfo) {
+        log.info("Triggering OpenClaw for room: {}, content: {}, attachments: {}", 
+                roomId, 
+                content != null ? content.substring(0, Math.min(50, content.length())) : "", 
+                attachments != null ? attachments.size() : 0);
 
         // 异步处理 OpenClaw 调用
         chatRoomService.getChatRoom(roomId).ifPresentOrElse(room -> {
@@ -224,7 +231,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                             log.info("OpenClaw session created: {}", newSession.sessionId());
                             // 发送消息
                             return openClawPluginService.sendMessage(
-                                    newSession.sessionId(), content, userInfo.getUserId(), userInfo.getUserName());
+                                    newSession.sessionId(), content, attachments, userInfo.getUserId(), userInfo.getUserName());
                         })
                         .subscribe(
                                 response -> {
@@ -236,7 +243,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
             } else {
                 log.info("Using existing OpenClaw session: {}", finalSessionId);
                 // 会话存活，直接发送消息
-                openClawPluginService.sendMessage(finalSessionId, content, userInfo.getUserId(), userInfo.getUserName())
+                openClawPluginService.sendMessage(finalSessionId, content, attachments, userInfo.getUserId(), userInfo.getUserName())
                         .subscribe(
                                 response -> {
                                     log.info("OpenClaw response received: {}", response.content().substring(0, Math.min(50, response.content().length())));
@@ -362,5 +369,14 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
         private String content;
         private ChatRoom.Message message;
         private List<ChatRoom.Message> messages;
+        private List<Attachment> attachments; // 附件列表
+    }
+
+    // 附件数据传输对象
+    @lombok.Data
+    public static class Attachment {
+        private String type;      // 类型，如 "image"
+        private String mimeType;  // MIME 类型，如 "image/png"
+        private String content;   // Base64 编码的内容（不含 data URL 前缀）
     }
 }
