@@ -1,5 +1,5 @@
 <template>
-  <div class="chat-view">
+  <div class="chat-view" @paste="handlePaste">
     <header class="header">
       <router-link to="/" class="back">←</router-link>
       <div class="room-info">
@@ -48,7 +48,7 @@
       </div>
     </div>
     
-    <div class="input-area">
+    <div class="input-area" @paste="handlePaste">
       <!-- 附件预览区域 -->
       <div v-if="attachments.length > 0" class="attachments-preview">
         <div v-for="att in attachments" :key="att.id" class="attachment-item">
@@ -82,7 +82,7 @@
           v-model="inputMessage"
           @keydown="handleKeydown"
           @input="handleInput"
-          @paste="handlePaste"
+          @paste.stop="handlePaste"
           placeholder="输入消息... 使用 @ 提及他人，粘贴或点击按钮添加图片"
           rows="1"
           ref="inputRef"
@@ -521,33 +521,53 @@ function generateAttachmentId(): string {
 
 // 处理粘贴事件
 function handlePaste(e: ClipboardEvent) {
+  console.log('[Paste] Event triggered', e)
   const items = e.clipboardData?.items
-  if (!items) return
+  if (!items) {
+    console.log('[Paste] No clipboard items')
+    return
+  }
 
+  console.log('[Paste] Clipboard items count:', items.length)
+  
   const imageItems: DataTransferItem[] = []
   for (let i = 0; i < items.length; i++) {
     const item = items[i]
+    console.log(`[Paste] Item ${i}: type=${item.type}, kind=${item.kind}`)
     if (item.type.startsWith('image/')) {
       imageItems.push(item)
     }
   }
 
-  if (imageItems.length === 0) return
+  if (imageItems.length === 0) {
+    console.log('[Paste] No image items found')
+    return
+  }
 
   e.preventDefault()
+  console.log('[Paste] Processing', imageItems.length, 'image(s)')
 
   for (const item of imageItems) {
     const file = item.getAsFile()
-    if (!file) continue
+    if (!file) {
+      console.log('[Paste] Could not get file from item')
+      continue
+    }
+    
+    console.log('[Paste] Processing file:', file.name, file.type, file.size)
 
     const reader = new FileReader()
     reader.onload = () => {
       const dataUrl = reader.result as string
+      console.log('[Paste] File read success, dataUrl length:', dataUrl.length)
       attachments.value.push({
         id: generateAttachmentId(),
         dataUrl,
         mimeType: file.type
       })
+    }
+    reader.onerror = (err) => {
+      console.error('[Paste] FileReader error:', err)
     }
     reader.readAsDataURL(file)
   }
