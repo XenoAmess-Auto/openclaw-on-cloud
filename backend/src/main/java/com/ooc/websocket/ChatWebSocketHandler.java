@@ -22,6 +22,8 @@ import java.io.IOException;
 import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 @Slf4j
 @Component
@@ -40,6 +42,31 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
 
     // session -> userInfo
     private final Map<WebSocketSession, WebSocketUserInfo> userInfoMap = new ConcurrentHashMap<>();
+
+    // ========== 队列系统 ==========
+    // roomId -> 任务队列
+    private final Map<String, ConcurrentLinkedQueue<OpenClawTask>> roomTaskQueues = new ConcurrentHashMap<>();
+    // roomId -> 是否正在执行任务
+    private final Map<String, AtomicBoolean> roomProcessingFlags = new ConcurrentHashMap<>();
+
+    /**
+     * OpenClaw 任务
+     */
+    @lombok.Data
+    @lombok.Builder
+    private static class OpenClawTask {
+        private String taskId;
+        private String roomId;
+        private String content;
+        private List<Attachment> attachments;
+        private WebSocketUserInfo userInfo;
+        private Instant createdAt;
+        private volatile TaskStatus status; // PENDING, PROCESSING, COMPLETED, FAILED
+
+        public enum TaskStatus {
+            PENDING, PROCESSING, COMPLETED, FAILED
+        }
+    }
 
     @Override
     public void afterConnectionEstablished(WebSocketSession session) {
@@ -134,7 +161,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
         int memberCount = roomSessions.getOrDefault(roomId, Collections.emptySet()).size();
 
         log.info("Message received: room={}, sender={}, content={}, attachments={}, memberCount={}, mentionedOpenClaw={}, mentions={}",
-                roomId, userInfo.getUserName(), 
+                roomId, userInfo.getUserName(),
                 content != null ? content.substring(0, Math.min(50, content.length())) : "",
                 hasAttachments ? attachments.size() : 0,
                 memberCount, mentionedOpenClaw, mentionResult.getMentions().size());
@@ -206,12 +233,80 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
     }
 
     private void triggerOpenClaw(String roomId, String content, List<Attachment> attachments, WebSocketUserInfo userInfo) {
-        log.info("Triggering OpenClaw for room: {}, content: {}, attachments: {}", 
-                roomId, 
-                content != null ? content.substring(0, Math.min(50, content.length())) : "", 
+        log.info("Adding OpenClaw task to queue for room: {}, content: {}, attachments: {}",
+                roomId,
+                content != null ? content.substring(0, Math.min(50, content.length())) : "",
                 attachments != null ? attachments.size() : 0);
 
-        // 异步处理 OpenClaw 调用
+        // 创建任务
+        OpenClawTask task = OpenClawTask.builder()
+                .taskId(UUID.randomUUID().toString())
+                .roomId(roomId)
+                .content(content)
+                .attachments(attachments)
+                .userInfo(userInfo)
+                .createdAt(Instant.now())
+                .status(OpenClawTask.TaskStatus.PENDING)
+                .build();
+
+        // 获取或创建该房间的任务队列
+        ConcurrentLinkedQueue<OpenClawTask> queue = roomTaskQueues.computeIfAbsent(roomId, k -> new ConcurrentLinkedQueue<>());
+        AtomicBoolean isProcessing = roomProcessingFlags.computeIfAbsent(roomId, k -> new AtomicBoolean(false));
+
+        // 将任务加入队列
+        queue.offer(task);
+
+        int queueSize = queue.size();
+        log.info("Task {} added to room {} queue. Queue size: {}", task.getTaskId(), roomId, queueSize);
+
+        // 发送排队状态消息
+        sendQueueStatusMessage(roomId, task, queueSize - 1); // -1 因为当前任务已经加入队列
+
+        // 尝试启动队列处理（如果当前没有任务在执行）
+        tryProcessNextTask(roomId);
+    }
+
+    /**
+     * 尝试处理队列中的下一个任务
+     */
+    private void tryProcessNextTask(String roomId) {
+        ConcurrentLinkedQueue<OpenClawTask> queue = roomTaskQueues.get(roomId);
+        AtomicBoolean isProcessing = roomProcessingFlags.get(roomId);
+
+        if (queue == null || isProcessing == null) {
+            return;
+        }
+
+        // 使用 CAS 操作确保只有一个线程能开始处理
+        if (!isProcessing.compareAndSet(false, true)) {
+            log.debug("Room {} is already processing a task, skipping", roomId);
+            return;
+        }
+
+        OpenClawTask task = queue.poll();
+        if (task == null) {
+            // 队列为空，重置处理标志
+            isProcessing.set(false);
+            log.debug("Room {} queue is empty, resetting processing flag", roomId);
+            return;
+        }
+
+        // 执行任务
+        executeTask(task);
+    }
+
+    /**
+     * 执行 OpenClaw 任务
+     */
+    private void executeTask(OpenClawTask task) {
+        String roomId = task.getRoomId();
+        log.info("Executing OpenClaw task {} for room {}", task.getTaskId(), roomId);
+
+        task.setStatus(OpenClawTask.TaskStatus.PROCESSING);
+
+        // 发送开始处理消息
+        sendTaskStartedMessage(roomId, task);
+
         chatRoomService.getChatRoom(roomId).ifPresentOrElse(room -> {
             String openClawSessionId = room.getOpenClawSessions().stream()
                     .filter(ChatRoom.OpenClawSession::isActive)
@@ -221,7 +316,6 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
 
             // 检查会话是否存活
             if (openClawSessionId != null && !openClawPluginService.isSessionAlive(openClawSessionId)) {
-                // 会话已死，需要恢复
                 log.info("OpenClaw session {} is not alive, will create new", openClawSessionId);
                 openClawSessionId = null;
             }
@@ -230,10 +324,8 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
 
             if (finalSessionId == null) {
                 log.info("Creating new OpenClaw session for room: {}", roomId);
-                // 需要创建新会话，先获取或创建 OOC 会话记忆
                 oocSessionService.getOrCreateSession(roomId, room.getName())
                         .flatMap(oocSession -> {
-                            // 如果需要总结，先总结
                             if (oocSession.getMessages().size() > 30) {
                                 return oocSessionService.summarizeAndCompact(oocSession)
                                         .thenReturn(oocSession);
@@ -241,39 +333,139 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                             return reactor.core.publisher.Mono.just(oocSession);
                         })
                         .flatMap(oocSession -> {
-                            // 创建 OpenClaw 会话，带上 OOC 上下文
                             List<Map<String, Object>> context = convertToContext(oocSession);
                             log.info("Creating OpenClaw session with {} context messages", context.size());
                             return openClawPluginService.createSession("ooc-" + roomId, context);
                         })
                         .flatMap(newSession -> {
-                            // 更新房间的 OpenClaw 会话
                             chatRoomService.updateOpenClawSession(roomId, newSession.sessionId());
                             log.info("OpenClaw session created: {}", newSession.sessionId());
-                            // 发送消息
                             return openClawPluginService.sendMessage(
-                                    newSession.sessionId(), content, attachments, userInfo.getUserId(), userInfo.getUserName());
+                                    newSession.sessionId(), task.getContent(), task.getAttachments(),
+                                    task.getUserInfo().getUserId(), task.getUserInfo().getUserName());
                         })
                         .subscribe(
                                 response -> {
-                                    log.info("OpenClaw response received: {}", response.content().substring(0, Math.min(50, response.content().length())));
+                                    log.info("OpenClaw response received for task {}: {}",
+                                            task.getTaskId(),
+                                            response.content().substring(0, Math.min(50, response.content().length())));
+                                    task.setStatus(OpenClawTask.TaskStatus.COMPLETED);
                                     handleOpenClawResponse(roomId, response);
+                                    onTaskComplete(roomId);
                                 },
-                                error -> log.error("OpenClaw error in create flow", error)
+                                error -> {
+                                    log.error("OpenClaw error in task {} create flow", task.getTaskId(), error);
+                                    task.setStatus(OpenClawTask.TaskStatus.FAILED);
+                                    sendTaskFailedMessage(roomId, task, error.getMessage());
+                                    onTaskComplete(roomId);
+                                }
                         );
             } else {
                 log.info("Using existing OpenClaw session: {}", finalSessionId);
-                // 会话存活，直接发送消息
-                openClawPluginService.sendMessage(finalSessionId, content, attachments, userInfo.getUserId(), userInfo.getUserName())
+                openClawPluginService.sendMessage(finalSessionId, task.getContent(), task.getAttachments(),
+                                task.getUserInfo().getUserId(), task.getUserInfo().getUserName())
                         .subscribe(
                                 response -> {
-                                    log.info("OpenClaw response received: {}", response.content().substring(0, Math.min(50, response.content().length())));
+                                    log.info("OpenClaw response received for task {}: {}",
+                                            task.getTaskId(),
+                                            response.content().substring(0, Math.min(50, response.content().length())));
+                                    task.setStatus(OpenClawTask.TaskStatus.COMPLETED);
                                     handleOpenClawResponse(roomId, response);
+                                    onTaskComplete(roomId);
                                 },
-                                error -> log.error("OpenClaw error in send flow", error)
+                                error -> {
+                                    log.error("OpenClaw error in task {} send flow", task.getTaskId(), error);
+                                    task.setStatus(OpenClawTask.TaskStatus.FAILED);
+                                    sendTaskFailedMessage(roomId, task, error.getMessage());
+                                    onTaskComplete(roomId);
+                                }
                         );
             }
-        }, () -> log.error("Chat room not found: {}", roomId));
+        }, () -> {
+            log.error("Chat room not found: {}", roomId);
+            task.setStatus(OpenClawTask.TaskStatus.FAILED);
+            onTaskComplete(roomId);
+        });
+    }
+
+    /**
+     * 任务完成后的回调
+     */
+    private void onTaskComplete(String roomId) {
+        log.info("Task completed for room {}, checking queue for next task", roomId);
+        AtomicBoolean isProcessing = roomProcessingFlags.get(roomId);
+        if (isProcessing != null) {
+            isProcessing.set(false);
+        }
+        // 尝试处理下一个任务
+        tryProcessNextTask(roomId);
+    }
+
+    /**
+     * 发送排队状态消息
+     */
+    private void sendQueueStatusMessage(String roomId, OpenClawTask task, int position) {
+        String statusText = position == 0
+                ? "🤖 OpenClaw 任务已加入队列，正在准备处理..."
+                : String.format("🤖 OpenClaw 任务已加入队列，当前排第 %d 位...", position + 1);
+
+        ChatRoom.Message message = ChatRoom.Message.builder()
+                .id(UUID.randomUUID().toString())
+                .senderId("openclaw")
+                .senderName("OpenClaw")
+                .content(statusText)
+                .timestamp(Instant.now())
+                .openclawMentioned(false)
+                .fromOpenClaw(true)
+                .build();
+
+        chatRoomService.addMessage(roomId, message);
+        broadcastToRoom(roomId, WebSocketMessage.builder()
+                .type("message")
+                .message(message)
+                .build());
+    }
+
+    /**
+     * 发送任务开始处理消息
+     */
+    private void sendTaskStartedMessage(String roomId, OpenClawTask task) {
+        ChatRoom.Message message = ChatRoom.Message.builder()
+                .id(UUID.randomUUID().toString())
+                .senderId("openclaw")
+                .senderName("OpenClaw")
+                .content("🤖 OpenClaw 正在处理任务...")
+                .timestamp(Instant.now())
+                .openclawMentioned(false)
+                .fromOpenClaw(true)
+                .build();
+
+        chatRoomService.addMessage(roomId, message);
+        broadcastToRoom(roomId, WebSocketMessage.builder()
+                .type("message")
+                .message(message)
+                .build());
+    }
+
+    /**
+     * 发送任务失败消息
+     */
+    private void sendTaskFailedMessage(String roomId, OpenClawTask task, String error) {
+        ChatRoom.Message message = ChatRoom.Message.builder()
+                .id(UUID.randomUUID().toString())
+                .senderId("openclaw")
+                .senderName("OpenClaw")
+                .content("❌ 任务执行失败: " + (error != null ? error : "未知错误"))
+                .timestamp(Instant.now())
+                .openclawMentioned(false)
+                .fromOpenClaw(true)
+                .build();
+
+        chatRoomService.addMessage(roomId, message);
+        broadcastToRoom(roomId, WebSocketMessage.builder()
+                .type("message")
+                .message(message)
+                .build());
     }
 
     private List<Map<String, Object>> convertToContext(OocSession session) {
@@ -369,7 +561,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
             String afterTools = toolsEnd < content.length() ? content.substring(toolsEnd).trim() : "";
             content = beforeTools + (beforeTools.isEmpty() || afterTools.isEmpty() ? "" : "\n\n") + afterTools;
         }
-        
+
         // 解析代码块作为工具结果
         if (content.contains("```") && !toolCalls.isEmpty()) {
             int codeStart = content.indexOf("```");
@@ -383,7 +575,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                 }
             }
         }
-        
+
         // 保存 OpenClaw 回复到 OOC 会话
         oocSessionService.addMessage(roomId, OocSession.SessionMessage.builder()
                 .id(UUID.randomUUID().toString())
