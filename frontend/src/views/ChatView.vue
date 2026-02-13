@@ -488,15 +488,15 @@ function renderContent(msg: Message) {
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
-  
+
   // 高亮 @所有人 和 @在线
   content = content
     .replace(/@所有人|@everyone|@all/gi, '<span class="mention mention-all">$\u0026</span>')
     .replace(/@在线|@here/gi, '<span class="mention mention-here">$\u0026</span>')
-  
+
   // 高亮 @openclaw
   content = content.replace(/@openclaw/gi, '<span class="mention">@openclaw</span>')
-  
+
   // 高亮具体用户@
   if (msg.mentions) {
     msg.mentions.forEach(mention => {
@@ -504,8 +504,21 @@ function renderContent(msg: Message) {
       content = content.replace(regex, `<span class="mention">@${mention.userName}</span>`)
     })
   }
-  
-  return content.replace(/\n/g, '<br>')
+
+  // 渲染附件图片
+  let attachmentsHtml = ''
+  if (msg.attachments && msg.attachments.length > 0) {
+    attachmentsHtml = '<div class="message-attachments">' +
+      msg.attachments.map(att => {
+        if (att.type === 'IMAGE' || att.contentType?.startsWith('image/')) {
+          return `<img src="${att.url}" alt="${att.name || '图片'}" class="message-image" />`
+        }
+        return `<a href="${att.url}" target="_blank" class="message-file">${att.name || '附件'}</a>`
+      }).join('') +
+      '</div>'
+  }
+
+  return content.replace(/\n/g, '<br>') + attachmentsHtml
 }
 
 function isMentionedMe(msg: Message): boolean {
@@ -809,6 +822,44 @@ function removeAttachment(id: string) {
 .message.from-me .message-content :deep(.mention) {
   color: rgba(255,255,255,0.95);
   background: rgba(255,255,255,0.2);
+}
+
+/* 消息附件样式 */
+.message-content :deep(.message-attachments) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.message-content :deep(.message-image) {
+  max-width: 300px;
+  max-height: 200px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+
+.message-content :deep(.message-image:hover) {
+  transform: scale(1.02);
+}
+
+.message-content :deep(.message-file) {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.5rem 1rem;
+  background: var(--bg-color);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  color: var(--primary-color);
+  text-decoration: none;
+  font-size: 0.875rem;
+}
+
+.message.from-me .message-content :deep(.message-file) {
+  background: rgba(255,255,255,0.2);
+  border-color: rgba(255,255,255,0.3);
+  color: white;
 }
 
 .empty {

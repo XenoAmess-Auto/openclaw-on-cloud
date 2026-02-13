@@ -144,6 +144,21 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                 .map(ChatRoom::getName)
                 .orElse("聊天室");
 
+        // 转换附件
+        List<ChatRoom.Message.Attachment> messageAttachments = new ArrayList<>();
+        if (attachments != null) {
+            for (Attachment att : attachments) {
+                messageAttachments.add(ChatRoom.Message.Attachment.builder()
+                        .id(UUID.randomUUID().toString())
+                        .type(att.getType())
+                        .contentType(att.getMimeType())
+                        .name("image.png")
+                        .url("data:" + att.getMimeType() + ";base64," + att.getContent())
+                        .size(att.getContent() != null ? att.getContent().length() * 3 / 4 : 0)
+                        .build());
+            }
+        }
+
         // 保存消息到聊天室
         ChatRoom.Message message = ChatRoom.Message.builder()
                 .id(UUID.randomUUID().toString())
@@ -156,6 +171,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                 .mentions(mentionResult.getMentions())
                 .mentionAll(mentionResult.isMentionAll())
                 .mentionHere(mentionResult.isMentionHere())
+                .attachments(messageAttachments)
                 .build();
 
         chatRoomService.addMessage(roomId, message);
