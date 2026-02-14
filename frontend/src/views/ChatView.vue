@@ -208,6 +208,16 @@
       </div>
     </div>
 
+    <!-- 选中文本浮动复制按钮 -->
+    <div
+      v-if="showSelectionCopyBtn"
+      class="selection-copy-btn"
+      :style="selectionCopyBtnStyle"
+      @click="copySelection"
+    >
+      复制
+    </div>
+
     <!-- @提及通知弹窗 -->
     <div v-if="showMentions" class="modal-overlay" @click="showMentions = false">
       <div class="modal mention-modal" @click.stop>
@@ -297,6 +307,10 @@ const mentionSelectedIndex = ref(0)
 const roomMembers = ref<MemberDto[]>([])
 const mentionStartIndex = ref(-1)
 
+// 选中文本复制相关状态
+const showSelectionCopyBtn = ref(false)
+const selectionCopyBtnStyle = ref({ top: '0px', left: '0px' })
+
 // @提及通知
 const mentions = ref<MentionRecord[]>([])
 const unreadMentionCount = ref(0)
@@ -358,6 +372,9 @@ onMounted(() => {
 
   // 添加全局上下文菜单阻止（用于长按复制）
   document.addEventListener('contextmenu', preventContextMenu)
+
+  // 添加选中文本监听
+  document.addEventListener('selectionchange', handleSelectionChange)
 })
 
 onUnmounted(() => {
@@ -367,6 +384,9 @@ onUnmounted(() => {
 
   // 移除全局上下文菜单阻止
   document.removeEventListener('contextmenu', preventContextMenu)
+
+  // 移除选中文本监听
+  document.removeEventListener('selectionchange', handleSelectionChange)
 
   // 清理长按定时器
   handleLongPressEnd()
@@ -941,8 +961,58 @@ function handleLongPressCancel(_event: TouchEvent) {
 function preventContextMenu(event: MouseEvent) {
   const target = event.target as HTMLElement
   if (target?.closest('.message-content') || target?.closest('.message')) {
+    // 如果有选中的文本，不阻止右键菜单（允许用户用系统菜单复制）
+    const selection = window.getSelection()
+    if (selection && selection.toString().trim()) {
+      return
+    }
     event.preventDefault()
   }
+}
+
+// ============ 选中文本复制功能 ============
+
+// 处理选中文本变化
+function handleSelectionChange() {
+  const selection = window.getSelection()
+  if (!selection || selection.isCollapsed || !selection.toString().trim()) {
+    showSelectionCopyBtn.value = false
+    return
+  }
+
+  // 检查选区是否在消息内容区域内
+  const range = selection.getRangeAt(0)
+  const container = range.commonAncestorContainer as HTMLElement
+  const messageContent = container?.closest?.('.message-content')
+
+  if (!messageContent) {
+    showSelectionCopyBtn.value = false
+    return
+  }
+
+  // 获取选区的位置
+  const rect = range.getBoundingClientRect()
+  selectionCopyBtnStyle.value = {
+    top: `${rect.top - 45 + window.scrollY}px`,
+    left: `${rect.left + rect.width / 2 - 25 + window.scrollX}px`
+  }
+  showSelectionCopyBtn.value = true
+}
+
+// 复制选中的文本
+async function copySelection() {
+  const selection = window.getSelection()
+  if (!selection) return
+
+  const text = selection.toString()
+  const success = await copyTextToClipboard(text)
+
+  if (success) {
+    showCopyToast()
+  }
+
+  showSelectionCopyBtn.value = false
+  selection.removeAllRanges()
 }
 </script>
 
@@ -1456,6 +1526,43 @@ function preventContextMenu(event: MouseEvent) {
 .copy-toast.show {
   opacity: 1;
   transform: translate(-50%, -50%) scale(1);
+}
+
+/* 选中文本复制按钮 */
+.selection-copy-btn {
+  position: fixed;
+  padding: 0.5rem 1rem;
+  background: var(--primary-color);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  z-index: 1000;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  animation: popIn 0.2s ease;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.selection-copy-btn:hover {
+  background: var(--primary-hover);
+}
+
+.selection-copy-btn:active {
+  transform: scale(0.95);
+}
+
+@keyframes popIn {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .message-content :deep(strong) {
@@ -2374,6 +2481,13 @@ textarea:focus {
 
   .tool-call-content {
     padding: 0.75rem;
+  }
+
+  /* 选中文本复制按钮 - 移动端 */
+  .selection-copy-btn {
+    padding: 0.625rem 1.25rem;
+    font-size: 0.9375rem;
+    border-radius: 8px;
   }
 }
 
