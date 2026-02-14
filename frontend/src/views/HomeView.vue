@@ -1145,7 +1145,6 @@ function isSameDay(d1: Date, d2: Date): boolean {
   max-width: 80%;
   min-width: 0;
   align-self: flex-start;
-  overflow: hidden;
 }
 
 .message.from-me {
@@ -1195,7 +1194,6 @@ function isSameDay(d1: Date, d2: Date): boolean {
   border-radius: 12px;
   min-width: 0;
   flex: 1;
-  overflow: hidden;
 }
 
 .message.from-me .message-body {
