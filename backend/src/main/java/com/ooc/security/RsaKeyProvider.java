@@ -106,7 +106,11 @@ public class RsaKeyProvider {
     }
 
     public String getPublicKeyBase64() {
-        return Base64.getEncoder().encodeToString(keyPair.getPublic().getEncoded());
+        // 返回完整的 PEM 格式公钥，方便前端 JSEncrypt 使用
+        String encoded = Base64.getEncoder().encodeToString(keyPair.getPublic().getEncoded());
+        return "-----BEGIN PUBLIC KEY-----\n" + 
+               encoded.replaceAll("(.{64})", "$1\n") + 
+               "\n-----END PUBLIC KEY-----";
     }
 
     public String decrypt(String encryptedBase64) {
