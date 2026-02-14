@@ -129,6 +129,28 @@ export const useChatStore = defineStore('chat', () => {
           typingUsers.value.delete(data.message.senderId)
         }
         break
+      case 'stream_start':
+        // 流式消息开始
+        messages.value.push(data.message)
+        break
+      case 'stream_delta':
+        // 流式消息增量 - 追加到最新消息
+        {
+          const lastMsg = messages.value[messages.value.length - 1]
+          if (lastMsg && lastMsg.id === data.message.id) {
+            lastMsg.content += data.message.content
+          }
+        }
+        break
+      case 'stream_end':
+        // 流式消息结束 - 替换为完整消息
+        {
+          const index = messages.value.findIndex(m => m.id === data.message.id)
+          if (index !== -1) {
+            messages.value[index] = data.message
+          }
+        }
+        break
       case 'typing':
         // 处理正在输入状态
         if (data.userId && data.userName) {

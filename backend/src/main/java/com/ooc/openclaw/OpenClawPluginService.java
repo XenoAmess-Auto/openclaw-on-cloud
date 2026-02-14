@@ -277,4 +277,170 @@ public class OpenClawPluginService {
     public record OpenClawSession(String sessionId, String instanceName, Instant createdAt) {}
     public record OpenClawResponse(String messageId, String content, Instant timestamp, boolean completed) {}
     public record SummarizeResponse(String summary) {}
+
+    /**
+     * 流式响应事件
+     */
+    public record StreamEvent(
+            String type,
+            String content,
+            String toolName,
+            String toolInput,
+            String messageId,
+            boolean completed
+    ) {}
+
+    /**
+     * 发送消息到 OpenClaw 并获取流式回复
+     */
+    public Flux<StreamEvent> sendMessageStream(String sessionId, String message,
+            List<ChatWebSocketHandler.Attachment> attachments, String userId, String userName) {
+
+        String processedMessage = convertUploadsPath(message);
+        List<Map<String, Object>> contentBlocks = new ArrayList<>();
+
+        if (processedMessage != null && !processedMessage.isEmpty()) {
+            Map<String, Object> textBlock = new HashMap<>();
+            textBlock.put("type", "text");
+            textBlock.put("text", userName + ": " + processedMessage);
+            contentBlocks.add(textBlock);
+        }
+
+        if (attachments != null && !attachments.isEmpty()) {
+            for (ChatWebSocketHandler.Attachment att : attachments) {
+                if ("image".equals(att.getType()) && att.getContent() != null) {
+                    Map<String, Object> imageBlock = new HashMap<>();
+                    imageBlock.put("type", "image_url");
+                    Map<String, String> imageUrl = new HashMap<>();
+                    String dataUrl = "data:" + att.getMimeType() + ";base64," + att.getContent();
+                    imageUrl.put("url", dataUrl);
+                    imageBlock.put("image_url", imageUrl);
+                    contentBlocks.add(imageBlock);
+                }
+            }
+        }
+
+        if (contentBlocks.isEmpty()) {
+            Map<String, Object> textBlock = new HashMap<>();
+            textBlock.put("type", "text");
+            textBlock.put("text", userName + ": [图片]");
+            contentBlocks.add(textBlock);
+        }
+
+        List<Map<String, Object>> messages = new ArrayList<>();
+        Map<String, Object> systemMsg = new HashMap<>();
+        systemMsg.put("role", "system");
+        systemMsg.put("content", """
+            You are OpenClaw, a helpful AI assistant. Be concise and direct in your responses.
+
+            IMPORTANT: When you use tools (read, write, edit, exec, etc.), you MUST include detailed
+            tool call information in your response in this format:
+
+            **Tools used:**
+            - `tool_name`: brief description
+
+            **Tool details:**
+            - `tool_name`:
+              ```
+              <tool output content here>
+              ```
+
+            Then provide your actual response.
+
+            For `read` tool: include the file content you read.
+            For `exec` tool: include the command output.
+            For other tools: include the relevant output data.
+            """);
+        messages.add(systemMsg);
+
+        Map<String, Object> userMsg = new HashMap<>();
+        userMsg.put("role", "user");
+        userMsg.put("content", contentBlocks);
+        messages.add(userMsg);
+
+        Map<String, Object> request = new HashMap<>();
+        request.put("model", "openclaw:main");
+        request.put("messages", messages);
+        request.put("user", sessionId);
+        request.put("stream", true);
+
+        log.info("Sending streaming request to OpenClaw: sessionId={}, textLength={}, imageCount={}",
+                sessionId,
+                processedMessage != null ? processedMessage.length() : 0,
+                attachments != null ? attachments.size() : 0);
+
+        return getWebClient().post()
+                .uri("/v1/chat/completions")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + properties.getApiKey())
+                .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+                .header(HttpHeaders.ACCEPT, "text/event-stream")
+                .bodyValue(request)
+                .retrieve()
+                .bodyToFlux(String.class)
+                .flatMap(this::parseSseLine)
+                .doOnNext(event -> {
+                    OpenClawSessionState state = sessionStates.computeIfAbsent(sessionId, k ->
+                        OpenClawSessionState.builder()
+                                .sessionId(sessionId)
+                                .instanceName("ooc-" + sessionId)
+                                .createdAt(Instant.now())
+                                .lastActivity(Instant.now())
+                                .build()
+                    );
+                    state.setLastActivity(Instant.now());
+                })
+                .doOnError(error -> log.error("OpenClaw streaming API error", error));
+    }
+
+    /**
+     * 解析 SSE 行
+     */
+    private Mono<StreamEvent> parseSseLine(String line) {
+        if (line == null || line.isEmpty()) {
+            return Mono.empty();
+        }
+
+        if (!line.startsWith("data:")) {
+            return Mono.empty();
+        }
+
+        String data = line.substring(5).trim();
+
+        if ("[DONE]".equals(data)) {
+            return Mono.just(new StreamEvent("done", null, null, null, null, true));
+        }
+
+        try {
+            JsonNode root = objectMapper.readTree(data);
+
+            if (root.has("error")) {
+                String errorMsg = root.path("error").path("message").asText("Unknown error");
+                return Mono.just(new StreamEvent("error", errorMsg, null, null, null, true));
+            }
+
+            if (root.has("choices") && root.path("choices").isArray()) {
+                JsonNode choices = root.path("choices");
+                if (choices.size() > 0) {
+                    JsonNode firstChoice = choices.get(0);
+                    JsonNode delta = firstChoice.path("delta");
+
+                    String content = delta.path("content").asText(null);
+
+                    String finishReason = firstChoice.path("finish_reason").asText(null);
+                    boolean isDone = "stop".equals(finishReason) || "tool_calls".equals(finishReason);
+
+                    if (content != null && !content.isEmpty()) {
+                        return Mono.just(new StreamEvent("message", content, null, null, null, isDone));
+                    } else if (isDone) {
+                        return Mono.just(new StreamEvent("done", null, null, null, null, true));
+                    }
+                }
+            }
+
+            return Mono.empty();
+        } catch (Exception e) {
+            log.warn("Failed to parse SSE line: {}", line, e);
+            return Mono.empty();
+        }
+    }
 }

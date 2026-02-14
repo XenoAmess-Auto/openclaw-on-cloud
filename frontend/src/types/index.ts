@@ -42,6 +42,8 @@ export interface Message {
   fromOpenClaw: boolean
   isSystem?: boolean
   isToolCall?: boolean
+  isStreaming?: boolean
+  delta?: boolean
   toolCalls?: ToolCall[]
   mentions?: Mention[]
   mentionAll?: boolean

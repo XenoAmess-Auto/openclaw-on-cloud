@@ -50,7 +50,7 @@ public class ChatRoom {
     private Instant updatedAt;
 
     @Data
-    @Builder
+    @Builder(toBuilder = true)
     @NoArgsConstructor
     @AllArgsConstructor
     public static class Message {
@@ -73,6 +73,10 @@ public class ChatRoom {
         private boolean mentionHere;
         @Builder.Default
         private List<Attachment> attachments = new ArrayList<>();
+        
+        // 流式消息相关字段
+        private boolean isStreaming;
+        private boolean delta;
 
         @Data
         @Builder

@@ -74,6 +74,22 @@ public class ChatRoomService {
         }).orElseThrow(() -> new RuntimeException("Chat room not found"));
     }
 
+    /**
+     * 更新消息（用于流式消息更新）
+     */
+    public ChatRoom updateMessage(String roomId, ChatRoom.Message updatedMessage) {
+        return chatRoomRepository.findById(roomId).map(room -> {
+            List<ChatRoom.Message> messages = room.getMessages();
+            for (int i = 0; i < messages.size(); i++) {
+                if (messages.get(i).getId().equals(updatedMessage.getId())) {
+                    messages.set(i, updatedMessage);
+                    break;
+                }
+            }
+            return chatRoomRepository.save(room);
+        }).orElseThrow(() -> new RuntimeException("Chat room not found"));
+    }
+
     public void updateOpenClawSession(String roomId, String sessionId) {
         chatRoomRepository.findById(roomId).ifPresent(room -> {
             // 标记旧的为不活跃
