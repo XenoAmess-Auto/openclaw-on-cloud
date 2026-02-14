@@ -152,7 +152,8 @@ fi
 
 # 检查前端服务
 echo "  [2/2] 检查前端服务..."
-FRONTEND_PID=$(pgrep -f "pnpm preview" || pgrep -f "vite preview" || true)
+# 检测方式1: 检查3000端口是否监听
+FRONTEND_PID=$(lsof -ti:3000 2>/dev/null || pgrep -f "pnpm preview" || pgrep -f "vite preview" || pgrep -f "vite" || true)
 if [ -n "$FRONTEND_PID" ]; then
     log_test "前端服务运行状态" "PASS" "PID: $FRONTEND_PID"
 else
@@ -166,11 +167,47 @@ echo ""
 # ============================================
 echo -e "${YELLOW}>>> 阶段 4: API 端点测试...${NC}"
 
+# 获取公钥并加密密码
+echo "  获取公钥并加密密码..."
+PUBLIC_KEY_RESPONSE=$(curl -s http://localhost:8081/api/auth/public-key 2>/dev/null || echo "")
+PUBLIC_KEY=$(echo "$PUBLIC_KEY_RESPONSE" | grep -o '"publicKey":"[^"]*"' | cut -d'"' -f4 | sed 's/\\n/\n/g' || true)
+
+if [ -n "$PUBLIC_KEY" ]; then
+    # 使用 Node.js 加密密码
+    ENCRYPTED_PASSWORD=$(node -e "
+const crypto = require('crypto');
+const publicKey = \`$PUBLIC_KEY\`;
+try {
+    const encrypted = crypto.publicEncrypt(publicKey, Buffer.from('admin'));
+    console.log(encrypted.toString('base64'));
+} catch(e) {
+    console.error('Encrypt error:', e.message);
+    process.exit(1);
+}
+" 2>&1)
+    
+    if [ $? -eq 0 ] && [ -n "$ENCRYPTED_PASSWORD" ]; then
+        log_test "密码加密" "PASS" "成功使用 RSA 公钥加密密码"
+    else
+        log_test "密码加密" "WARN" "加密失败，将尝试明文密码"
+        ENCRYPTED_PASSWORD="admin"
+    fi
+else
+    log_test "获取公钥" "WARN" "无法获取公钥，将尝试明文密码"
+    ENCRYPTED_PASSWORD="admin"
+fi
+
 # 获取访问令牌
 echo "  获取访问令牌..."
+# E2E 测试专用账号
+E2E_USERNAME="ooc-test-1771067194"
+E2E_PASSWORD="CxVgvs7QQyRFNWUAGlKR/w=="
+
+# 将密码转义，处理特殊字符
+ESCAPED_PASSWORD=$(echo "$E2E_PASSWORD" | sed 's/"/\\"/g; s/\//\\\//g')
 TOKEN_RESPONSE=$(curl -s -X POST http://localhost:8081/api/auth/login \
     -H "Content-Type: application/json" \
-    -d '{"username":"admin","password":"admin"}' 2>/dev/null || echo "")
+    -d "{\"username\":\"$E2E_USERNAME\",\"password\":\"$ESCAPED_PASSWORD\"}" 2>/dev/null || echo "")
 
 TOKEN=$(echo "$TOKEN_RESPONSE" | grep -o '"token":"[^"]*"' | cut -d'"' -f4 || true)
 
