@@ -490,21 +490,18 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
         String content = response.content();
         List<ChatRoom.Message.ToolCall> toolCalls = new ArrayList<>();
 
-        // 解析 **Tools used:** 部分
+        // 解析 **Tools used:** 部分来构建工具调用列表
         if (content.contains("**Tools used:**")) {
             int toolsStart = content.indexOf("**Tools used:**");
             int toolsEnd = content.length();
 
             // 找到 Tools used 部分的结束位置（下一个空行或内容结束）
-            // 从 toolsStart 之后开始搜索
             int searchStart = toolsStart + "**Tools used:**".length();
             int nextDoubleNewline = content.indexOf("\n\n", searchStart);
 
             if (nextDoubleNewline != -1) {
-                // 找到双换行，Tools used 部分在这里结束
                 toolsEnd = nextDoubleNewline;
             }
-            // 如果没有找到双换行，toolsEnd 保持为 content.length()
 
             String toolsSection = content.substring(toolsStart, Math.min(toolsEnd, content.length()));
 
@@ -533,38 +530,9 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                     }
                 }
             }
-
-            // 移除 Tools used 部分，只保留实际回复内容
-            String beforeTools = content.substring(0, toolsStart).trim();
-            String afterTools = toolsEnd < content.length() ? content.substring(toolsEnd).trim() : "";
-            
-            // 清理 afterTools 前面可能存在的多余换行
-            if (afterTools.startsWith("\n")) {
-                afterTools = afterTools.substring(1).trim();
-            }
-            
-            content = beforeTools + (beforeTools.isEmpty() || afterTools.isEmpty() ? "" : "\n\n") + afterTools;
         }
 
-        // 解析代码块作为工具结果
-        if (content.contains("```") && !toolCalls.isEmpty()) {
-            int codeStart = content.indexOf("```");
-            int codeEnd = content.indexOf("```", codeStart + 3);
-            if (codeEnd != -1) {
-                String codeBlock = content.substring(codeStart, codeEnd + 3);
-                // 将第一个代码块关联到第一个工具
-                if (!toolCalls.isEmpty()) {
-                    ChatRoom.Message.ToolCall firstTool = toolCalls.get(0);
-                    firstTool.setResult(codeBlock);
-                }
-                // 从 content 中移除代码块，避免重复显示
-                String beforeCode = content.substring(0, codeStart).trim();
-                String afterCode = content.substring(codeEnd + 3).trim();
-                content = beforeCode + (beforeCode.isEmpty() || afterCode.isEmpty() ? "" : "\n\n") + afterCode;
-            }
-        }
-
-        // 保存 OpenClaw 回复到 OOC 会话
+        // 保存 OpenClaw 回复到 OOC 会话（保存完整内容）
         oocSessionService.addMessage(roomId, OocSession.SessionMessage.builder()
                 .id(UUID.randomUUID().toString())
                 .senderId("openclaw")
@@ -574,7 +542,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                 .fromOpenClaw(true)
                 .build());
 
-        // 保存到聊天室
+        // 保存到聊天室 - 保留完整的 OpenClaw 响应内容
         ChatRoom.Message message = ChatRoom.Message.builder()
                 .id(UUID.randomUUID().toString())
                 .senderId("openclaw")

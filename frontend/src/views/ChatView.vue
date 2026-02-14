@@ -1864,17 +1864,20 @@ textarea:focus {
   -webkit-box-orient: vertical;
 }
 
-/* 工具调用消息样式 */
+/* 工具调用消息样式 - 改进版 */
 .tool-call-message {
-  background: var(--surface-color) !important;
-  border: 1px solid var(--border-color);
-  max-width: 90% !important;
-  margin: 0.5rem auto !important;
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%) !important;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px !important;
+  max-width: 95% !important;
+  margin: 0.75rem auto !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  overflow: hidden;
 }
 
 .tool-call-message.from-openclaw {
-  margin-left: 1rem !important;
-  margin-right: auto !important;
+  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%) !important;
+  border-color: #93c5fd;
 }
 
 .tool-call-header {
@@ -1882,19 +1885,18 @@ textarea:focus {
   align-items: center;
   gap: 0.5rem;
   padding: 0.75rem 1rem;
-  background: rgba(0,0,0,0.03);
-  border-bottom: 1px solid var(--border-color);
-  border-radius: 8px 8px 0 0;
+  background: rgba(59, 130, 246, 0.08);
+  border-bottom: 1px solid rgba(59, 130, 246, 0.15);
 }
 
 .tool-icon {
-  font-size: 1rem;
+  font-size: 1.125rem;
 }
 
 .tool-title {
   font-weight: 600;
   font-size: 0.875rem;
-  color: var(--text-primary);
+  color: #1e40af;
 }
 
 .tool-call-list {
@@ -1903,10 +1905,16 @@ textarea:focus {
 
 .tool-item {
   margin-bottom: 0.75rem;
-  padding: 0.75rem;
-  background: var(--bg-color);
-  border-radius: 8px;
-  border-left: 3px solid var(--primary-color);
+  padding: 0.875rem;
+  background: #ffffff;
+  border-radius: 12px;
+  border-left: 4px solid #3b82f6;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  transition: transform 0.15s ease;
+}
+
+.tool-item:hover {
+  transform: translateX(2px);
 }
 
 .tool-item:last-child {
@@ -1915,6 +1923,7 @@ textarea:focus {
 
 .tool-item.running {
   border-left-color: #f59e0b;
+  background: #fffbeb;
 }
 
 .tool-item.completed {
@@ -1923,28 +1932,33 @@ textarea:focus {
 
 .tool-item.error {
   border-left-color: #ef4444;
+  background: #fef2f2;
 }
 
 .tool-name {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  margin-bottom: 0.25rem;
+  margin-bottom: 0.375rem;
 }
 
 .tool-name code {
-  background: rgba(0,0,0,0.05);
-  padding: 0.125rem 0.375rem;
-  border-radius: 4px;
+  background: #1e293b;
+  color: #e2e8f0;
+  padding: 0.25rem 0.5rem;
+  border-radius: 6px;
   font-size: 0.8125rem;
-  font-family: monospace;
-  color: var(--text-primary);
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-weight: 500;
 }
 
 .tool-status {
-  font-size: 0.75rem;
-  padding: 0.125rem 0.375rem;
-  border-radius: 4px;
+  font-size: 0.6875rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 99px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
 }
 
 .tool-status.running {
@@ -1964,35 +1978,46 @@ textarea:focus {
 
 .tool-description {
   font-size: 0.8125rem;
-  color: var(--text-secondary);
-  margin-top: 0.25rem;
+  color: #64748b;
+  margin-top: 0.375rem;
+  line-height: 1.4;
 }
 
 .tool-result {
-  margin-top: 0.5rem;
-  background: rgba(0,0,0,0.03);
-  border-radius: 6px;
+  margin-top: 0.625rem;
+  background: #f8fafc;
+  border-radius: 8px;
   overflow: hidden;
+  border: 1px solid #e2e8f0;
 }
 
 .tool-result pre {
   margin: 0;
-  padding: 0.75rem;
+  padding: 0.875rem;
   font-size: 0.8125rem;
   overflow-x: auto;
-  max-height: 300px;
+  max-height: 400px;
   overflow-y: auto;
+  line-height: 1.5;
+  color: #334155;
 }
 
 .tool-result code {
   font-family: 'JetBrains Mono', 'Fira Code', monospace;
-  line-height: 1.5;
 }
 
 .tool-call-content {
   padding: 1rem;
-  border-top: 1px solid var(--border-color);
-  background: var(--bg-color);
+  border-top: 1px solid #e2e8f0;
+  background: #ffffff;
+}
+
+.tool-call-content :deep(p:first-child) {
+  margin-top: 0;
+}
+
+.tool-call-content :deep(p:last-child) {
+  margin-bottom: 0;
 }
 
 /* ============================================

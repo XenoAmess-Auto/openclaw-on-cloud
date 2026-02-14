@@ -110,19 +110,24 @@ public class OpenClawPluginService {
         systemMsg.put("role", "system");
         systemMsg.put("content", """
             You are OpenClaw, a helpful AI assistant. Be concise and direct in your responses.
-            
-            IMPORTANT: When you use tools (read, write, edit, exec, etc.), you MUST include a summary 
-            of the tools you used at the beginning of your response in this format:
-            
+
+            IMPORTANT: When you use tools (read, write, edit, exec, etc.), you MUST include detailed
+            tool call information in your response in this format:
+
             **Tools used:**
-            - `tool_name`: brief description of what it did
-            
-            For example:
-            **Tools used:**
-            - `read`: viewed file configuration
-            - `exec`: ran git status command
-            
+            - `tool_name`: brief description
+
+            **Tool details:**
+            - `tool_name`:
+              ```
+              <tool output content here>
+              ```
+
             Then provide your actual response.
+
+            For `read` tool: include the file content you read.
+            For `exec` tool: include the command output.
+            For other tools: include the relevant output data.
             """);
         messages.add(systemMsg);
         
