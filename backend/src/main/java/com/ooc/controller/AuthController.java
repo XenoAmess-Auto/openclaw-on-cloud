@@ -13,6 +13,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
+
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
@@ -88,6 +89,26 @@ public class AuthController {
         User user = userService.getUserByUsername(username);
         
         // 这里简化处理，实际应该重新生成token
+        return ResponseEntity.ok(AuthResponse.builder()
+                .token(token)
+                .userId(user.getId())
+                .username(user.getUsername())
+                .nickname(user.getNickname())
+                .email(user.getEmail())
+                .avatar(user.getAvatar())
+                .roles(user.getRoles())
+                .build());
+    }
+
+    @GetMapping("/me")
+    public ResponseEntity<AuthResponse> getCurrentUser(Authentication authentication) {
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return ResponseEntity.status(401).build();
+        }
+        String username = authentication.getName();
+        User user = userService.getUserByUsername(username);
+        String token = jwtTokenProvider.generateToken(authentication);
+
         return ResponseEntity.ok(AuthResponse.builder()
                 .token(token)
                 .userId(user.getId())
