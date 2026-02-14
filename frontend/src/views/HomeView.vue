@@ -1252,24 +1252,47 @@ function isSameDay(d1: Date, d2: Date): boolean {
   word-break: break-word;
   overflow-wrap: break-word;
   max-width: 100%;
+  min-width: 0;
 }
 
-/* 代码块样式 */
+/* 代码块样式 - 严格防止溢出 */
 .message-content :deep(pre) {
   max-width: 100%;
+  width: 100%;
   overflow-x: auto;
-  white-space: pre-wrap;
-  word-wrap: break-word;
+  white-space: pre-wrap !important;
+  word-wrap: break-word !important;
+  word-break: break-all !important;
+  box-sizing: border-box;
+}
+
+.message-content :deep(pre code) {
+  white-space: pre-wrap !important;
+  word-wrap: break-word !important;
+  word-break: break-all !important;
+  display: block;
+  max-width: 100%;
 }
 
 .message-content :deep(code) {
   word-wrap: break-word;
   white-space: pre-wrap;
+  word-break: break-all;
+  max-width: 100%;
 }
 
 /* 确保所有子元素不溢出 */
 .message-content :deep(*) {
   max-width: 100%;
+  box-sizing: border-box;
+}
+
+/* 特别处理可能溢出的元素 */
+.message-content :deep(p),
+.message-content :deep(div),
+.message-content :deep(span) {
+  max-width: 100%;
+  word-break: break-word;
 }
 
 .message-content :deep(.mention) {
