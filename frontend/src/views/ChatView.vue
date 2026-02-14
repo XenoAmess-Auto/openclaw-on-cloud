@@ -66,6 +66,10 @@
           </div>
           <!-- 工具调用后的回复内容 -->
           <div class="message-content tool-call-content" v-html="renderContent(msg)"></div>
+          <!-- 调试：显示工具调用消息的原始内容长度 -->
+          <div v-if="!msg.content || msg.content.length < 50" class="empty-content-debug">
+            [工具调用消息内容 - 长度: {{ msg.content?.length || 0 }}, ID: {{ msg.id?.slice(-6) }}]
+          </div>
         </template>
         
         <!-- 普通消息 -->
@@ -637,6 +641,20 @@ function highlightCode(code: string): string {
 function renderContent(msg: Message) {
   // 防御性处理：确保 content 不为 null/undefined
   let content = msg.content || ''
+
+  // 如果是工具调用消息，提取工具详情后的实际回复内容
+  if (msg.isToolCall || msg.toolCalls?.length) {
+    // 查找 "---" 分隔符，提取前面的内容作为实际回复
+    const separatorIndex = content.indexOf('---')
+    if (separatorIndex !== -1) {
+      content = content.substring(0, separatorIndex).trim()
+    }
+    // 移除 **Tools used:** 和 **Tool details:** 部分
+    const toolsUsedIndex = content.indexOf('**Tools used:**')
+    if (toolsUsedIndex !== -1) {
+      content = content.substring(0, toolsUsedIndex).trim()
+    }
+  }
 
   // 处理转义字符：将字符串 \n \t 转为真正的换行和制表符
   content = content.replace(/\\n/g, '\n').replace(/\\t/g, '\t')

@@ -125,7 +125,9 @@ public class OpenClawPluginService {
               <tool output content here>
               ```
 
-            Then provide your actual response.
+            ---
+
+            Then provide your actual response summary above the separator.
 
             For `read` tool: include the file content you read.
             For `exec` tool: include the command output.
@@ -345,7 +347,9 @@ public class OpenClawPluginService {
               <tool output content here>
               ```
 
-            Then provide your actual response.
+            ---
+
+            Then provide your actual response summary above the separator.
 
             For `read` tool: include the file content you read.
             For `exec` tool: include the command output.
