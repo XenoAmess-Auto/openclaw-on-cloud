@@ -335,6 +335,8 @@ import { chatRoomApi } from '@/api/chatRoom'
 import SessionManager from '@/components/SessionManager.vue'
 import MemberManager from '@/components/MemberManager.vue'
 import { fileApi } from '@/api/file'
+import { marked } from 'marked'
+import DOMPurify from 'dompurify'
 import type { MemberDto, Message, FileUploadResponse } from '@/types'
 
 const router = useRouter()
@@ -734,37 +736,120 @@ function isMentionedMe(msg: Message): boolean {
 }
 
 function renderContent(msg: Message) {
-  let content = msg.content
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
+  // 防御性处理：确保 content 不为 null/undefined
+  let content = msg.content || ''
 
-  // 将附件链接转换为可点击的链接和图片
-  content = content.replace(/\[文件: ([^\]]+)\]\(([^)]+)\)/g, (_match, name, url) => {
-    // 判断是否为图片
-    if (url.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {
-      return `<div class="message-image"><img src="${url}" alt="${name}" loading="lazy" /></div>`
-    }
-    return `<a href="${url}" target="_blank" class="file-link">📎 ${name}</a>`
+  // 处理转义字符：将字符串 \n \t 转为真正的换行和制表符
+  content = content.replace(/\\n/g, '\n').replace(/\\t/g, '\t')
+
+  // Step 1: 先渲染 Markdown（在 HTML 转义之前）
+  // 临时替换 @提及，防止 Markdown 解析器破坏它们
+  const mentionPlaceholders: string[] = []
+  content = content.replace(/(@所有人|@everyone|@all|@在线|@here|@openclaw|@[^\s]+)/gi, (match) => {
+    mentionPlaceholders.push(match)
+    return `\u0000MENTION_${mentionPlaceholders.length - 1}\u0000`
   })
 
-  // 高亮 @所有人 和 @在线
-  content = content
-    .replace(/@所有人|@everyone|@all/gi, '<span class="mention mention-all">$&</span>')
-    .replace(/@在线|@here/gi, '<span class="mention mention-here">$&</span>')
+  // 渲染 Markdown
+  let htmlContent: string
+  try {
+    console.log('[renderContent] Input content:', content.substring(0, 100))
+    // 使用 marked.marked 进行同步解析（marked v17+）
+    const parsed = (marked as any).marked?.(content) || marked.parse(content, { async: false })
+    htmlContent = String(parsed)
+    console.log('[renderContent] Parsed HTML:', htmlContent.substring(0, 100))
 
-  // 高亮 @openclaw
-  content = content.replace(/@openclaw/gi, '<span class="mention">@openclaw</span>')
+    // 安全检查：如果解析结果看起来像 Promise 或没有 HTML 标签，使用 fallback
+    if (htmlContent === '[object Promise]' || !htmlContent.includes('<')) {
+      console.warn('[renderContent] Invalid parsed content, using fallback')
+      throw new Error('Invalid parsed content')
+    }
+  } catch (e) {
+    console.error('[renderContent] Markdown parsing error:', e)
+    // 解析失败时的 fallback
+    htmlContent = content
+      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*(.+?)\*/g, '<em>$1</em>')
+      .replace(/`(.+?)`/g, '<code>$1</code>')
+      .replace(/~~(.+?)~~/g, '<del>$1</del>')
+      .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+      .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+      .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+      .replace(/^- (.+)$/gm, '<li>$1</li>')
+      .replace(/\n/g, '<br>')
+  }
 
-  // 高亮具体用户@
+  // XSS 清理
+  htmlContent = DOMPurify.sanitize(htmlContent, {
+    ALLOWED_TAGS: [
+      'p', 'br', 'hr',
+      'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+      'ul', 'ol', 'li',
+      'strong', 'em', 'code', 'pre', 'blockquote',
+      'a', 'img', 'table', 'thead', 'tbody', 'tr', 'th', 'td',
+      'del', 'ins', 'sup', 'sub'
+    ],
+    ALLOWED_ATTR: ['href', 'src', 'alt', 'title', 'target', 'class']
+  })
+
+  // Step 2: 恢复 @提及并添加高亮
+  htmlContent = htmlContent.replace(/\u0000MENTION_(\d+)\u0000/g, (_, index) => {
+    const mention = mentionPlaceholders[parseInt(index)]
+    if (!mention) return ''
+
+    // 判断提及类型并添加对应的 class
+    if (/@所有人|@everyone|@all/i.test(mention)) {
+      return `<span class="mention mention-all">${mention}</span>`
+    } else if (/@在线|@here/i.test(mention)) {
+      return `<span class="mention mention-here">${mention}</span>`
+    } else if (/@openclaw/i.test(mention)) {
+      return `<span class="mention">${mention}</span>`
+    } else {
+      // 未知的 @xxx 也高亮
+      return `<span class="mention">${mention}</span>`
+    }
+  })
+
+  // Step 3: 处理 msg.mentions 中可能存在的但未在内容中找到的提及
   if (msg.mentions) {
     msg.mentions.forEach(mention => {
       const regex = new RegExp(`@${mention.userName}`, 'g')
-      content = content.replace(regex, `<span class="mention">@${mention.userName}</span>`)
+      // 只替换未被替换过的（即不在 placeholder 中的）
+      if (!mentionPlaceholders.some(p => p === `@${mention.userName}`)) {
+        htmlContent = htmlContent.replace(regex, `<span class="mention">@${mention.userName}</span>`)
+      }
     })
   }
 
-  return content.replace(/\n/g, '<br>')
+  // Step 4: 渲染附件图片
+  let attachmentsHtml = ''
+  if (msg.attachments && msg.attachments.length > 0) {
+    attachmentsHtml = '<div class="message-attachments">' +
+      msg.attachments.map(att => {
+        // 更可靠的图片检测：检查 type、contentType 或 url
+        const typeStr = (att.type || '').toUpperCase()
+        const contentTypeStr = (att.contentType || '').toLowerCase()
+        const urlStr = (att.url || '').toLowerCase()
+
+        // 多种方式检测图片
+        const isImage = typeStr === 'IMAGE' ||
+                       contentTypeStr.startsWith('image/') ||
+                       urlStr.startsWith('data:image/') ||
+                       urlStr.endsWith('.png') ||
+                       urlStr.endsWith('.jpg') ||
+                       urlStr.endsWith('.jpeg') ||
+                       urlStr.endsWith('.gif') ||
+                       urlStr.endsWith('.webp')
+
+        if (isImage) {
+          return `<img src="${att.url}" alt="${att.name || '图片'}" class="message-image" loading="lazy" />`
+        }
+        return `<a href="${att.url}" target="_blank" class="message-file">${att.name || '附件'}</a>`
+      }).join('') +
+      '</div>'
+  }
+
+  return htmlContent + attachmentsHtml
 }
 
 function getInitials(name: string): string {
