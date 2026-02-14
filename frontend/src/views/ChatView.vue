@@ -237,21 +237,22 @@ import DOMPurify from 'dompurify'
 import hljs from 'highlight.js'
 import 'highlight.js/styles/github-dark.css'
 
-// 配置 marked 选项
-marked.setOptions({
+// 自定义 renderer 添加代码高亮 - marked v17 方式
+const renderer = {
+  code({ text, lang }: { text: string; lang?: string }): string {
+    const language = lang || 'plaintext'
+    const validLang = hljs.getLanguage(language) ? language : 'plaintext'
+    const highlighted = hljs.highlight(text, { language: validLang }).value
+    return `<pre class="hljs language-${validLang}"><code class="language-${validLang}">${highlighted}</code></pre>`
+  }
+}
+
+// 配置 marked - marked v17 使用 use
+marked.use({
+  renderer,
   breaks: true, // 将换行符转换为 <br>
   gfm: true,    // GitHub Flavored Markdown
 })
-
-// 自定义 renderer 添加代码高亮
-const renderer = new marked.Renderer()
-renderer.code = function({ text, lang }: { text: string; lang?: string }): string {
-  const language = lang || 'plaintext'
-  const validLang = hljs.getLanguage(language) ? language : 'plaintext'
-  const highlighted = hljs.highlight(text, { language: validLang }).value
-  return `<pre class="hljs language-${validLang}"><code class="language-${validLang}">${highlighted}</code></pre>`
-}
-marked.use({ renderer })
 
 const route = useRoute()
 const router = useRouter()
@@ -599,9 +600,27 @@ function renderContent(msg: Message) {
   // 渲染 Markdown
   let htmlContent: string
   try {
-    // marked v9+ 返回 Promise，需要同步处理
+    // marked v9+ 可能返回 Promise，需要正确处理
     const result = marked.parse(content)
-    htmlContent = typeof result === 'string' ? result : (result as any).toString()
+    if (typeof result === 'string') {
+      htmlContent = result
+    } else {
+      // 如果是 Promise（异步扩展），我们无法在渲染函数中等待
+      // 所以这里临时返回未解析的内容，并记录警告
+      console.warn('marked.parse returned Promise, using sync fallback')
+      htmlContent = content
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.+?)\*/g, '<em>$1</em>')
+        .replace(/`(.+?)`/g, '<code>$1</code>')
+        .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+        .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+        .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+        .replace(/^- (.+)$/gm, '<li>$1</li>')
+        .replace(/\n/g, '<br>')
+    }
   } catch (e) {
     console.error('Markdown parsing error:', e)
     htmlContent = content.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
