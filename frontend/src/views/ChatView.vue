@@ -600,30 +600,21 @@ function renderContent(msg: Message) {
   // 渲染 Markdown
   let htmlContent: string
   try {
-    // marked v9+ 可能返回 Promise，需要正确处理
-    const result = marked.parse(content)
-    if (typeof result === 'string') {
-      htmlContent = result
-    } else {
-      // 如果是 Promise（异步扩展），我们无法在渲染函数中等待
-      // 所以这里临时返回未解析的内容，并记录警告
-      console.warn('marked.parse returned Promise, using sync fallback')
-      htmlContent = content
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-        .replace(/\*(.+?)\*/g, '<em>$1</em>')
-        .replace(/`(.+?)`/g, '<code>$1</code>')
-        .replace(/^### (.+)$/gm, '<h3>$1</h3>')
-        .replace(/^## (.+)$/gm, '<h2>$1</h2>')
-        .replace(/^# (.+)$/gm, '<h1>$1</h1>')
-        .replace(/^- (.+)$/gm, '<li>$1</li>')
-        .replace(/\n/g, '<br>')
-    }
+    // marked v17 默认返回 Promise，使用 { async: false } 获取同步结果
+    htmlContent = marked.parse(content, { async: false }) as string
   } catch (e) {
     console.error('Markdown parsing error:', e)
-    htmlContent = content.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    // 同步解析失败时的 fallback
+    htmlContent = content
+      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*(.+?)\*/g, '<em>$1</em>')
+      .replace(/`(.+?)`/g, '<code>$1</code>')
+      .replace(/~~(.+?)~~/g, '<del>$1</del>')
+      .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+      .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+      .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+      .replace(/^- (.+)$/gm, '<li>$1</li>')
+      .replace(/\n/g, '<br>')
   }
 
   // XSS 清理
