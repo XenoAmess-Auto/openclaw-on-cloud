@@ -11,7 +11,7 @@ public class OpenClawProperties {
 
     private String gatewayUrl = "http://localhost:18789";
     private String apiKey = "";
-    private long sessionTimeoutMs = 300000; // 5 minutes
+    private long sessionTimeoutMs = 1800000; // 30 minutes
     private int maxSessionMessages = 50;
     private boolean autoSummarize = true;
     private int summarizeThreshold = 30;
