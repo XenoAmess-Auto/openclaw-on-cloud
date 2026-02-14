@@ -83,7 +83,7 @@
           <div
             class="message-content"
             v-html="renderContent(msg)"
-            @touchstart.prevent="handleLongPressStart($event, msg)"
+            @touchstart="handleLongPressStart($event, msg)"
             @touchend="handleLongPressEnd()"
             @touchcancel="handleLongPressCancel($event)"
             @mousedown="handleLongPressStart($event, msg)"
@@ -945,6 +945,11 @@ function handleLongPressStart(event: TouchEvent | MouseEvent, msg: Message) {
     longPressTarget.value = null
     target.classList.remove('long-pressing')
 
+    // 阻止默认行为（防止浏览器菜单弹出）
+    if (event.cancelable) {
+      event.preventDefault()
+    }
+
     // 执行复制
     const textToCopy = msg.content || ''
     const success = await copyTextToClipboard(textToCopy)
@@ -1506,6 +1511,8 @@ async function copySelection() {
 .message-content {
   user-select: text !important;
   -webkit-user-select: text !important;
+  -webkit-touch-callout: default !important;
+  touch-action: auto;
   cursor: pointer;
   transition: transform 0.15s ease, background-color 0.15s ease;
 }
