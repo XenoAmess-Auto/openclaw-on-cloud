@@ -69,7 +69,17 @@
             <span v-else-if="msg.mentionHere" class="mention-tag mention-here">@在线</span>
             <span class="time">{{ formatTime(msg.timestamp) }}</span>
           </div>
-          <div class="message-content" v-html="renderContent(msg)"></div>
+          <div
+            class="message-content"
+            v-html="renderContent(msg)"
+            @touchstart.prevent="handleLongPressStart($event, msg)"
+            @touchend="handleLongPressEnd()"
+            @touchcancel="handleLongPressCancel($event)"
+            @mousedown="handleLongPressStart($event, msg)"
+            @mouseup="handleLongPressEnd()"
+            @mouseleave="handleLongPressEnd()"
+            @contextmenu.prevent
+          ></div>
         </template>
       </div>
       
@@ -280,6 +290,11 @@ const mentionStartIndex = ref(-1)
 const mentions = ref<MentionRecord[]>([])
 const unreadMentionCount = ref(0)
 
+// 长按复制相关状态
+const longPressTimer = ref<number | null>(null)
+const longPressTarget = ref<HTMLElement | null>(null)
+const LONG_PRESS_DURATION = 500 // 长按触发时间（毫秒）
+
 const isPrivateChat = computed(() => {
   return false
 })
@@ -326,15 +341,24 @@ onMounted(() => {
   chatStore.connect(roomId.value)
   loadRoomMembers()
   loadMentions()
-  
+
   // 添加 document 级别的 paste 监听
   document.addEventListener('paste', handleDocumentPaste)
+
+  // 添加全局上下文菜单阻止（用于长按复制）
+  document.addEventListener('contextmenu', preventContextMenu)
 })
 
 onUnmounted(() => {
   chatStore.disconnect()
   // 移除 document 级别的 paste 监听
   document.removeEventListener('paste', handleDocumentPaste)
+
+  // 移除全局上下文菜单阻止
+  document.removeEventListener('contextmenu', preventContextMenu)
+
+  // 清理长按定时器
+  handleLongPressEnd()
 })
 
 watch(() => chatStore.messages.length, () => {
@@ -806,6 +830,108 @@ function handleFileSelect(e: Event) {
 // 移除附件
 function removeAttachment(id: string) {
   attachments.value = attachments.value.filter(att => att.id !== id)
+}
+
+// ============ 长按复制功能 ============
+
+// 复制文本到剪贴板
+async function copyTextToClipboard(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text)
+    return true
+  } catch (err) {
+    console.error('复制失败:', err)
+    // Fallback: 使用 document.execCommand
+    const textarea = document.createElement('textarea')
+    textarea.value = text
+    textarea.style.position = 'fixed'
+    textarea.style.left = '-9999px'
+    document.body.appendChild(textarea)
+    textarea.select()
+    try {
+      const success = document.execCommand('copy')
+      document.body.removeChild(textarea)
+      return success
+    } catch (e) {
+      document.body.removeChild(textarea)
+      return false
+    }
+  }
+}
+
+// 显示复制成功提示
+function showCopyToast() {
+  // 创建提示元素
+  const toast = document.createElement('div')
+  toast.className = 'copy-toast'
+  toast.textContent = '已复制'
+  document.body.appendChild(toast)
+
+  // 触发动画
+  requestAnimationFrame(() => {
+    toast.classList.add('show')
+  })
+
+  // 2秒后移除
+  setTimeout(() => {
+    toast.classList.remove('show')
+    setTimeout(() => {
+      document.body.removeChild(toast)
+    }, 300)
+  }, 2000)
+}
+
+// 长按开始
+function handleLongPressStart(event: TouchEvent | MouseEvent, msg: Message) {
+  // 只处理普通消息（非工具调用消息）
+  if (msg.isToolCall || msg.toolCalls?.length) return
+
+  const target = event.currentTarget as HTMLElement
+  if (!target) return
+
+  longPressTarget.value = target
+
+  // 添加长按中样式
+  target.classList.add('long-pressing')
+
+  // 设置定时器
+  longPressTimer.value = window.setTimeout(async () => {
+    longPressTimer.value = null
+    longPressTarget.value = null
+    target.classList.remove('long-pressing')
+
+    // 执行复制
+    const textToCopy = msg.content || ''
+    const success = await copyTextToClipboard(textToCopy)
+    if (success) {
+      showCopyToast()
+    }
+  }, LONG_PRESS_DURATION)
+}
+
+// 长按结束（取消）
+function handleLongPressEnd(_event?: TouchEvent | MouseEvent) {
+  if (longPressTimer.value) {
+    clearTimeout(longPressTimer.value)
+    longPressTimer.value = null
+  }
+  if (longPressTarget.value) {
+    longPressTarget.value.classList.remove('long-pressing')
+    longPressTarget.value = null
+  }
+}
+
+// 长按取消（移动手指时）
+function handleLongPressCancel(_event: TouchEvent) {
+  handleLongPressEnd()
+}
+
+// 阻止上下文菜单（防止长按触发浏览器菜单）
+function preventContextMenu(event: MouseEvent) {
+  const target = event.target as HTMLElement
+  if (target?.closest('.message-content') || target?.closest('.message')) {
+    event.preventDefault()
+  }
 }
 </script>
 
@@ -1279,6 +1405,46 @@ function removeAttachment(id: string) {
 
 .message.from-me .message-content :deep(a) {
   color: rgba(255,255,255,0.9);
+}
+
+/* 长按复制相关样式 */
+.message-content {
+  user-select: text;
+  -webkit-user-select: text;
+  cursor: pointer;
+  transition: transform 0.15s ease, background-color 0.15s ease;
+}
+
+.message-content:active,
+.message-content.long-pressing {
+  transform: scale(0.98);
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+.message.from-me .message-content.long-pressing {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+/* 复制提示 Toast */
+.copy-toast {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(0.9);
+  background: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 0.75rem 1.5rem;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  z-index: 9999;
+  opacity: 0;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+  pointer-events: none;
+}
+
+.copy-toast.show {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
 }
 
 .message-content :deep(strong) {

@@ -151,7 +151,8 @@ public class OpenClawPluginService {
                 .bodyToMono(ChatCompletionResponse.class)
                 .map(response -> {
                     String content = response.choices().get(0).message().content();
-                    log.info("Received OpenClaw response: {}", content.substring(0, Math.min(50, content.length())));
+                    log.info("Received OpenClaw response ({} chars): {}", content.length(),
+                            content.substring(0, Math.min(200, content.length())));
                     return new OpenClawResponse(
                             UUID.randomUUID().toString(),
                             content,
