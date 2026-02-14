@@ -1250,6 +1250,26 @@ function isSameDay(d1: Date, d2: Date): boolean {
 .message-content {
   line-height: 1.5;
   word-break: break-word;
+  overflow-wrap: break-word;
+  max-width: 100%;
+}
+
+/* 代码块样式 */
+.message-content :deep(pre) {
+  max-width: 100%;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.message-content :deep(code) {
+  word-wrap: break-word;
+  white-space: pre-wrap;
+}
+
+/* 确保所有子元素不溢出 */
+.message-content :deep(*) {
+  max-width: 100%;
 }
 
 .message-content :deep(.mention) {
