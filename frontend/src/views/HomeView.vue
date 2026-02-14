@@ -99,6 +99,8 @@
                     </div>
                   </div>
                 </div>
+                <!-- 显示完整的回复内容 -->
+                <div class="message-content tool-call-content" v-html="renderContent(msg)"></div>
               </div>
               
               <!-- 普通消息 -->
@@ -1385,6 +1387,12 @@ function isSameDay(d1: Date, d2: Date): boolean {
   margin: 0.5rem 1rem;
   max-width: 80%;
   align-self: flex-start;
+}
+
+.tool-call-content {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border-color);
 }
 
 .tool-call-header {
