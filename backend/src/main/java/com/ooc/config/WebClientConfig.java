@@ -18,10 +18,10 @@ public class WebClientConfig {
     @Bean
     public WebClient.Builder webClientBuilder() {
         HttpClient httpClient = HttpClient.create()
-                .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 10000)
-                .responseTimeout(Duration.ofSeconds(60))
+                .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 30000)  // 30秒连接超时
+                .responseTimeout(Duration.ofSeconds(300))  // 5分钟响应超时（OpenClaw可能处理复杂任务）
                 .doOnConnected(conn -> conn
-                        .addHandlerLast(new ReadTimeoutHandler(60, TimeUnit.SECONDS))
+                        .addHandlerLast(new ReadTimeoutHandler(300, TimeUnit.SECONDS))  // 5分钟读取超时
                         .addHandlerLast(new WriteTimeoutHandler(60, TimeUnit.SECONDS)));
 
         return WebClient.builder()
