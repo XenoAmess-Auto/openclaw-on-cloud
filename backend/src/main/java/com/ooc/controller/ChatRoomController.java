@@ -175,6 +175,36 @@ public class ChatRoomController {
         return ResponseEntity.ok().build();
     }
 
+    @GetMapping("/{roomId}/messages")
+    public ResponseEntity<List<ChatRoom.Message>> getChatRoomMessages(
+            @PathVariable String roomId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        ChatRoom room = chatRoomService.getChatRoom(roomId)
+                .orElseThrow(() -> new RuntimeException("Chat room not found"));
+
+        List<ChatRoom.Message> messages = room.getMessages();
+        if (messages == null) {
+            return ResponseEntity.ok(List.of());
+        }
+
+        // 分页处理（简单的内存分页）
+        int start = page * size;
+        int end = Math.min(start + size, messages.size());
+
+        if (start >= messages.size()) {
+            return ResponseEntity.ok(List.of());
+        }
+
+        // 返回倒序（最新消息在前）
+        List<ChatRoom.Message> pagedMessages = messages.subList(
+                Math.max(0, messages.size() - end),
+                Math.max(0, messages.size() - start)
+        );
+
+        return ResponseEntity.ok(pagedMessages);
+    }
+
     private String getUserIdFromAuth(Authentication authentication) {
         return authentication.getName();
     }

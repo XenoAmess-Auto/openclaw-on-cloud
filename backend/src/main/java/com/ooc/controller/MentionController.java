@@ -22,6 +22,15 @@ public class MentionController {
 
     private final MentionService mentionService;
 
+    @GetMapping
+    public ResponseEntity<Page<MentionRecord>> getMentions(
+            @AuthenticationPrincipal UserDetails userDetails,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        String userId = getUserIdFromDetails(userDetails);
+        return ResponseEntity.ok(mentionService.getMentionHistory(userId, PageRequest.of(page, size)));
+    }
+
     @GetMapping("/unread")
     public ResponseEntity<List<MentionRecord>> getUnreadMentions(
             @AuthenticationPrincipal UserDetails userDetails) {

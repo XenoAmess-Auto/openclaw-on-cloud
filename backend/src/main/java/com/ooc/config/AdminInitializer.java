@@ -23,10 +23,11 @@ public class AdminInitializer implements CommandLineRunner {
         String adminUsername = "admin";
         String adminPassword = "admin123";
 
-        if (userRepository.existsByUsername(adminUsername)) {
-            log.info("Admin user already exists");
-            return;
-        }
+        // 如果用户存在，删除旧用户重新创建（解决密钥更换后的密码不匹配问题）
+        userRepository.findByUsername(adminUsername).ifPresent(existingUser -> {
+            log.info("Removing existing admin user to recreate with new encryption key");
+            userRepository.delete(existingUser);
+        });
 
         User admin = User.builder()
                 .username(adminUsername)

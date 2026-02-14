@@ -377,7 +377,10 @@ public class OpenClawPluginService {
                 .bodyValue(request)
                 .retrieve()
                 .bodyToFlux(String.class)
+                .doOnNext(line -> log.info("SSE raw line: {}", line.substring(0, Math.min(100, line.length()))))
                 .flatMap(this::parseSseLine)
+                .doOnNext(event -> log.info("Parsed event: type={}, content={}", event.type(), 
+                        event.content() != null ? event.content().substring(0, Math.min(50, event.content().length())) : "null"))
                 .doOnNext(event -> {
                     OpenClawSessionState state = sessionStates.computeIfAbsent(sessionId, k ->
                         OpenClawSessionState.builder()
@@ -400,11 +403,13 @@ public class OpenClawPluginService {
             return Mono.empty();
         }
 
-        if (!line.startsWith("data:")) {
-            return Mono.empty();
+        String data;
+        if (line.startsWith("data:")) {
+            data = line.substring(5).trim();
+        } else {
+            // 处理没有 data: 前缀的情况（bodyToFlux 可能已经处理了 SSE 格式）
+            data = line.trim();
         }
-
-        String data = line.substring(5).trim();
 
         if ("[DONE]".equals(data)) {
             return Mono.just(new StreamEvent("done", null, null, null, null, true));
