@@ -3,6 +3,7 @@ package com.ooc.controller;
 import com.ooc.dto.ChatRoomCreateRequest;
 import com.ooc.dto.ChatRoomDto;
 import com.ooc.dto.MemberDto;
+import com.ooc.dto.SendMessageRequest;
 import com.ooc.entity.ChatRoom;
 import com.ooc.entity.User;
 import com.ooc.service.ChatRoomService;
@@ -17,7 +18,9 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.Set;
 import java.util.HashSet;
+import java.util.UUID;
 import java.util.stream.Collectors;
+import java.time.Instant;
 
 @Slf4j
 @RestController
@@ -203,6 +206,33 @@ public class ChatRoomController {
         );
 
         return ResponseEntity.ok(pagedMessages);
+    }
+
+    @PostMapping("/{roomId}/messages")
+    public ResponseEntity<ChatRoom.Message> sendMessage(
+            @PathVariable String roomId,
+            @RequestBody SendMessageRequest request,
+            Authentication authentication) {
+        String userId = getUserIdFromAuth(authentication);
+        User user = userService.getUserByUsername(userId);
+
+        // 创建消息
+        ChatRoom.Message message = ChatRoom.Message.builder()
+                .id(UUID.randomUUID().toString())
+                .senderId(userId)
+                .senderName(user.getNickname() != null ? user.getNickname() : user.getUsername())
+                .senderAvatar(user.getAvatar())
+                .content(request.getContent())
+                .timestamp(Instant.now())
+                .openclawMentioned(request.getContent() != null && request.getContent().contains("@openclaw"))
+                .fromOpenClaw(false)
+                .isSystem(false)
+                .isToolCall(false)
+                .isStreaming(false)
+                .build();
+
+        ChatRoom updatedRoom = chatRoomService.addMessage(roomId, message);
+        return ResponseEntity.ok(message);
     }
 
     private String getUserIdFromAuth(Authentication authentication) {
