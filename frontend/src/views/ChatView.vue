@@ -968,9 +968,9 @@ function handleLongPressEnd(_event?: TouchEvent | MouseEvent) {
 }
 
 // 长按取消（移动手指时）
-function handleLongPressCancel(_event: TouchEvent) {
-  handleLongPressEnd()
-}
+// function handleLongPressCancel(_event: TouchEvent) {
+//   handleLongPressEnd()
+// }
 
 // 阻止上下文菜单（防止长按触发浏览器菜单）
 function preventContextMenu(event: MouseEvent) {
