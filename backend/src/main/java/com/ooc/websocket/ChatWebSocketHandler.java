@@ -429,16 +429,20 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
             OpenClawPluginService.StreamEvent event,
             OpenClawTask task) {
 
-        log.debug("Stream event: type={}, contentLength={}", event.type(), 
-                event.content() != null ? event.content().length() : 0);
+        log.info("Stream event for task {}: type={}, contentLength={}, totalBuilderLength={}",
+                task.getTaskId(),
+                event.type(),
+                event.content() != null ? event.content().length() : 0,
+                contentBuilder.get().length());
 
         if ("message".equals(event.type())) {
-            if (event.content() != null) {
+            if (event.content() != null && !event.content().isEmpty()) {
                 // 追加内容
                 contentBuilder.get().append(event.content());
                 String currentContent = contentBuilder.get().toString();
 
-                log.debug("Appending content: newChars={}, totalChars={}", 
+                log.info("Appending content for task {}: newChars={}, totalChars={}",
+                        task.getTaskId(),
                         event.content().length(), currentContent.length());
 
                 // 更新消息内容
@@ -456,10 +460,12 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                                 .delta(true)
                                 .build())
                         .build());
+            } else {
+                log.warn("Received empty content in message event for task {}", task.getTaskId());
             }
         } else if ("done".equals(event.type())) {
             // 流结束，在 onComplete 中处理
-            log.debug("Stream done event received");
+            log.info("Stream done event received for task {}", task.getTaskId());
         } else if ("error".equals(event.type())) {
             log.error("Stream error for task {}: {}", task.getTaskId(), event.content());
         }
@@ -494,6 +500,23 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
      * 完成流式消息
      */
     private void finalizeStreamMessage(String roomId, String messageId, String finalContent, OpenClawTask task) {
+        // 详细日志：记录内容状态以便诊断
+        log.info("Finalizing stream message for task {}: contentLength={}, isNull={}, isEmpty={}, isBlank={}",
+                task.getTaskId(),
+                finalContent != null ? finalContent.length() : -1,
+                finalContent == null,
+                finalContent != null ? finalContent.isEmpty() : "N/A",
+                finalContent != null ? finalContent.isBlank() : "N/A");
+
+        // 如果内容为空，设置为提示文本
+        if (finalContent == null || finalContent.isEmpty()) {
+            log.warn("Stream message finalized with empty content for task {}, setting placeholder text", task.getTaskId());
+            finalContent = "*(OpenClaw 无回复)*";
+        } else if (finalContent.isBlank()) {
+            // 内容只包含空白字符，保留原始内容但记录警告
+            log.warn("Stream message finalized with blank content (whitespace only) for task {}, content will be preserved", task.getTaskId());
+        }
+
         // 解析工具调用
         List<ChatRoom.Message.ToolCall> toolCalls = parseToolCalls(finalContent);
 
@@ -539,6 +562,10 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
      */
     private List<ChatRoom.Message.ToolCall> parseToolCalls(String content) {
         List<ChatRoom.Message.ToolCall> toolCalls = new ArrayList<>();
+
+        if (content == null || !content.contains("**Tools used:**")) {
+            return toolCalls;
+        }
 
         if (content.contains("**Tools used:**")) {
             int toolsStart = content.indexOf("**Tools used:**");

@@ -65,7 +65,7 @@
             </div>
           </div>
           <!-- 工具调用后的回复内容 -->
-          <div v-if="msg.content" class="message-content tool-call-content" v-html="renderContent(msg)"></div>
+          <div class="message-content tool-call-content" v-html="renderContent(msg)"></div>
         </template>
         
         <!-- 普通消息 -->
