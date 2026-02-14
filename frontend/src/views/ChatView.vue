@@ -83,13 +83,9 @@
           <div
             class="message-content"
             v-html="renderContent(msg)"
-            @touchstart="handleLongPressStart($event, msg)"
-            @touchend="handleLongPressEnd()"
-            @touchcancel="handleLongPressCancel($event)"
             @mousedown="handleLongPressStart($event, msg)"
             @mouseup="handleLongPressEnd()"
             @mouseleave="handleLongPressEnd()"
-            @contextmenu.prevent
           ></div>
           <!-- 调试用：显示消息原始内容（开发时可见）-->
           <div v-if="!msg.content && !msg.attachments?.length" class="empty-content-debug">
@@ -1507,27 +1503,32 @@ async function copySelection() {
   color: rgba(255,255,255,0.9);
 }
 
-/* 长按复制相关样式 */
-.message-content {
-  user-select: text !important;
-  -webkit-user-select: text !important;
-  -moz-user-select: text !important;
-  -ms-user-select: text !important;
-  -webkit-touch-callout: default !important;
-  touch-action: manipulation;
-  -webkit-tap-highlight-color: transparent;
-  cursor: text;
-  transition: transform 0.15s ease, background-color 0.15s ease;
+/* 长按复制相关样式 - 桌面端 */
+@media (hover: hover) {
+  .message-content {
+    cursor: pointer;
+    transition: transform 0.15s ease, background-color 0.15s ease;
+  }
+
+  .message-content:active,
+  .message-content.long-pressing {
+    transform: scale(0.98);
+    background-color: rgba(0, 0, 0, 0.05);
+  }
+
+  .message.from-me .message-content.long-pressing {
+    background-color: rgba(255, 255, 255, 0.1);
+  }
 }
 
-.message-content:active,
-.message-content.long-pressing {
-  transform: scale(0.98);
-  background-color: rgba(0, 0, 0, 0.05);
-}
-
-.message.from-me .message-content.long-pressing {
-  background-color: rgba(255, 255, 255, 0.1);
+/* 移动端允许文本选择 */
+@media (hover: none) {
+  .message-content {
+    cursor: text;
+    -webkit-user-select: text !important;
+    user-select: text !important;
+    -webkit-touch-callout: default !important;
+  }
 }
 
 /* 复制提示 Toast */
