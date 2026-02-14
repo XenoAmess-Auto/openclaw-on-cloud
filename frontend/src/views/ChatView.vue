@@ -35,6 +35,13 @@
       >
         <!-- 工具调用展示 -->
         <template v-if="msg.isToolCall || msg.toolCalls?.length">
+          <!-- 消息头部 -->
+          <div class="message-header">
+            <span class="sender">{{ msg.senderName }}</span>
+            <span v-if="msg.mentionAll" class="mention-tag mention-all">@所有人</span>
+            <span v-else-if="msg.mentionHere" class="mention-tag mention-here">@在线</span>
+            <span class="time">{{ formatTime(msg.timestamp) }}</span>
+          </div>
           <div class="tool-call-header">
             <span class="tool-icon">🔧</span>
             <span class="tool-title">工具调用</span>
