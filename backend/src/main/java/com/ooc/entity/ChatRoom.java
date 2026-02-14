@@ -1,5 +1,6 @@
 package com.ooc.entity;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -62,6 +63,7 @@ public class ChatRoom {
         private boolean openclawMentioned;
         private boolean fromOpenClaw;
         private boolean isSystem;
+        @JsonProperty("isToolCall")
         private boolean isToolCall;
         @Builder.Default
         private List<ToolCall> toolCalls = new ArrayList<>();
