@@ -642,13 +642,9 @@ function renderContent(msg: Message) {
   // 防御性处理：确保 content 不为 null/undefined
   let content = msg.content || ''
 
-  // 如果是工具调用消息，提取工具详情后的实际回复内容
+  // 如果是工具调用消息，只移除 **Tools used:** 和 **Tool details:** 部分
+  // 但保留工具调用的详细输出内容（如天气信息）
   if (msg.isToolCall || msg.toolCalls?.length) {
-    // 查找 "---" 分隔符，提取前面的内容作为实际回复
-    const separatorIndex = content.indexOf('---')
-    if (separatorIndex !== -1) {
-      content = content.substring(0, separatorIndex).trim()
-    }
     // 移除 **Tools used:** 和 **Tool details:** 部分
     const toolsUsedIndex = content.indexOf('**Tools used:**')
     if (toolsUsedIndex !== -1) {
