@@ -1504,8 +1504,8 @@ async function copySelection() {
 
 /* 长按复制相关样式 */
 .message-content {
-  user-select: text;
-  -webkit-user-select: text;
+  user-select: text !important;
+  -webkit-user-select: text !important;
   cursor: pointer;
   transition: transform 0.15s ease, background-color 0.15s ease;
 }

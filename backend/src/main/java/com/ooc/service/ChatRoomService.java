@@ -80,14 +80,22 @@ public class ChatRoomService {
     public ChatRoom updateMessage(String roomId, ChatRoom.Message updatedMessage) {
         return chatRoomRepository.findById(roomId).map(room -> {
             List<ChatRoom.Message> messages = room.getMessages();
+            boolean found = false;
             for (int i = 0; i < messages.size(); i++) {
                 if (messages.get(i).getId().equals(updatedMessage.getId())) {
                     messages.set(i, updatedMessage);
+                    found = true;
                     break;
                 }
             }
-            return chatRoomRepository.save(room);
-        }).orElseThrow(() -> new RuntimeException("Chat room not found"));
+            if (!found) {
+                System.err.println("WARNING: Message not found for update: " + updatedMessage.getId() + " in room: " + roomId);
+            }
+            ChatRoom saved = chatRoomRepository.save(room);
+            System.out.println("DEBUG: Updated message " + updatedMessage.getId() + " with content length: " + 
+                (updatedMessage.getContent() != null ? updatedMessage.getContent().length() : -1));
+            return saved;
+        }).orElseThrow(() -> new RuntimeException("Chat room not found: " + roomId));
     }
 
     public void updateOpenClawSession(String roomId, String sessionId) {

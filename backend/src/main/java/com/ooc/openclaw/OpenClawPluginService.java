@@ -145,6 +145,7 @@ public class OpenClawPluginService {
         request.put("model", "openclaw:main");
         request.put("messages", messages);
         request.put("user", sessionId); // 用于保持会话状态
+        request.put("tool_choice", "auto"); // Enable tool calling
 
         log.info("Sending multimodal request to OpenClaw: sessionId={}, textLength={}, imageCount={}", 
                 sessionId, 
@@ -335,7 +336,7 @@ public class OpenClawPluginService {
         systemMsg.put("content", """
             You are OpenClaw, a helpful AI assistant. Be concise and direct in your responses.
 
-            IMPORTANT: When you use tools (read, write, edit, exec, etc.), you MUST include detailed
+            IMPORTANT: When you use tools (read, write, edit, exec, web_search, weather, etc.), you MUST include detailed
             tool call information in your response in this format:
 
             **Tools used:**
@@ -353,6 +354,8 @@ public class OpenClawPluginService {
 
             For `read` tool: include the file content you read.
             For `exec` tool: include the command output.
+            For `web_search` tool: include the search results.
+            For `weather` queries: use exec with curl to wttr.in, e.g., `curl -s "wttr.in/LOCATION?format=3"`
             For other tools: include the relevant output data.
             """);
         messages.add(systemMsg);
@@ -367,6 +370,9 @@ public class OpenClawPluginService {
         request.put("messages", messages);
         request.put("user", sessionId);
         request.put("stream", true);
+        
+        // Enable tool calling - let OpenClaw use available tools
+        request.put("tool_choice", "auto");
 
         log.info("Sending streaming request to OpenClaw: sessionId={}, textLength={}, imageCount={}",
                 sessionId,
@@ -379,12 +385,28 @@ public class OpenClawPluginService {
                 .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
                 .header(HttpHeaders.ACCEPT, "text/event-stream")
                 .bodyValue(request)
-                .retrieve()
-                .bodyToFlux(String.class)
-                .doOnNext(line -> log.info("SSE raw line: {}", line.substring(0, Math.min(100, line.length()))))
-                .flatMap(this::parseSseLine)
-                .doOnNext(event -> log.info("Parsed event: type={}, content={}", event.type(), 
-                        event.content() != null ? event.content().substring(0, Math.min(50, event.content().length())) : "null"))
+                .exchangeToFlux(response -> {
+                    if (response.statusCode().is2xxSuccessful()) {
+                        return response.bodyToFlux(String.class)
+                                .flatMap(line -> {
+                                    // SSE 响应可能包含多行 data: 事件，需要按行分割
+                                    return Flux.fromArray(line.split("\n"))
+                                            .map(String::trim)
+                                            .filter(l -> !l.isEmpty());
+                                })
+                                .doOnNext(line -> log.info("SSE raw line: {}", line.substring(0, Math.min(100, line.length()))))
+                                .flatMap(this::parseSseLine)
+                                .doOnNext(event -> log.info("Parsed event: type={}, content={}", event.type(),
+                                        event.content() != null ? event.content().substring(0, Math.min(50, event.content().length())) : "null"))
+                                .onErrorResume(error -> {
+                                    log.warn("SSE stream error (may be normal completion): {}", error.getMessage());
+                                    return Flux.empty();
+                                });
+                    } else {
+                        return response.createError()
+                                .flatMapMany(error -> Flux.error(new RuntimeException("OpenClaw API error: " + response.statusCode())));
+                    }
+                })
                 .doOnNext(event -> {
                     OpenClawSessionState state = sessionStates.computeIfAbsent(sessionId, k ->
                         OpenClawSessionState.builder()

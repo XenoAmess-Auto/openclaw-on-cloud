@@ -5,18 +5,26 @@ import com.ooc.dto.ChatRoomDto;
 import com.ooc.dto.MemberDto;
 import com.ooc.dto.SendMessageRequest;
 import com.ooc.entity.ChatRoom;
+import com.ooc.entity.OocSession;
 import com.ooc.entity.User;
+import com.ooc.openclaw.OpenClawPluginService;
 import com.ooc.service.ChatRoomService;
+import com.ooc.service.OocSessionService;
 import com.ooc.service.UserService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
+import reactor.core.publisher.Mono;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -30,6 +38,8 @@ public class ChatRoomController {
 
     private final ChatRoomService chatRoomService;
     private final UserService userService;
+    private final OpenClawPluginService openClawPluginService;
+    private final OocSessionService oocSessionService;
 
     @PostMapping
     public ResponseEntity<ChatRoomDto> createChatRoom(
@@ -224,15 +234,234 @@ public class ChatRoomController {
                 .senderAvatar(user.getAvatar())
                 .content(request.getContent())
                 .timestamp(Instant.now())
-                .openclawMentioned(request.getContent() != null && request.getContent().contains("@openclaw"))
+                .openclawMentioned(request.getContent() != null && request.getContent().toLowerCase().contains("@openclaw"))
                 .fromOpenClaw(false)
                 .isSystem(false)
                 .isToolCall(false)
                 .isStreaming(false)
                 .build();
 
-        ChatRoom updatedRoom = chatRoomService.addMessage(roomId, message);
+        chatRoomService.addMessage(roomId, message);
+
+        // 触发 OpenClaw 处理（如果消息包含 @openclaw）
+        if (message.isOpenclawMentioned()) {
+            log.info("@openclaw mentioned in message, triggering OpenClaw processing for room: {}", roomId);
+            // 使用 CompletableFuture 异步执行，避免阻塞 HTTP 响应
+            java.util.concurrent.CompletableFuture.runAsync(() -> triggerOpenClaw(roomId, message));
+        }
+
         return ResponseEntity.ok(message);
+    }
+
+    /**
+     * 异步触发 OpenClaw 处理
+     */
+    private void triggerOpenClaw(String roomId, ChatRoom.Message message) {
+        try {
+            log.info("Starting async OpenClaw processing for room: {}, message: {}", roomId, message.getId());
+            
+            // 获取房间信息
+            ChatRoom room = chatRoomService.getChatRoom(roomId)
+                    .orElseThrow(() -> new RuntimeException("Chat room not found: " + roomId));
+            
+            String roomName = room.getName() != null ? room.getName() : "聊天室";
+            String userId = message.getSenderId();
+            String userName = message.getSenderName();
+            String content = message.getContent();
+            
+            // 获取或创建 OOC 会话（同步等待）
+            OocSession oocSession = oocSessionService.getOrCreateSession(roomId, roomName).block();
+            if (oocSession == null) {
+                log.error("Failed to get or create OOC session for room: {}", roomId);
+                return;
+            }
+            
+            // 获取或创建 OpenClaw 会话
+            String openClawSessionId = room.getOpenClawSessions().stream()
+                    .filter(ChatRoom.OpenClawSession::isActive)
+                    .findFirst()
+                    .map(ChatRoom.OpenClawSession::getSessionId)
+                    .orElse(null);
+            
+            if (openClawSessionId != null && !openClawPluginService.isSessionAlive(openClawSessionId)) {
+                log.info("OpenClaw session {} is not alive, will create new", openClawSessionId);
+                openClawSessionId = null;
+            }
+            
+            // 如果需要，创建新会话
+            if (openClawSessionId == null) {
+                log.info("Creating new OpenClaw session for room: {}", roomId);
+                
+                // 检查是否需要总结
+                if (oocSession.getMessages().size() > 30) {
+                    oocSessionService.summarizeAndCompact(oocSession).block();
+                }
+                
+                // 转换上下文
+                List<Map<String, Object>> context = convertToContext(oocSession);
+                
+                // 创建会话
+                OpenClawPluginService.OpenClawSession newSession = 
+                        openClawPluginService.createSession("ooc-" + roomId, context).block();
+                
+                if (newSession == null) {
+                    log.error("Failed to create OpenClaw session for room: {}", roomId);
+                    return;
+                }
+                
+                openClawSessionId = newSession.sessionId();
+                chatRoomService.updateOpenClawSession(roomId, openClawSessionId);
+                log.info("Created new OpenClaw session: {}", openClawSessionId);
+            }
+            
+            // 创建流式消息占位
+            String responseMessageId = UUID.randomUUID().toString();
+            StringBuilder responseBuilder = new StringBuilder();
+            
+            ChatRoom.Message streamingMsg = ChatRoom.Message.builder()
+                    .id(responseMessageId)
+                    .senderId("openclaw")
+                    .senderName("OpenClaw")
+                    .content("")
+                    .timestamp(Instant.now())
+                    .openclawMentioned(false)
+                    .fromOpenClaw(true)
+                    .isStreaming(true)
+                    .toolCalls(new ArrayList<>())
+                    .build();
+            chatRoomService.addMessage(roomId, streamingMsg);
+            
+            // 发送流式请求并收集响应
+            final String finalSessionId = openClawSessionId;
+            openClawPluginService.sendMessageStream(finalSessionId, content, null, userId, userName)
+                    .doOnNext(event -> {
+                        if ("message".equals(event.type()) && event.content() != null) {
+                            responseBuilder.append(event.content());
+                        }
+                    })
+                    .doOnError(error -> {
+                        log.error("OpenClaw streaming error for room: {}", roomId, error);
+                        String errorContent = responseBuilder + "\n\n[错误: " + error.getMessage() + "]";
+                        saveOpenClawResponse(roomId, responseMessageId, errorContent, oocSession);
+                    })
+                    .doOnComplete(() -> {
+                        String finalContent = responseBuilder.toString();
+                        if (finalContent.isEmpty()) {
+                            finalContent = "*(OpenClaw 无回复)*";
+                        }
+                        saveOpenClawResponse(roomId, responseMessageId, finalContent, oocSession);
+                    })
+                    .blockLast();
+                    
+        } catch (Exception e) {
+            log.error("Failed to process OpenClaw request for room: {}", roomId, e);
+        }
+    }
+    
+    /**
+     * 保存 OpenClaw 响应
+     */
+    private void saveOpenClawResponse(String roomId, String messageId, String content, OocSession oocSession) {
+        // 解析工具调用
+        List<ChatRoom.Message.ToolCall> toolCalls = parseToolCalls(content);
+        
+        // 保存到 OOC 会话
+        oocSessionService.addMessage(roomId, OocSession.SessionMessage.builder()
+                .id(UUID.randomUUID().toString())
+                .senderId("openclaw")
+                .senderName("OpenClaw")
+                .content(content)
+                .timestamp(Instant.now())
+                .fromOpenClaw(true)
+                .build());
+        
+        // 保存最终消息
+        ChatRoom.Message finalMsg = ChatRoom.Message.builder()
+                .id(messageId)
+                .senderId("openclaw")
+                .senderName("OpenClaw")
+                .content(content)
+                .timestamp(Instant.now())
+                .openclawMentioned(false)
+                .fromOpenClaw(true)
+                .isStreaming(false)
+                .isToolCall(!toolCalls.isEmpty())
+                .toolCalls(toolCalls)
+                .build();
+        chatRoomService.updateMessage(roomId, finalMsg);
+        
+        log.info("OpenClaw response saved for room: {}, content length: {}, toolCalls: {}", 
+                roomId, content.length(), toolCalls.size());
+    }
+    
+    /**
+     * 将 OOC 会话转换为 OpenClaw 上下文
+     */
+    private List<Map<String, Object>> convertToContext(OocSession session) {
+        List<Map<String, Object>> context = new ArrayList<>();
+        if (session.getSummary() != null && !session.getSummary().isEmpty()) {
+            Map<String, Object> summaryMsg = new HashMap<>();
+            summaryMsg.put("role", "system");
+            summaryMsg.put("content", "【历史会话摘要】" + session.getSummary());
+            context.add(summaryMsg);
+        }
+        for (OocSession.SessionMessage msg : session.getMessages()) {
+            Map<String, Object> ctxMsg = new HashMap<>();
+            ctxMsg.put("role", msg.isFromOpenClaw() ? "assistant" : "user");
+            ctxMsg.put("content", msg.getSenderName() + ": " + msg.getContent());
+            ctxMsg.put("timestamp", msg.getTimestamp());
+            context.add(ctxMsg);
+        }
+        return context;
+    }
+    
+    /**
+     * 从内容中解析工具调用
+     */
+    private List<ChatRoom.Message.ToolCall> parseToolCalls(String content) {
+        List<ChatRoom.Message.ToolCall> toolCalls = new ArrayList<>();
+        
+        if (content == null || !content.contains("**Tools used:**")) {
+            return toolCalls;
+        }
+        
+        int toolsStart = content.indexOf("**Tools used:**");
+        int toolsEnd = content.length();
+        int searchStart = toolsStart + "**Tools used:**".length();
+        int nextDoubleNewline = content.indexOf("\n\n", searchStart);
+        
+        if (nextDoubleNewline != -1) {
+            toolsEnd = nextDoubleNewline;
+        }
+        
+        String toolsSection = content.substring(toolsStart, Math.min(toolsEnd, content.length()));
+        String[] toolLines = toolsSection.split("\n");
+        
+        for (String line : toolLines) {
+            line = line.trim();
+            if (line.startsWith("- `") && line.contains("`")) {
+                int nameStart = line.indexOf("`") + 1;
+                int nameEnd = line.indexOf("`", nameStart);
+                if (nameEnd > nameStart) {
+                    String toolName = line.substring(nameStart, nameEnd);
+                    String description = "";
+                    int descStart = line.indexOf(":", nameEnd);
+                    if (descStart != -1 && descStart + 1 < line.length()) {
+                        description = line.substring(descStart + 1).trim();
+                    }
+                    
+                    toolCalls.add(ChatRoom.Message.ToolCall.builder()
+                            .id(UUID.randomUUID().toString())
+                            .name(toolName)
+                            .description(description)
+                            .status("completed")
+                            .timestamp(Instant.now())
+                            .build());
+                }
+            }
+        }
+        
+        return toolCalls;
     }
 
     private String getUserIdFromAuth(Authentication authentication) {

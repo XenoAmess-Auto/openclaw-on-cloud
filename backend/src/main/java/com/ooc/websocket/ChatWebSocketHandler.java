@@ -545,7 +545,9 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                 .build());
 
         // 更新聊天室消息
+        System.out.println("DEBUG: About to update message " + messageId + " with content length: " + finalContent.length());
         chatRoomService.updateMessage(roomId, finalMsg);
+        System.out.println("DEBUG: Message update called for " + messageId);
 
         // 广播流结束
         broadcastToRoom(roomId, WebSocketMessage.builder()
