@@ -663,8 +663,16 @@ function renderContent(msg: Message) {
   let htmlContent: string
   try {
     console.log('[renderContent] Input content:', content.substring(0, 100))
-    htmlContent = marked.parse(content, { async: false }) as string
+    // 使用 marked.marked 进行同步解析（marked v17+）
+    const parsed = (marked as any).marked?.(content) || marked.parse(content, { async: false })
+    htmlContent = String(parsed)
     console.log('[renderContent] Parsed HTML:', htmlContent.substring(0, 100))
+    
+    // 安全检查：如果解析结果看起来像 Promise 或没有 HTML 标签，使用 fallback
+    if (htmlContent === '[object Promise]' || !htmlContent.includes('<')) {
+      console.warn('[renderContent] Invalid parsed content, using fallback')
+      throw new Error('Invalid parsed content')
+    }
   } catch (e) {
     console.error('[renderContent] Markdown parsing error:', e)
     // 解析失败时的 fallback
