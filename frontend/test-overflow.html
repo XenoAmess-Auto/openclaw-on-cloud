@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>消息样式测试</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f3f4f6;
+      padding: 20px;
+    }
+    
+    .chat-container {
+      max-width: 800px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 12px;
+      padding: 20px;
+    }
+    
+    /* 模拟消息布局 */
+    .message {
+      display: flex;
+      gap: 0.75rem;
+      max-width: 80%;
+      margin-bottom: 1rem;
+    }
+    
+    .message-avatar {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: #4f46e5;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: bold;
+    }
+    
+    .message-body {
+      background: #f3f4f6;
+      padding: 0.75rem 1rem;
+      border-radius: 12px;
+      min-width: 0;
+      flex: 1;
+    }
+    
+    /* 修复后的 message-content 样式 */
+    .message-content {
+      line-height: 1.5;
+      word-break: break-word;
+      overflow-wrap: break-word;
+      max-width: 100%;
+      min-width: 0;
+    }
+    
+    /* 代码块样式 - 严格防止溢出 */
+    .message-content pre {
+      max-width: 100%;
+      width: 100%;
+      overflow-x: auto;
+      white-space: pre-wrap !important;
+      word-wrap: break-word !important;
+      word-break: break-all !important;
+      box-sizing: border-box;
+      background: #1e1e2e;
+      color: #cdd6f4;
+      padding: 1rem;
+      border-radius: 8px;
+      margin: 0.5rem 0;
+    }
+    
+    .message-content pre code {
+      white-space: pre-wrap !important;
+      word-wrap: break-word !important;
+      word-break: break-all !important;
+      display: block;
+      max-width: 100%;
+      background: transparent;
+      padding: 0;
+    }
+    
+    .message-content code {
+      word-wrap: break-word;
+      white-space: pre-wrap;
+      word-break: break-all;
+      max-width: 100%;
+      background: rgba(0,0,0,0.05);
+      padding: 0.2em 0.4em;
+      border-radius: 3px;
+      font-family: monospace;
+    }
+    
+    /* 确保所有子元素不溢出 */
+    .message-content * {
+      max-width: 100%;
+      box-sizing: border-box;
+    }
+    
+    /* 特别处理可能溢出的元素 */
+    .message-content p,
+    .message-content div,
+    .message-content span {
+      max-width: 100%;
+      word-break: break-word;
+    }
+    
+    .message-content ul,
+    .message-content ol {
+      padding-left: 1.5rem;
+      margin: 0.5rem 0;
+    }
+    
+    .message-content li {
+      margin: 0.25rem 0;
+    }
+    
+    .message-content strong {
+      font-weight: 600;
+    }
+    
+    .test-title {
+      font-size: 1.25rem;
+      font-weight: bold;
+      margin-bottom: 1rem;
+      color: #333;
+    }
+  </style>
+</head>
+<body>
+  <div class="chat-container">
+    <div class="test-title">消息样式测试 - 检查是否溢出</div>
+    
+    <div class="message">
+      <div class="message-avatar">AI</div>
+      <div class="message-body">
+        <div class="message-header" style="font-size: 0.875rem; color: #666; margin-bottom: 0.25rem;">
+          <span style="font-weight: 500;">OpenClaw</span>
+        </div>
+        <div class="message-content">
+          <p><strong>Tools used:</strong></p>
+          <ul>
+            <li><code>web_search</code>: 搜索信息</li>
+          </ul>
+          <pre><code class="language-bash">$ curl -s "wttr.in/Beijing?format=3"
+Beijing: +15°C ☀️   🌡️+15°C 🌬️↗15km/h
+This is a very long line that should not overflow the message bubble and should wrap properly within the container boundaries without extending beyond the left or right edges of the message bubble.</code></pre>
+          <p>查询结果：找到相关信息。</p>
+        </div>
+      </div>
+    </div>
+    
+    <div class="message">
+      <div class="message-avatar">AI</div>
+      <div class="message-body">
+        <div class="message-content">
+          <p>这是一段包含 <code>veryLongFunctionNameThatMightCauseOverflow()</code> 的行内代码测试。</p>
+          <p><strong>粗体文本</strong> 和 <em>斜体文本</em> 应该正常显示。</p>
+        </div>
+      </div>
+    </div>
+    
+    <div class="message">
+      <div class="message-avatar">AI</div>
+      <div class="message-body">
+        <div class="message-content">
+          <pre><code class="language-json">{"key": "value", "longKeyName": "this is a very long value that should wrap properly", "array": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]}</code></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <script>
+    // 检查是否有溢出
+    function checkOverflow() {
+      const messages = document.querySelectorAll('.message');
+      let hasOverflow = false;
+      
+      messages.forEach((msg, index) => {
+        const body = msg.querySelector('.message-body');
+        const content = msg.querySelector('.message-content');
+        
+        if (body && content) {
+          const bodyRect = body.getBoundingClientRect();
+          const contentRect = content.getBoundingClientRect();
+          const containerRect = document.querySelector('.chat-container').getBoundingClientRect();
+          
+          // 检查是否超出容器
+          if (contentRect.right > bodyRect.right || contentRect.left < bodyRect.left) {
+            console.error(`消息 ${index + 1} 溢出！`);
+            console.error(`  body: ${bodyRect.left} - ${bodyRect.right}`);
+            console.error(`  content: ${contentRect.left} - ${contentRect.right}`);
+            hasOverflow = true;
+          } else {
+            console.log(`消息 ${index + 1} 正常`);
+          }
+        }
+      });
+      
+      if (hasOverflow) {
+        console.error('❌ 检测到溢出！');
+      } else {
+        console.log('✅ 所有消息都正常，没有溢出');
+      }
+      
+      return !hasOverflow;
+    }
+    
+    // 页面加载后检查
+    window.onload = () => {
+      setTimeout(checkOverflow, 100);
+    };
+  </script>
+</body>
+</html>
