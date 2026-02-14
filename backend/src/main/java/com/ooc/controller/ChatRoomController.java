@@ -11,6 +11,7 @@ import com.ooc.openclaw.OpenClawPluginService;
 import com.ooc.service.ChatRoomService;
 import com.ooc.service.OocSessionService;
 import com.ooc.service.UserService;
+import com.ooc.websocket.ChatWebSocketHandler;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -40,6 +41,7 @@ public class ChatRoomController {
     private final UserService userService;
     private final OpenClawPluginService openClawPluginService;
     private final OocSessionService oocSessionService;
+    private final ChatWebSocketHandler webSocketHandler;
 
     @PostMapping
     public ResponseEntity<ChatRoomDto> createChatRoom(
@@ -389,6 +391,12 @@ public class ChatRoomController {
                 .toolCalls(toolCalls)
                 .build();
         chatRoomService.updateMessage(roomId, finalMsg);
+        
+        // 广播 WebSocket stream_end 事件，通知前端更新消息
+        webSocketHandler.broadcastToRoom(roomId, ChatWebSocketHandler.WebSocketMessage.builder()
+                .type("stream_end")
+                .message(finalMsg)
+                .build());
         
         log.info("OpenClaw response saved for room: {}, content length: {}, toolCalls: {}", 
                 roomId, content.length(), toolCalls.size());

@@ -793,7 +793,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                 .build());
     }
 
-    private void broadcastToRoom(String roomId, WebSocketMessage message, WebSocketSession... exclude) {
+    public void broadcastToRoom(String roomId, WebSocketMessage message, WebSocketSession... exclude) {
         Set<WebSocketSession> excludeSet = new HashSet<>(Arrays.asList(exclude));
         Set<WebSocketSession> sessions = roomSessions.getOrDefault(roomId, Collections.emptySet());
 
