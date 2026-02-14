@@ -747,7 +747,7 @@ function renderContent(msg: Message) {
   const mentionPlaceholders: string[] = []
   content = content.replace(/(@所有人|@everyone|@all|@在线|@here|@openclaw|@[^\s]+)/gi, (match) => {
     mentionPlaceholders.push(match)
-    return `\u0000MENTION_${mentionPlaceholders.length - 1}\u0000`
+    return `<!--MENTION_${mentionPlaceholders.length - 1}-->`
   })
 
   // 渲染 Markdown
@@ -793,7 +793,7 @@ function renderContent(msg: Message) {
   })
 
   // Step 2: 恢复 @提及并添加高亮
-  htmlContent = htmlContent.replace(/\u0000MENTION_(\d+)\u0000/g, (_, index) => {
+  htmlContent = htmlContent.replace(/<!--MENTION_(\d+)-->/g, (_, index) => {
     const mention = mentionPlaceholders[parseInt(index)]
     if (!mention) return ''
 
