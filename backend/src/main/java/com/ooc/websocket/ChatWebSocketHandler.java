@@ -557,6 +557,10 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                     ChatRoom.Message.ToolCall firstTool = toolCalls.get(0);
                     firstTool.setResult(codeBlock);
                 }
+                // 从 content 中移除代码块，避免重复显示
+                String beforeCode = content.substring(0, codeStart).trim();
+                String afterCode = content.substring(codeEnd + 3).trim();
+                content = beforeCode + (beforeCode.isEmpty() || afterCode.isEmpty() ? "" : "\n\n") + afterCode;
             }
         }
 
