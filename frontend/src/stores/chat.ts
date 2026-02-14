@@ -131,23 +131,42 @@ export const useChatStore = defineStore('chat', () => {
         break
       case 'stream_start':
         // 流式消息开始
+        console.log('[WebSocket] stream_start:', data.message)
         messages.value.push(data.message)
         break
       case 'stream_delta':
         // 流式消息增量 - 追加到最新消息
         {
-          const lastMsg = messages.value[messages.value.length - 1]
-          if (lastMsg && lastMsg.id === data.message.id) {
-            lastMsg.content += data.message.content
+          const index = messages.value.findIndex(m => m.id === data.message.id)
+          if (index !== -1) {
+            // 创建新对象以确保响应式更新
+            const updatedMsg = { ...messages.value[index] }
+            updatedMsg.content = (updatedMsg.content || '') + (data.message.content || '')
+            messages.value.splice(index, 1, updatedMsg)
+            console.log('[WebSocket] stream_delta - appended content, total length:', updatedMsg.content.length)
+          } else {
+            console.warn('[WebSocket] stream_delta - message not found:', data.message.id)
           }
         }
         break
       case 'stream_end':
         // 流式消息结束 - 替换为完整消息
         {
+          console.log('[WebSocket] stream_end - received message:', {
+            id: data.message?.id,
+            contentLength: data.message?.content?.length,
+            isToolCall: data.message?.isToolCall,
+            toolCallsCount: data.message?.toolCalls?.length
+          })
           const index = messages.value.findIndex(m => m.id === data.message.id)
           if (index !== -1) {
-            messages.value[index] = data.message
+            // 使用 splice 确保响应式更新
+            messages.value.splice(index, 1, data.message)
+            console.log('[WebSocket] stream_end - message replaced at index:', index)
+          } else {
+            // 如果找不到消息（异常情况），直接追加
+            messages.value.push(data.message)
+            console.log('[WebSocket] stream_end - message appended (not found in existing)')
           }
         }
         break

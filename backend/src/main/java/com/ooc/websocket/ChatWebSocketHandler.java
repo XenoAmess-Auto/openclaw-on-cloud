@@ -429,11 +429,17 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
             OpenClawPluginService.StreamEvent event,
             OpenClawTask task) {
 
+        log.debug("Stream event: type={}, contentLength={}", event.type(), 
+                event.content() != null ? event.content().length() : 0);
+
         if ("message".equals(event.type())) {
             if (event.content() != null) {
                 // 追加内容
                 contentBuilder.get().append(event.content());
                 String currentContent = contentBuilder.get().toString();
+
+                log.debug("Appending content: newChars={}, totalChars={}", 
+                        event.content().length(), currentContent.length());
 
                 // 更新消息内容
                 ChatRoom.Message updatedMsg = streamingMessage.get().toBuilder()
@@ -453,6 +459,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
             }
         } else if ("done".equals(event.type())) {
             // 流结束，在 onComplete 中处理
+            log.debug("Stream done event received");
         } else if ("error".equals(event.type())) {
             log.error("Stream error for task {}: {}", task.getTaskId(), event.content());
         }

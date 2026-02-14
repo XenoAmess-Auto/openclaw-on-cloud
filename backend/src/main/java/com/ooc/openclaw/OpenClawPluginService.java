@@ -413,21 +413,33 @@ public class OpenClawPluginService {
         try {
             JsonNode root = objectMapper.readTree(data);
 
+            // 调试日志 - 记录原始数据
+            log.info("SSE raw data: {}", data.substring(0, Math.min(200, data.length())));
+
             if (root.has("error")) {
                 String errorMsg = root.path("error").path("message").asText("Unknown error");
+                log.error("SSE error: {}", errorMsg);
                 return Mono.just(new StreamEvent("error", errorMsg, null, null, null, true));
             }
 
+            // 尝试多种可能的字段路径获取内容
+            String content = null;
+
+            // 1. 标准 OpenAI 格式: choices[0].delta.content
             if (root.has("choices") && root.path("choices").isArray()) {
                 JsonNode choices = root.path("choices");
                 if (choices.size() > 0) {
                     JsonNode firstChoice = choices.get(0);
                     JsonNode delta = firstChoice.path("delta");
+                    content = delta.path("content").asText(null);
 
-                    String content = delta.path("content").asText(null);
-
+                    // 检查 finish_reason
                     String finishReason = firstChoice.path("finish_reason").asText(null);
                     boolean isDone = "stop".equals(finishReason) || "tool_calls".equals(finishReason);
+
+                    log.info("SSE OpenAI format - content: {}, finishReason: {}",
+                            content != null ? "present(" + content.length() + " chars)" : "null",
+                            finishReason);
 
                     if (content != null && !content.isEmpty()) {
                         return Mono.just(new StreamEvent("message", content, null, null, null, isDone));
@@ -437,9 +449,63 @@ public class OpenClawPluginService {
                 }
             }
 
+            // 2. 直接 content 字段 (有些格式直接在根级别)
+            if (content == null && root.has("content")) {
+                content = root.path("content").asText(null);
+                log.info("SSE root content format - content: {}",
+                        content != null ? "present(" + content.length() + " chars)" : "null");
+                if (content != null && !content.isEmpty()) {
+                    return Mono.just(new StreamEvent("message", content, null, null, null, false));
+                }
+            }
+
+            // 3. message 字段
+            if (content == null && root.has("message")) {
+                JsonNode message = root.path("message");
+                if (message.has("content")) {
+                    content = message.path("content").asText(null);
+                    log.info("SSE message.content format - content: {}",
+                            content != null ? "present(" + content.length() + " chars)" : "null");
+                    if (content != null && !content.isEmpty()) {
+                        return Mono.just(new StreamEvent("message", content, null, null, null, false));
+                    }
+                }
+            }
+
+            // 4. text 或 textDelta 字段
+            if (content == null && root.has("text")) {
+                content = root.path("text").asText(null);
+                log.info("SSE text format - content: {}",
+                        content != null ? "present(" + content.length() + " chars)" : "null");
+                if (content != null && !content.isEmpty()) {
+                    return Mono.just(new StreamEvent("message", content, null, null, null, false));
+                }
+            }
+
+            if (content == null && root.has("textDelta")) {
+                content = root.path("textDelta").asText(null);
+                log.info("SSE textDelta format - content: {}",
+                        content != null ? "present(" + content.length() + " chars)" : "null");
+                if (content != null && !content.isEmpty()) {
+                    return Mono.just(new StreamEvent("message", content, null, null, null, false));
+                }
+            }
+
+            // 5. 检查是否有 done/completed 标记
+            if (root.has("done") && root.path("done").asBoolean(false)) {
+                log.info("SSE done flag detected");
+                return Mono.just(new StreamEvent("done", null, null, null, null, true));
+            }
+
+            if (root.has("completed") && root.path("completed").asBoolean(false)) {
+                log.info("SSE completed flag detected");
+                return Mono.just(new StreamEvent("done", null, null, null, null, true));
+            }
+
+            log.warn("SSE unrecognized format: {}", data.substring(0, Math.min(200, data.length())));
             return Mono.empty();
         } catch (Exception e) {
-            log.warn("Failed to parse SSE line: {}", line, e);
+            log.warn("Failed to parse SSE line: {}", line.substring(0, Math.min(100, line.length())), e);
             return Mono.empty();
         }
     }

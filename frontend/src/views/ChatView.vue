@@ -87,6 +87,10 @@
             @mouseleave="handleLongPressEnd()"
             @contextmenu.prevent
           ></div>
+          <!-- 调试用：显示消息原始内容（开发时可见）-->
+          <div v-if="!msg.content && !msg.attachments?.length" class="empty-content-debug">
+            [空消息 - ID: {{ msg.id?.slice(-6) }}]
+          </div>
         </template>
       </div>
       
@@ -2018,6 +2022,18 @@ textarea:focus {
 
 .tool-call-content :deep(p:last-child) {
   margin-bottom: 0;
+}
+
+/* 空消息调试样式 */
+.empty-content-debug {
+  padding: 0.5rem;
+  background: #fef3c7;
+  border: 1px dashed #f59e0b;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  color: #92400e;
+  font-style: italic;
+  margin-top: 0.5rem;
 }
 
 /* ============================================
