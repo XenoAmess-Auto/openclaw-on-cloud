@@ -690,7 +690,7 @@ function renderContent(msg: Message) {
       'a', 'img', 'table', 'thead', 'tbody', 'tr', 'th', 'td',
       'del', 'ins', 'sup', 'sub'
     ],
-    ALLOWED_ATTR: ['href', 'src', 'alt', 'title', 'target']
+    ALLOWED_ATTR: ['href', 'src', 'alt', 'title', 'target', 'class']
   })
 
   // Step 2: 恢复 @提及并添加高亮
