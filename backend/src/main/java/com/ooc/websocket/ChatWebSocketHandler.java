@@ -496,37 +496,15 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
             int toolsEnd = content.length();
 
             // 找到 Tools used 部分的结束位置（下一个空行或内容结束）
-            String[] lines = content.substring(toolsStart).split("\n", -1);
-            int lineCount = 0;
-            for (int i = 1; i < lines.length; i++) {
-                String line = lines[i];
-                // 如果遇到空行，说明 Tools used 部分结束
-                if (line.trim().isEmpty()) {
-                    // 继续跳过所有连续的空行
-                    int j = i + 1;
-                    while (j < lines.length && lines[j].trim().isEmpty()) {
-                        j++;
-                    }
-                    // 计算实际字符位置
-                    toolsEnd = toolsStart;
-                    for (int k = 0; k < j; k++) {
-                        toolsEnd += lines[k].length() + 1; // +1 for \n
-                    }
-                    break;
-                }
-                // 如果行不以 - 开头且不是工具调用行，说明 Tools used 部分结束
-                if (!line.trim().startsWith("- ") && !line.trim().isEmpty()) {
-                    int j = i;
-                    while (j < lines.length && lines[j].trim().isEmpty()) {
-                        j++;
-                    }
-                    toolsEnd = toolsStart;
-                    for (int k = 0; k < j; k++) {
-                        toolsEnd += lines[k].length() + 1;
-                    }
-                    break;
-                }
+            // 从 toolsStart 之后开始搜索
+            int searchStart = toolsStart + "**Tools used:**".length();
+            int nextDoubleNewline = content.indexOf("\n\n", searchStart);
+
+            if (nextDoubleNewline != -1) {
+                // 找到双换行，Tools used 部分在这里结束
+                toolsEnd = nextDoubleNewline;
             }
+            // 如果没有找到双换行，toolsEnd 保持为 content.length()
 
             String toolsSection = content.substring(toolsStart, Math.min(toolsEnd, content.length()));
 
@@ -559,6 +537,12 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
             // 移除 Tools used 部分，只保留实际回复内容
             String beforeTools = content.substring(0, toolsStart).trim();
             String afterTools = toolsEnd < content.length() ? content.substring(toolsEnd).trim() : "";
+            
+            // 清理 afterTools 前面可能存在的多余换行
+            if (afterTools.startsWith("\n")) {
+                afterTools = afterTools.substring(1).trim();
+            }
+            
             content = beforeTools + (beforeTools.isEmpty() || afterTools.isEmpty() ? "" : "\n\n") + afterTools;
         }
 
