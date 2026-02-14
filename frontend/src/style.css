@@ -48,15 +48,17 @@ body {
   }
 }
 
-/* 禁用文本选择（可选元素除外） */
-body {
-  user-select: none;
-  -webkit-user-select: none;
-}
+/* 移动端禁用文本选择（桌面端默认可选） */
+@media (hover: none) {
+  body {
+    user-select: none;
+    -webkit-user-select: none;
+  }
 
-input, textarea, [contenteditable] {
-  user-select: text;
-  -webkit-user-select: text;
+  input, textarea, [contenteditable] {
+    user-select: text;
+    -webkit-user-select: text;
+  }
 }
 
 /* 平滑滚动 */
