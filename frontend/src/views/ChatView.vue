@@ -237,21 +237,19 @@ import DOMPurify from 'dompurify'
 import hljs from 'highlight.js'
 import 'highlight.js/styles/github-dark.css'
 
-// 配置 marked - marked v17 使用 use
+// 配置 marked - marked v17
 marked.use({
-  breaks: true, // 将换行符转换为 <br>
-  gfm: true,    // GitHub Flavored Markdown
+  breaks: true,
+  gfm: true,
+  renderer: {
+    code({ text, lang }: { text: string; lang?: string }): string {
+      const language = lang || 'plaintext'
+      const validLang = hljs.getLanguage(language) ? language : 'plaintext'
+      const highlighted = hljs.highlight(text, { language: validLang }).value
+      return `<pre class="hljs language-${validLang}"><code class="language-${validLang}">${highlighted}</code></pre>`
+    }
+  }
 })
-
-// 自定义 renderer 添加代码高亮 - marked v17 方式
-const renderer = new marked.Renderer()
-renderer.code = function({ text, lang }: { text: string; lang?: string }): string {
-  const language = lang || 'plaintext'
-  const validLang = hljs.getLanguage(language) ? language : 'plaintext'
-  const highlighted = hljs.highlight(text, { language: validLang }).value
-  return `<pre class="hljs language-${validLang}"><code class="language-${validLang}">${highlighted}</code></pre>`
-}
-marked.use({ renderer })
 
 const route = useRoute()
 const router = useRouter()
@@ -599,11 +597,12 @@ function renderContent(msg: Message) {
   // 渲染 Markdown
   let htmlContent: string
   try {
-    // marked v17 默认返回 Promise，使用 { async: false } 获取同步结果
+    console.log('[renderContent] Input content:', content.substring(0, 100))
     htmlContent = marked.parse(content, { async: false }) as string
+    console.log('[renderContent] Parsed HTML:', htmlContent.substring(0, 100))
   } catch (e) {
-    console.error('Markdown parsing error:', e)
-    // 同步解析失败时的 fallback
+    console.error('[renderContent] Markdown parsing error:', e)
+    // 解析失败时的 fallback
     htmlContent = content
       .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
       .replace(/\*(.+?)\*/g, '<em>$1</em>')
