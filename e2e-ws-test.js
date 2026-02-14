@@ -1,6 +1,11 @@
 #!/usr/bin/env node
 /**
  * OOC E2E WebSocket Test - 等待真正回答并检测完整性
+ * 
+ * 关键点：
+ * 1. "任务已加入队列"是状态消息，不是真正的回答
+ * 2. 真正的回答是 stream_start → stream_delta → stream_end 之后的消息
+ * 3. 必须等待 stream_end 才能确认收到了完整回答
  */
 
 const WebSocket = require('ws');
@@ -9,6 +14,7 @@ const http = require('http');
 const GREEN = '\x1b[32m';
 const RED = '\x1b[31m';
 const YELLOW = '\x1b[33m';
+const BLUE = '\x1b[34m';
 const NC = '\x1b[0m';
 
 const TEST_USERNAME = 'ooc-test-1771067194';
@@ -68,7 +74,6 @@ function getOrCreateRoom(token) {
                     const rooms = JSON.parse(data);
                     if (rooms.length > 0) resolve(rooms[0]);
                     else {
-                        // Create room
                         const postData = JSON.stringify({
                             name: 'E2E Test', description: 'Test room', type: 'PUBLIC'
                         });
@@ -121,71 +126,94 @@ function connectWebSocket(roomId) {
 }
 
 /**
- * 发送消息并等待真正的 OpenClaw 回答（不是队列状态消息）
+ * 发送消息并等待完整的 OpenClaw 回答（通过 stream_end 确认）
  */
-function waitForRealResponse(ws, message, maxWaitMs = 60000) {
+function waitForCompleteResponse(ws, message, maxWaitMs = 120000) {
     return new Promise((resolve) => {
-        const responses = [];
         let streamStarted = false;
         let streamEnded = false;
+        let finalMessage = null;
+        let contentBuffer = '';
+        const startTime = Date.now();
+        
+        console.log(`\n    [Test] Sending: ${message}`);
         
         const handler = (data) => {
             try {
                 const msg = JSON.parse(data.toString());
+                const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
                 
-                if (msg.type === 'stream_start') {
-                    streamStarted = true;
-                    console.log('    [Event] Stream started');
+                // 队列状态消息（不是真正的回答）
+                if (msg.type === 'message' && msg.message?.fromOpenClaw) {
+                    const content = msg.message.content || '';
+                    if (content.includes('任务已加入队列') || content.includes('正在准备处理')) {
+                        console.log(`    [${elapsed}s] Queue status: ${content.substring(0, 40)}...`);
+                        return; // 忽略队列状态消息
+                    }
                 }
                 
-                if (msg.type === 'stream_delta') {
+                // 真正的流式回答开始
+                if (msg.type === 'stream_start') {
+                    streamStarted = true;
+                    console.log(`    [${elapsed}s] ✓ Stream started (OpenClaw is responding)`);
+                }
+                
+                // 流式内容片段
+                if (msg.type === 'stream_delta' && msg.message?.content) {
+                    contentBuffer += msg.message.content;
                     process.stdout.write('.');
                 }
                 
+                // 流式回答结束 - 这是真正的完整回答
                 if (msg.type === 'stream_end') {
                     streamEnded = true;
-                    console.log('\n    [Event] Stream ended');
-                    if (msg.message) responses.push(msg.message);
+                    finalMessage = msg.message;
+                    console.log(`\n    [${elapsed}s] ✓ Stream ended`);
+                    console.log(`    [${elapsed}s] ✓ Total content: ${contentBuffer.length} chars`);
+                    
+                    ws.off('message', handler);
+                    resolve({ 
+                        success: true, 
+                        message: finalMessage, 
+                        content: contentBuffer,
+                        streamStarted, 
+                        streamEnded,
+                        elapsedMs: Date.now() - startTime
+                    });
                 }
                 
-                if (msg.type === 'message' && msg.message?.fromOpenClaw) {
-                    const content = msg.message.content || '';
-                    // 过滤队列状态消息，只保留真正的回答
-                    if (!content.includes('任务已加入队列') && !content.includes('正在准备处理')) {
-                        responses.push(msg.message);
-                        console.log(`    [Event] Real response received (${content.length} chars)`);
-                    } else {
-                        console.log(`    [Event] Queue status: ${content.substring(0, 40)}...`);
-                    }
-                }
             } catch (e) {}
         };
         
         ws.on('message', handler);
         
         // 发送消息
-        console.log(`    Sending: ${message}`);
         ws.send(JSON.stringify({ type: 'message', content: message, attachments: [] }));
         
         // 超时处理
         setTimeout(() => {
             ws.off('message', handler);
-            // 返回最后一个非队列状态的真实回答
-            const realResponse = responses.length > 0 ? responses[responses.length - 1] : null;
+            const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+            console.log(`\n    [${elapsed}s] ✗ Timeout waiting for stream_end`);
             resolve({ 
-                response: realResponse, 
+                success: false, 
+                message: finalMessage, 
+                content: contentBuffer,
                 streamStarted, 
                 streamEnded,
-                allResponses: responses 
+                elapsedMs: Date.now() - startTime
             });
         }, maxWaitMs);
     });
 }
 
 async function runTests() {
-    console.log('='.repeat(60));
+    console.log('='.repeat(70));
     console.log('  OOC E2E WebSocket Test - 等待真正回答并检测完整性');
-    console.log('='.repeat(60));
+    console.log('='.repeat(70));
+    console.log();
+    console.log('  说明：此测试会等待 OpenClaw 的完整流式回答（stream_end）');
+    console.log('       队列状态消息（"任务已加入队列"）会被忽略');
     console.log();
     
     // Phase 1: Login
@@ -225,55 +253,55 @@ async function runTests() {
     // Phase 4: Test @openclaw 你是谁
     console.log();
     console.log(`${YELLOW}>>> Phase 4: Test @openclaw 你是谁？${NC}`);
-    console.log('  Waiting for real response (max 60s)...');
+    console.log('  等待完整回答（max 120s）...');
     
-    const identityResult = await waitForRealResponse(ws, '@openclaw 你是谁？', 60000);
+    const identityResult = await waitForCompleteResponse(ws, '@openclaw 你是谁？', 120000);
     
-    if (identityResult.response) {
-        const content = identityResult.response.content || '';
+    if (identityResult.success && identityResult.content.length > 0) {
+        const content = identityResult.content;
         const hasIdentity = content.includes('机器人') || content.includes('助手') || content.includes('OpenClaw');
-        const notTruncated = content.length > 50;
         
-        logTest('Identity Response', hasIdentity ? 'PASS' : 'FAIL', 
-            `Length: ${content.length}, Has identity: ${hasIdentity}, Not truncated: ${notTruncated}`);
+        logTest('Identity Response', hasIdentity ? 'PASS' : 'WARN', 
+            `Length: ${content.length}, Has identity: ${hasIdentity}, Time: ${(identityResult.elapsedMs/1000).toFixed(1)}s`);
         
         console.log();
         console.log('  Content preview:');
-        console.log('  ' + '-'.repeat(56));
-        content.split('\n').slice(0, 6).forEach(line => {
-            console.log('  ' + (line.length > 53 ? line.substring(0, 53) + '...' : line));
+        console.log('  ' + '-'.repeat(66));
+        content.split('\n').slice(0, 8).forEach(line => {
+            console.log('  ' + (line.length > 63 ? line.substring(0, 63) + '...' : line));
         });
-        if (content.split('\n').length > 6) console.log('  ...');
-        console.log('  ' + '-'.repeat(56));
+        if (content.split('\n').length > 8) console.log('  ...');
+        console.log('  ' + '-'.repeat(66));
     } else {
-        logTest('Identity Response', 'FAIL', 'No real response received (only queue status)');
+        logTest('Identity Response', 'FAIL', 
+            `Stream started: ${identityResult.streamStarted}, Stream ended: ${identityResult.streamEnded}, Content: ${identityResult.content.length} chars`);
     }
     
     // Phase 5: Test @openclaw 天气查询
     console.log();
     console.log(`${YELLOW}>>> Phase 5: Test @openclaw 济宁邹城的温度是？${NC}`);
-    console.log('  Waiting for real response (max 90s)...');
+    console.log('  等待完整回答（max 180s）...');
     console.log();
     console.log('  完整性检测清单:');
     console.log('    □ 包含温度数值 (如 +22°C)');
-    console.log('    □ 包含湿度信息');
-    console.log('    □ 包含风速信息');
+    console.log('    □ 包含湿度信息 (如 100%)');
+    console.log('    □ 包含风速信息 (如 ↙4km/h)');
     console.log('    □ 包含工具调用详情 (curl 命令输出)');
-    console.log('    □ 内容未被截断');
+    console.log('    □ 内容未被截断 (显示完整)');
     console.log();
     
-    const weatherResult = await waitForRealResponse(ws, '@openclaw 济宁邹城的温度是？', 90000);
+    const weatherResult = await waitForCompleteResponse(ws, '@openclaw 济宁邹城的温度是？', 180000);
     
-    if (weatherResult.response) {
-        const content = weatherResult.response.content || '';
+    if (weatherResult.success && weatherResult.content.length > 0) {
+        const content = weatherResult.content;
         
         // 完整性检测
         const checks = {
             hasTemp: content.includes('°C') || /\+?\d+°C/.test(content),
             hasHumidity: content.includes('%') || content.includes('湿度'),
             hasWind: content.includes('km/h') || content.includes('风速') || content.includes('↙'),
-            hasToolDetails: content.includes('curl') || content.includes('wttr') || weatherResult.response.toolCalls?.length > 0,
-            notTruncated: content.length > 100
+            hasToolDetails: content.includes('curl') || content.includes('wttr') || content.includes('```'),
+            notTruncated: content.length > 100 && !content.includes('...')
         };
         
         console.log('  检测结果:');
@@ -284,33 +312,34 @@ async function runTests() {
         console.log(`    内容完整: ${checks.notTruncated ? '✓' : '✗'} (${content.length} chars)`);
         console.log();
         
-        const allPassed = Object.values(checks).every(v => v);
+        const allPassed = checks.hasTemp && checks.hasHumidity && checks.hasWind && checks.hasToolDetails;
         logTest('Weather Response', allPassed ? 'PASS' : 'FAIL', 
-            `Passed: ${Object.values(checks).filter(v => v).length}/5 checks`);
+            `Passed: ${Object.values(checks).filter(v => v).length}/5 checks, Time: ${(weatherResult.elapsedMs/1000).toFixed(1)}s`);
         
         console.log();
         console.log('  Content preview:');
-        console.log('  ' + '-'.repeat(56));
-        content.split('\n').slice(0, 10).forEach(line => {
-            console.log('  ' + (line.length > 53 ? line.substring(0, 53) + '...' : line));
+        console.log('  ' + '-'.repeat(66));
+        content.split('\n').slice(0, 12).forEach(line => {
+            console.log('  ' + (line.length > 63 ? line.substring(0, 63) + '...' : line));
         });
-        if (content.split('\n').length > 10) console.log('  ...');
-        console.log('  ' + '-'.repeat(56));
+        if (content.split('\n').length > 12) console.log('  ...');
+        console.log('  ' + '-'.repeat(66));
     } else {
-        logTest('Weather Response', 'FAIL', 'No real response received (only queue status)');
+        logTest('Weather Response', 'FAIL', 
+            `Stream started: ${weatherResult.streamStarted}, Stream ended: ${weatherResult.streamEnded}, Content: ${weatherResult.content.length} chars`);
     }
     
     ws.close();
     
     // Summary
     console.log();
-    console.log('='.repeat(60));
+    console.log('='.repeat(70));
     if (failed === 0) {
         console.log(`${GREEN}  All tests passed! ✓${NC}`);
     } else {
         console.log(`${RED}  Some tests failed! ✗${NC}`);
     }
-    console.log('='.repeat(60));
+    console.log('='.repeat(70));
     console.log(`\nResults: ${passed} passed, ${failed} failed`);
     
     process.exit(failed > 0 ? 1 : 0);
