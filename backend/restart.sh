@@ -3,12 +3,13 @@
 # Restart script for OOC Backend
 
 APP_NAME="ooc-backend"
-JAR_FILE="build/libs/ooc-backend-1.0.0.jar"
+JAR_FILE="target/ooc-backend-1.0.0.jar"
 LOG_FILE="backend.log"
 
 # Kill existing process
 echo "Stopping $APP_NAME..."
 pkill -9 -f "$JAR_FILE" 2>/dev/null || true
+pkill -9 -f "build/libs/ooc-backend-1.0.0.jar" 2>/dev/null || true
 sleep 2
 
 # Check if process is still running

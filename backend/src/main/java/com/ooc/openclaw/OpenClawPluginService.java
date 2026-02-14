@@ -399,7 +399,29 @@ public class OpenClawPluginService {
                                 .doOnNext(event -> log.info("Parsed event: type={}, content={}", event.type(),
                                         event.content() != null ? event.content().substring(0, Math.min(50, event.content().length())) : "null"))
                                 .onErrorResume(error -> {
-                                    log.warn("SSE stream error (may be normal completion): {}", error.getMessage());
+                                    // 区分真正的错误和正常的连接关闭
+                                    String errorMsg = error.getMessage();
+                                    boolean isPrematureClose = errorMsg != null && (
+                                        errorMsg.contains("premature close") ||
+                                        errorMsg.contains("connection reset") ||
+                                        errorMsg.contains("Connection reset") ||
+                                        errorMsg.contains("broken pipe") ||
+                                        errorMsg.contains("Broken pipe")
+                                    );
+                                    boolean isTimeout = errorMsg != null && (
+                                        errorMsg.contains("timeout") ||
+                                        errorMsg.contains("Timeout")
+                                    );
+
+                                    if (isPrematureClose) {
+                                        log.warn("SSE connection closed prematurely (client disconnected or network issue): {}", errorMsg);
+                                    } else if (isTimeout) {
+                                        log.warn("SSE stream timeout (OpenClaw tool execution may have taken too long): {}", errorMsg);
+                                    } else if (errorMsg == null) {
+                                        log.warn("SSE stream ended (possibly normal completion or null error)");
+                                    } else {
+                                        log.error("SSE stream error: {}", errorMsg, error);
+                                    }
                                     return Flux.empty();
                                 });
                     } else {

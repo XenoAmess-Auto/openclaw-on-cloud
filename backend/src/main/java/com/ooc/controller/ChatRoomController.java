@@ -249,7 +249,11 @@ public class ChatRoomController {
         if (message.isOpenclawMentioned()) {
             log.info("@openclaw mentioned in message, triggering OpenClaw processing for room: {}", roomId);
             // 使用 CompletableFuture 异步执行，避免阻塞 HTTP 响应
-            java.util.concurrent.CompletableFuture.runAsync(() -> triggerOpenClaw(roomId, message));
+            java.util.concurrent.CompletableFuture.runAsync(() -> triggerOpenClaw(roomId, message))
+                    .exceptionally(ex -> {
+                        log.error("OpenClaw processing failed for room: {}", roomId, ex);
+                        return null;
+                    });
         }
 
         return ResponseEntity.ok(message);
@@ -335,6 +339,8 @@ public class ChatRoomController {
             
             // 发送流式请求并收集响应
             final String finalSessionId = openClawSessionId;
+            java.util.concurrent.CountDownLatch latch = new java.util.concurrent.CountDownLatch(1);
+            
             openClawPluginService.sendMessageStream(finalSessionId, content, null, userId, userName)
                     .doOnNext(event -> {
                         if ("message".equals(event.type()) && event.content() != null) {
@@ -345,6 +351,7 @@ public class ChatRoomController {
                         log.error("OpenClaw streaming error for room: {}", roomId, error);
                         String errorContent = responseBuilder + "\n\n[错误: " + error.getMessage() + "]";
                         saveOpenClawResponse(roomId, responseMessageId, errorContent, oocSession);
+                        latch.countDown();
                     })
                     .doOnComplete(() -> {
                         String finalContent = responseBuilder.toString();
@@ -352,8 +359,26 @@ public class ChatRoomController {
                             finalContent = "*(OpenClaw 无回复)*";
                         }
                         saveOpenClawResponse(roomId, responseMessageId, finalContent, oocSession);
+                        latch.countDown();
                     })
-                    .blockLast();
+                    .subscribe();
+            
+            // 等待流完成（最多60秒）
+            try {
+                if (!latch.await(60, java.util.concurrent.TimeUnit.SECONDS)) {
+                    log.warn("OpenClaw streaming timeout for room: {}", roomId);
+                    String timeoutContent = responseBuilder.toString();
+                    if (timeoutContent.isEmpty()) {
+                        timeoutContent = "*(OpenClaw 响应超时)*";
+                    } else {
+                        timeoutContent += "\n\n[响应超时，部分内容可能未加载完成]";
+                    }
+                    saveOpenClawResponse(roomId, responseMessageId, timeoutContent, oocSession);
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                log.error("OpenClaw streaming interrupted for room: {}", roomId);
+            }
                     
         } catch (Exception e) {
             log.error("Failed to process OpenClaw request for room: {}", roomId, e);
