@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Markdown 渲染测试</title>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.5/dist/purify.min.js"></script>
+  <style>
+    body { font-family: sans-serif; padding: 20px; }
+    .test-case { margin: 20px 0; padding: 15px; border: 1px solid #ccc; }
+    .test-case h3 { margin-top: 0; }
+    .pass { color: green; }
+    .fail { color: red; }
+    
+    /* 模拟 ChatView 的样式 */
+    .message-content pre {
+      background: #1e1e2e;
+      color: #cdd6f4;
+      padding: 1rem;
+      border-radius: 8px;
+      overflow-x: auto;
+    }
+    .message-content code {
+      background: rgba(0,0,0,0.05);
+      padding: 0.2em 0.4em;
+      border-radius: 3px;
+      font-family: monospace;
+    }
+    .message-content pre code {
+      background: transparent;
+      padding: 0;
+    }
+    .message-content blockquote {
+      border-left: 4px solid #4f46e5;
+      padding-left: 1rem;
+      margin: 0.5rem 0;
+      color: #666;
+    }
+    .message-content ul {
+      padding-left: 1.5rem;
+    }
+    .message-content strong {
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+  <h1>Markdown 渲染测试</h1>
+  
+  <div class="test-case">
+    <h3>测试 1: 粗体和斜体</h3>
+    <div id="test1" class="message-content"></div>
+  </div>
+  
+  <div class="test-case">
+    <h3>测试 2: 列表</h3>
+    <div id="test2" class="message-content"></div>
+  </div>
+  
+  <div class="test-case">
+    <h3>测试 3: 代码块</h3>
+    <div id="test3" class="message-content"></div>
+  </div>
+  
+  <div class="test-case">
+    <h3>测试 4: 引用块</h3>
+    <div id="test4" class="message-content"></div>
+  </div>
+  
+  <div class="test-case">
+    <h3>测试 5: 综合内容</h3>
+    <div id="test5" class="message-content"></div>
+  </div>
+  
+  <div id="results"></div>
+
+  <script>
+    // 模拟 ChatView.vue 中的 renderContent 逻辑
+    function renderContent(content) {
+      // 处理转义字符
+      content = content.replace(/\\n/g, '\n').replace(/\\t/g, '\t');
+      
+      // 渲染 Markdown
+      let htmlContent = marked.parse(content, { async: false });
+      
+      // XSS 清理 - 修复后的配置
+      htmlContent = DOMPurify.sanitize(htmlContent, {
+        ALLOWED_TAGS: [
+          'p', 'br', 'hr',
+          'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+          'ul', 'ol', 'li',
+          'strong', 'em', 'code', 'pre', 'blockquote',
+          'a', 'img', 'table', 'thead', 'tbody', 'tr', 'th', 'td',
+          'del', 'ins', 'sup', 'sub'
+        ],
+        ALLOWED_ATTR: ['href', 'src', 'alt', 'title', 'target', 'class']  // 修复：添加 class
+      });
+      
+      return htmlContent;
+    }
+    
+    // 测试用例
+    const tests = [
+      {
+        id: 'test1',
+        name: '粗体和斜体',
+        input: '**粗体文字** 和 *斜体文字*',
+        check: (html) => html.includes('<strong>') && html.includes('<em>')
+      },
+      {
+        id: 'test2',
+        name: '列表',
+        input: '- 列表项 1\n- 列表项 2\n- 列表项 3',
+        check: (html) => html.includes('<ul>') && html.includes('<li>')
+      },
+      {
+        id: 'test3',
+        name: '代码块',
+        input: '```javascript\nconst x = 1;\nconsole.log(x);\n```',
+        check: (html) => {
+          // 检查是否保留了 class 属性（代码块语言类名）
+          return html.includes('<pre') && html.includes('<code') && 
+                 (html.includes('class="language-javascript"') || html.includes('class="language-'));
+        }
+      },
+      {
+        id: 'test4',
+        name: '引用块',
+        input: '> 这是引用文本\n> 多行引用',
+        check: (html) => html.includes('<blockquote>')
+      },
+      {
+        id: 'test5',
+        name: '综合内容',
+        input: '**粗体** 和 *斜体*\n\n- 项目 1\n- 项目 2\n\n> 引用\n\n`inline code`',
+        check: (html) => {
+          return html.includes('<strong>') && 
+                 html.includes('<em>') && 
+                 html.includes('<ul>') && 
+                 html.includes('<blockquote>') &&
+                 html.includes('<code>');
+        }
+      }
+    ];
+    
+    // 运行测试
+    let passCount = 0;
+    let failCount = 0;
+    let resultsHtml = '<h2>测试结果</h2><ul>';
+    
+    tests.forEach(test => {
+      const html = renderContent(test.input);
+      document.getElementById(test.id).innerHTML = html;
+      
+      const passed = test.check(html);
+      if (passed) {
+        passCount++;
+        resultsHtml += `<li class="pass">✅ ${test.name}: 通过</li>`;
+      } else {
+        failCount++;
+        resultsHtml += `<li class="fail">❌ ${test.name}: 失败</li>`;
+        resultsHtml += `<li>实际输出: ${html.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</li>`;
+      }
+    });
+    
+    resultsHtml += '</ul>';
+    resultsHtml += `<h3>总计: ${passCount} 通过, ${failCount} 失败</h3>`;
+    
+    document.getElementById('results').innerHTML = resultsHtml;
+    
+    // 输出到控制台
+    console.log('=== Markdown 渲染测试结果 ===');
+    console.log(`通过: ${passCount}, 失败: ${failCount}`);
+  </script>
+</body>
+</html>
