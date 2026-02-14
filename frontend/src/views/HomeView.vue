@@ -742,15 +742,7 @@ function renderContent(msg: Message) {
   // 处理转义字符：将字符串 \n \t 转为真正的换行和制表符
   content = content.replace(/\\n/g, '\n').replace(/\\t/g, '\t')
 
-  // Step 1: 先渲染 Markdown（在 HTML 转义之前）
-  // 临时替换 @提及，防止 Markdown 解析器破坏它们
-  const mentionPlaceholders: string[] = []
-  content = content.replace(/(@所有人|@everyone|@all|@在线|@here|@openclaw|@[^\s]+)/gi, (match) => {
-    mentionPlaceholders.push(match)
-    return `<!--MENTION_${mentionPlaceholders.length - 1}-->`
-  })
-
-  // 渲染 Markdown
+  // Step 1: 渲染 Markdown（不进行 @提及替换，DOMPurify 会清理特殊标记）
   let htmlContent: string
   try {
     console.log('[renderContent] Input content:', content.substring(0, 100))
@@ -792,32 +784,17 @@ function renderContent(msg: Message) {
     ALLOWED_ATTR: ['href', 'src', 'alt', 'title', 'target', 'class']
   })
 
-  // Step 2: 恢复 @提及并添加高亮
-  htmlContent = htmlContent.replace(/<!--MENTION_(\d+)-->/g, (_, index) => {
-    const mention = mentionPlaceholders[parseInt(index)]
-    if (!mention) return ''
-
-    // 判断提及类型并添加对应的 class
-    if (/@所有人|@everyone|@all/i.test(mention)) {
-      return `<span class="mention mention-all">${mention}</span>`
-    } else if (/@在线|@here/i.test(mention)) {
-      return `<span class="mention mention-here">${mention}</span>`
-    } else if (/@openclaw/i.test(mention)) {
-      return `<span class="mention">${mention}</span>`
-    } else {
-      // 未知的 @xxx 也高亮
-      return `<span class="mention">${mention}</span>`
-    }
-  })
-
-  // Step 3: 处理 msg.mentions 中可能存在的但未在内容中找到的提及
+  // Step 2: 在 HTML 中查找并高亮 @提及（在 sanitization 之后进行）
+  // 使用正则匹配文本节点中的 @提及
+  htmlContent = htmlContent.replace(/(@所有人|@everyone|@all)/gi, '<span class="mention mention-all">$1</span>')
+  htmlContent = htmlContent.replace(/(@在线|@here)/gi, '<span class="mention mention-here">$1</span>')
+  htmlContent = htmlContent.replace(/(@openclaw)/gi, '<span class="mention">$1</span>')
+  
+  // 处理其他用户提及
   if (msg.mentions) {
     msg.mentions.forEach(mention => {
       const regex = new RegExp(`@${mention.userName}`, 'g')
-      // 只替换未被替换过的（即不在 placeholder 中的）
-      if (!mentionPlaceholders.some(p => p === `@${mention.userName}`)) {
-        htmlContent = htmlContent.replace(regex, `<span class="mention">@${mention.userName}</span>`)
-      }
+      htmlContent = htmlContent.replace(regex, `<span class="mention">@${mention.userName}</span>`)
     })
   }
 
