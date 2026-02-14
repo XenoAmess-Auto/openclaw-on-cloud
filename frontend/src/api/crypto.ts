@@ -4,8 +4,7 @@ import apiClient from './client'
 let publicKey: string | null = null
 
 export async function getPublicKey(): Promise<string> {
-  if (publicKey) return publicKey
-
+  // 每次获取新的公钥，避免缓存问题
   const response = await apiClient.get('/auth/public-key')
   publicKey = response.data.publicKey
   return publicKey!
