@@ -599,7 +599,9 @@ function renderContent(msg: Message) {
   // 渲染 Markdown
   let htmlContent: string
   try {
-    htmlContent = marked.parse(content) as string
+    // marked v9+ 返回 Promise，需要同步处理
+    const result = marked.parse(content)
+    htmlContent = typeof result === 'string' ? result : (result as any).toString()
   } catch (e) {
     console.error('Markdown parsing error:', e)
     htmlContent = content.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
