@@ -1511,9 +1511,12 @@ async function copySelection() {
 .message-content {
   user-select: text !important;
   -webkit-user-select: text !important;
+  -moz-user-select: text !important;
+  -ms-user-select: text !important;
   -webkit-touch-callout: default !important;
-  touch-action: auto;
-  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  cursor: text;
   transition: transform 0.15s ease, background-color 0.15s ease;
 }
 
