@@ -615,6 +615,11 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                 ? streamingToolCalls
                 : parseToolCalls(finalContent);
 
+        log.info("finalizeStreamMessage: parsed {} tool calls for task {}", toolCalls.size(), task.getTaskId());
+        if (!toolCalls.isEmpty()) {
+            toolCalls.forEach(tc -> log.info("  Tool: {} - {}", tc.getName(), tc.getDescription()));
+        }
+
         // 创建最终消息
         ChatRoom.Message finalMsg = ChatRoom.Message.builder()
                 .id(messageId)
@@ -660,49 +665,92 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
     private List<ChatRoom.Message.ToolCall> parseToolCalls(String content) {
         List<ChatRoom.Message.ToolCall> toolCalls = new ArrayList<>();
 
-        if (content == null || !content.contains("**Tools used:**")) {
+        if (content == null) {
+            log.debug("parseToolCalls: content is null");
             return toolCalls;
         }
 
-        if (content.contains("**Tools used:**")) {
-            int toolsStart = content.indexOf("**Tools used:**");
-            int toolsEnd = content.length();
+        // 检查是否有 Tools used 部分（支持多种格式）
+        String toolsMarker = "**Tools used:**";
+        int toolsStart = content.indexOf(toolsMarker);
 
-            int searchStart = toolsStart + "**Tools used:**".length();
-            int nextDoubleNewline = content.indexOf("\n\n", searchStart);
+        if (toolsStart == -1) {
+            // 尝试其他可能的格式
+            toolsMarker = "Tools used:";
+            toolsStart = content.indexOf(toolsMarker);
+        }
 
-            if (nextDoubleNewline != -1) {
-                toolsEnd = nextDoubleNewline;
-            }
+        if (toolsStart == -1) {
+            log.debug("parseToolCalls: no Tools used section found in content of length {}", content.length());
+            return toolCalls;
+        }
 
-            String toolsSection = content.substring(toolsStart, Math.min(toolsEnd, content.length()));
-            String[] toolLines = toolsSection.split("\n");
+        log.info("parseToolCalls: found Tools used section at index {}", toolsStart);
 
-            for (String line : toolLines) {
-                line = line.trim();
-                if (line.startsWith("- `") && line.contains("`")) {
+        int toolsEnd = content.length();
+        int searchStart = toolsStart + toolsMarker.length();
+
+        // 查找 Tools used 部分的结束位置（下一个双换行或章节标题）
+        int nextDoubleNewline = content.indexOf("\n\n", searchStart);
+        int nextSection = content.indexOf("**", searchStart);
+
+        if (nextDoubleNewline != -1 && (nextSection == -1 || nextDoubleNewline < nextSection)) {
+            toolsEnd = nextDoubleNewline;
+        } else if (nextSection != -1) {
+            toolsEnd = nextSection;
+        }
+
+        String toolsSection = content.substring(toolsStart, Math.min(toolsEnd, content.length()));
+        log.debug("parseToolCalls: tools section length = {}", toolsSection.length());
+
+        String[] toolLines = toolsSection.split("\n");
+
+        for (String line : toolLines) {
+            line = line.trim();
+            // 支持多种格式：- `tool_name`: description 或 - tool_name: description
+            if (line.startsWith("- ")) {
+                String toolName = null;
+                String description = "";
+
+                // 尝试格式：- `tool_name`: description
+                if (line.contains("`")) {
                     int nameStart = line.indexOf("`") + 1;
                     int nameEnd = line.indexOf("`", nameStart);
                     if (nameEnd > nameStart) {
-                        String toolName = line.substring(nameStart, nameEnd);
-                        String description = "";
+                        toolName = line.substring(nameStart, nameEnd);
                         int descStart = line.indexOf(":", nameEnd);
                         if (descStart != -1 && descStart + 1 < line.length()) {
                             description = line.substring(descStart + 1).trim();
                         }
-
-                        toolCalls.add(ChatRoom.Message.ToolCall.builder()
-                                .id(UUID.randomUUID().toString())
-                                .name(toolName)
-                                .description(description)
-                                .status("completed")
-                                .timestamp(Instant.now())
-                                .build());
                     }
+                } else {
+                    // 尝试格式：- tool_name: description
+                    int colonIndex = line.indexOf(":");
+                    if (colonIndex > 2) {  // "- ".length() == 2
+                        toolName = line.substring(2, colonIndex).trim();
+                        if (toolName.contains(" ")) {
+                            // 如果名称包含空格，可能不是有效的工具名
+                            toolName = null;
+                        } else {
+                            description = line.substring(colonIndex + 1).trim();
+                        }
+                    }
+                }
+
+                if (toolName != null && !toolName.isEmpty()) {
+                    log.info("parseToolCalls: found tool '{}' with description '{}'", toolName, description);
+                    toolCalls.add(ChatRoom.Message.ToolCall.builder()
+                            .id(UUID.randomUUID().toString())
+                            .name(toolName)
+                            .description(description)
+                            .status("completed")
+                            .timestamp(Instant.now())
+                            .build());
                 }
             }
         }
 
+        log.info("parseToolCalls: total {} tools found", toolCalls.size());
         return toolCalls;
     }
 
