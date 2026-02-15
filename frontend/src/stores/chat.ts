@@ -56,10 +56,23 @@ export const useChatStore = defineStore('chat', () => {
     messages.value = []
     typingUsers.value.clear()
     
-    const wsUrl = `ws://${window.location.host}/ws/chat`
+    // 构建 WebSocket URL：优先使用当前页面的 host，但处理端口问题
+    // 开发环境：Vite 代理 /ws 到后端，使用相同 host:port
+    // 生产环境：通常使用标准端口（80/443），需要指向 API 服务器
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    const host = window.location.host
+    
+    // 检查是否在开发环境（端口 3000 是 Vite 默认端口）
+    const isDev = host.includes(':3000')
+    
+    // 构建 WebSocket URL
+    // 开发环境：ws://localhost:3000/ws/chat（通过 Vite 代理）
+    // 生产环境：直接使用 /ws 路径，让浏览器根据当前 host 连接
+    const wsUrl = `${protocol}//${host}/ws/chat`
     const socket = new WebSocket(wsUrl)
     
     socket.onopen = () => {
+      console.log('[WebSocket] Connected to', wsUrl)
       isConnected.value = true
       socket.send(JSON.stringify({
         type: 'join',
@@ -74,7 +87,12 @@ export const useChatStore = defineStore('chat', () => {
       handleMessage(data)
     }
 
-    socket.onclose = () => {
+    socket.onerror = (error) => {
+      console.error('[WebSocket] Error:', error)
+    }
+
+    socket.onclose = (event) => {
+      console.log('[WebSocket] Closed:', event.code, event.reason)
       isConnected.value = false
     }
 
