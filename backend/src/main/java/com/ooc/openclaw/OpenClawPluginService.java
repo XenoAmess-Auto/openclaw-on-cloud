@@ -556,7 +556,7 @@ public class OpenClawPluginService {
      * 发送消息到 OpenClaw 并获取流式回复（内部实现）
      * 
      * 注意：OpenClaw 的 OpenAI 兼容层只支持文本内容，不支持 image_url 类型的 content block。
-     * 所以我们将图片 URL 嵌入到文本中，让 OpenClaw 可以通过 web_fetch 工具获取图片内容。
+     * 所以我们需要将本地图片转换为 base64 data URL 嵌入到文本中，让 OpenClaw 可以直接分析图片内容。
      */
     private Flux<StreamEvent> sendMessageStreamInternal(String sessionId, String message,
             List<ChatWebSocketHandler.Attachment> attachments, String userId, String userName) {
@@ -569,8 +569,8 @@ public class OpenClawPluginService {
 
         log.info("[sendMessageStream] Processing {} attachments", attachments != null ? attachments.size() : 0);
 
-        // 收集图片 URL，嵌入到文本中
-        List<String> imageUrls = new ArrayList<>();
+        // 收集图片 data URL，嵌入到文本中
+        List<String> imageDataUrls = new ArrayList<>();
         if (attachments != null && !attachments.isEmpty()) {
             for (ChatWebSocketHandler.Attachment att : attachments) {
                 log.info("[sendMessageStream] Attachment: type={}, mimeType={}, url={}",
@@ -579,24 +579,32 @@ public class OpenClawPluginService {
                 if ("image".equalsIgnoreCase(att.getType())) {
                     String imageUrl = att.getUrl();
                     if (imageUrl != null && !imageUrl.isEmpty()) {
-                        // 将相对路径转换为完整 URL
+                        // 将 /uploads/ 路径转换为 data URL
                         if (imageUrl.startsWith("/uploads/")) {
-                            imageUrl = "http://localhost:8081" + imageUrl;
+                            String dataUrl = readFileToDataUrl(imageUrl, att.getMimeType());
+                            if (dataUrl != null) {
+                                imageDataUrls.add(dataUrl);
+                                log.info("[sendMessageStream] Converted to data URL: {} bytes", dataUrl.length());
+                            } else {
+                                log.warn("[sendMessageStream] Failed to convert image to data URL: {}", imageUrl);
+                            }
+                        } else {
+                            // 已经是完整 URL（如外部图片链接）
+                            imageDataUrls.add(imageUrl);
+                            log.info("[sendMessageStream] Added external image URL: {}", imageUrl);
                         }
-                        imageUrls.add(imageUrl);
-                        log.info("[sendMessageStream] Added image URL: {}", imageUrl);
                     }
                 }
             }
         }
         
-        // 如果有图片，在消息末尾添加图片 URL
-        if (!imageUrls.isEmpty()) {
+        // 如果有图片，在消息末尾添加图片 data URL
+        if (!imageDataUrls.isEmpty()) {
             messageBuilder.append("\n\n[图片附件]:\n");
-            for (int i = 0; i < imageUrls.size(); i++) {
-                messageBuilder.append("图片 ").append(i + 1).append(": ").append(imageUrls.get(i)).append("\n");
+            for (int i = 0; i < imageDataUrls.size(); i++) {
+                messageBuilder.append("图片 ").append(i + 1).append(": ").append(imageDataUrls.get(i)).append("\n");
             }
-            messageBuilder.append("\n请使用 web_fetch 工具获取图片内容并分析。");
+            messageBuilder.append("\n请分析以上图片内容。");
         }
 
         String finalMessage = messageBuilder.toString();
@@ -652,7 +660,7 @@ public class OpenClawPluginService {
         log.info("Sending streaming request to OpenClaw: sessionId={}, messageLength={}, imageCount={}",
                 sessionId,
                 finalMessage.length(),
-                imageUrls.size());
+                imageDataUrls.size());
 
         return getWebClient().post()
                 .uri("/v1/chat/completions")
