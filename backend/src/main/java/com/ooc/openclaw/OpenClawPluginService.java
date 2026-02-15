@@ -2,6 +2,7 @@ package com.ooc.openclaw;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.ooc.entity.ChatRoom;
 import com.ooc.websocket.ChatWebSocketHandler;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -350,9 +351,37 @@ public class OpenClawPluginService {
     ) {}
 
     /**
+     * 发送消息到 OpenClaw 并获取流式回复（使用 ChatRoom.Message.Attachment）
+     */
+    public Flux<StreamEvent> sendMessageStreamWithRoomAttachments(String sessionId, String message,
+            List<ChatRoom.Message.Attachment> attachments, String userId, String userName) {
+        // 转换为 ChatWebSocketHandler.Attachment
+        List<ChatWebSocketHandler.Attachment> convertedAttachments = new ArrayList<>();
+        if (attachments != null && !attachments.isEmpty()) {
+            for (ChatRoom.Message.Attachment att : attachments) {
+                ChatWebSocketHandler.Attachment converted = new ChatWebSocketHandler.Attachment();
+                converted.setType(att.getType());
+                converted.setMimeType(att.getContentType());
+                converted.setUrl(att.getUrl());
+                // content 字段在 ChatRoom.Message.Attachment 中不存在，保持 null
+                convertedAttachments.add(converted);
+            }
+        }
+        return sendMessageStreamInternal(sessionId, message, convertedAttachments, userId, userName);
+    }
+
+    /**
      * 发送消息到 OpenClaw 并获取流式回复
      */
     public Flux<StreamEvent> sendMessageStream(String sessionId, String message,
+            List<ChatWebSocketHandler.Attachment> attachments, String userId, String userName) {
+        return sendMessageStreamInternal(sessionId, message, attachments, userId, userName);
+    }
+
+    /**
+     * 发送消息到 OpenClaw 并获取流式回复（内部实现）
+     */
+    private Flux<StreamEvent> sendMessageStreamInternal(String sessionId, String message,
             List<ChatWebSocketHandler.Attachment> attachments, String userId, String userName) {
 
         String processedMessage = convertUploadsPath(message);

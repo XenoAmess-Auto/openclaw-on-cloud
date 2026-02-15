@@ -369,7 +369,7 @@ public class ChatRoomController {
             final String finalSessionId = openClawSessionId;
             java.util.concurrent.CountDownLatch latch = new java.util.concurrent.CountDownLatch(1);
             
-            openClawPluginService.sendMessageStream(finalSessionId, content, null, userId, userName)
+            openClawPluginService.sendMessageStreamWithRoomAttachments(finalSessionId, content, message.getAttachments(), userId, userName)
                     .doOnNext(event -> {
                         if ("message".equals(event.type()) && event.content() != null) {
                             responseBuilder.append(event.content());
