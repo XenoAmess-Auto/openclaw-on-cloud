@@ -91,9 +91,21 @@ data/
 # Logs
 logs/
 *.log
+backend/logs/
+backend/*.log
+frontend/*.log
+
+# PID files
+*.pid
+backend/*.pid
+frontend/*.pid
 
 # Temporary files
 tmp/
 temp/
 *.tmp
 uploads/
+
+# Runtime files
+1
+EOF

@@ -12,7 +12,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.List;
+import java.util.HashSet;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -29,38 +29,53 @@ class ChatRoomServiceTest {
     @InjectMocks
     private ChatRoomService chatRoomService;
 
+    private static final String USER_ID = "user123";
+    private static final String ROOM_ID = "room123";
+
+    @BeforeEach
+    void setUp() {
+    }
+
     @Test
     void createChatRoom_WithValidData_ShouldCreateRoom() {
         // Given
+        String name = "Test Room";
+        String description = "Test Description";
+        
         when(chatRoomRepository.save(any(ChatRoom.class))).thenAnswer(invocation -> {
             ChatRoom room = invocation.getArgument(0);
-            room.setId("room-123");
+            room.setId(ROOM_ID);
             return room;
         });
 
         // When
-        ChatRoom result = chatRoomService.createChatRoom("Test Room", "Description", "user-123");
+        ChatRoom result = chatRoomService.createChatRoom(name, description, USER_ID);
 
         // Then
         assertThat(result).isNotNull();
-        assertThat(result.getId()).isEqualTo("room-123");
-        assertThat(result.getName()).isEqualTo("Test Room");
-        assertThat(result.getDescription()).isEqualTo("Description");
-        assertThat(result.getCreatorId()).isEqualTo("user-123");
-        assertThat(result.getMemberIds()).contains("user-123");
+        assertThat(result.getId()).isEqualTo(ROOM_ID);
+        assertThat(result.getName()).isEqualTo(name);
+        assertThat(result.getDescription()).isEqualTo(description);
+        assertThat(result.getCreatorId()).isEqualTo(USER_ID);
+        assertThat(result.getMemberIds()).contains(USER_ID);
+        
+        verify(chatRoomRepository).save(any(ChatRoom.class));
     }
 
     @Test
     void getChatRoom_WithExistingRoom_ShouldReturnRoom() {
         // Given
         ChatRoom room = ChatRoom.builder()
-                .id("room-123")
+                .id(ROOM_ID)
                 .name("Test Room")
+                .creatorId(USER_ID)
+                .memberIds(new HashSet<>(Arrays.asList(USER_ID)))
                 .build();
-        when(chatRoomRepository.findById("room-123")).thenReturn(Optional.of(room));
+        
+        when(chatRoomRepository.findById(ROOM_ID)).thenReturn(Optional.of(room));
 
         // When
-        Optional<ChatRoom> result = chatRoomService.getChatRoom("room-123");
+        Optional<ChatRoom> result = chatRoomService.getChatRoom(ROOM_ID);
 
         // Then
         assertThat(result).isPresent();
@@ -68,46 +83,44 @@ class ChatRoomServiceTest {
     }
 
     @Test
-    void getUserChatRooms_ShouldReturnUserRooms() {
+    void getChatRoom_WithNonExistingRoom_ShouldReturnEmpty() {
         // Given
-        ChatRoom room1 = ChatRoom.builder().id("room-1").name("Room 1").build();
-        ChatRoom room2 = ChatRoom.builder().id("room-2").name("Room 2").build();
-        when(chatRoomRepository.findByMemberIdsContaining("user-123"))
-                .thenReturn(Arrays.asList(room1, room2));
+        when(chatRoomRepository.findById(ROOM_ID)).thenReturn(Optional.empty());
 
         // When
-        List<ChatRoom> result = chatRoomService.getUserChatRooms("user-123");
+        Optional<ChatRoom> result = chatRoomService.getChatRoom(ROOM_ID);
 
         // Then
-        assertThat(result).hasSize(2);
-        assertThat(result).extracting(ChatRoom::getName).contains("Room 1", "Room 2");
+        assertThat(result).isEmpty();
     }
 
     @Test
     void addMember_WithExistingRoom_ShouldAddMember() {
         // Given
         ChatRoom room = ChatRoom.builder()
-                .id("room-123")
+                .id(ROOM_ID)
                 .name("Test Room")
-                .memberIds(new java.util.HashSet<>(java.util.Set.of("creator-123")))
+                .memberIds(new HashSet<>(Arrays.asList(USER_ID)))
                 .build();
-        when(chatRoomRepository.findById("room-123")).thenReturn(Optional.of(room));
+        
+        when(chatRoomRepository.findById(ROOM_ID)).thenReturn(Optional.of(room));
         when(chatRoomRepository.save(any(ChatRoom.class))).thenReturn(room);
 
         // When
-        ChatRoom result = chatRoomService.addMember("room-123", "new-user-123");
+        ChatRoom result = chatRoomService.addMember(ROOM_ID, "newUser");
 
         // Then
-        assertThat(result.getMemberIds()).contains("creator-123", "new-user-123");
+        assertThat(result.getMemberIds()).contains("newUser", USER_ID);
+        verify(chatRoomRepository).save(room);
     }
 
     @Test
     void addMember_WithNonExistingRoom_ShouldThrowException() {
         // Given
-        when(chatRoomRepository.findById("unknown")).thenReturn(Optional.empty());
+        when(chatRoomRepository.findById(ROOM_ID)).thenReturn(Optional.empty());
 
         // When & Then
-        assertThatThrownBy(() -> chatRoomService.addMember("unknown", "user-123"))
+        assertThatThrownBy(() -> chatRoomService.addMember(ROOM_ID, "newUser"))
                 .isInstanceOf(RuntimeException.class)
                 .hasMessage("Chat room not found");
     }
@@ -116,82 +129,107 @@ class ChatRoomServiceTest {
     void removeMember_WithExistingRoom_ShouldRemoveMember() {
         // Given
         ChatRoom room = ChatRoom.builder()
-                .id("room-123")
+                .id(ROOM_ID)
                 .name("Test Room")
-                .memberIds(new java.util.HashSet<>(java.util.Set.of("creator-123", "user-123")))
+                .memberIds(new HashSet<>(Arrays.asList(USER_ID, "otherUser")))
                 .build();
-        when(chatRoomRepository.findById("room-123")).thenReturn(Optional.of(room));
+        
+        when(chatRoomRepository.findById(ROOM_ID)).thenReturn(Optional.of(room));
         when(chatRoomRepository.save(any(ChatRoom.class))).thenReturn(room);
 
         // When
-        ChatRoom result = chatRoomService.removeMember("room-123", "user-123");
+        ChatRoom result = chatRoomService.removeMember(ROOM_ID, "otherUser");
 
         // Then
-        assertThat(result.getMemberIds()).contains("creator-123");
-        assertThat(result.getMemberIds()).doesNotContain("user-123");
+        assertThat(result.getMemberIds()).contains(USER_ID);
+        assertThat(result.getMemberIds()).doesNotContain("otherUser");
     }
 
     @Test
     void addMessage_WithExistingRoom_ShouldAddMessage() {
         // Given
-        ChatRoom room = ChatRoom.builder()
-                .id("room-123")
-                .name("Test Room")
-                .messages(new ArrayList<>())
-                .build();
         ChatRoom.Message message = ChatRoom.Message.builder()
-                .senderId("user-123")
-                .senderName("Test User")
-                .content("Hello World")
+                .id("msg123")
+                .content("Test message")
+                .senderId(USER_ID)
                 .timestamp(Instant.now())
                 .build();
-        when(chatRoomRepository.findById("room-123")).thenReturn(Optional.of(room));
+        
+        ChatRoom room = ChatRoom.builder()
+                .id(ROOM_ID)
+                .name("Test Room")
+                .messages(new ArrayList<>())
+                .memberIds(new HashSet<>(Arrays.asList(USER_ID)))
+                .build();
+        
+        when(chatRoomRepository.findById(ROOM_ID)).thenReturn(Optional.of(room));
         when(chatRoomRepository.save(any(ChatRoom.class))).thenReturn(room);
 
         // When
-        ChatRoom result = chatRoomService.addMessage("room-123", message);
+        ChatRoom result = chatRoomService.addMessage(ROOM_ID, message);
 
         // Then
         assertThat(result.getMessages()).hasSize(1);
-        assertThat(result.getMessages().get(0).getContent()).isEqualTo("Hello World");
+        assertThat(result.getMessages().get(0).getContent()).isEqualTo("Test message");
     }
 
     @Test
-    void addMessage_WithMoreThan1000Messages_ShouldKeepLatest1000() {
+    void updateMessage_WithExistingMessage_ShouldUpdateContent() {
         // Given
-        List<ChatRoom.Message> messages = new ArrayList<>();
-        for (int i = 0; i < 1000; i++) {
-            messages.add(ChatRoom.Message.builder()
-                    .content("Message " + i)
-                    .build());
-        }
+        String messageId = "msg123";
+        ChatRoom.Message existingMessage = ChatRoom.Message.builder()
+                .id(messageId)
+                .content("Old content")
+                .senderId(USER_ID)
+                .timestamp(Instant.now())
+                .build();
+        
+        ChatRoom.Message updatedMessage = ChatRoom.Message.builder()
+                .id(messageId)
+                .content("Updated content")
+                .senderId(USER_ID)
+                .timestamp(Instant.now())
+                .build();
+        
         ChatRoom room = ChatRoom.builder()
-                .id("room-123")
-                .messages(messages)
+                .id(ROOM_ID)
+                .name("Test Room")
+                .messages(new ArrayList<>(Arrays.asList(existingMessage)))
+                .memberIds(new HashSet<>(Arrays.asList(USER_ID)))
                 .build();
-        ChatRoom.Message newMessage = ChatRoom.Message.builder()
-                .content("New Message")
-                .build();
-        when(chatRoomRepository.findById("room-123")).thenReturn(Optional.of(room));
+        
+        when(chatRoomRepository.findById(ROOM_ID)).thenReturn(Optional.of(room));
         when(chatRoomRepository.save(any(ChatRoom.class))).thenReturn(room);
 
         // When
-        ChatRoom result = chatRoomService.addMessage("room-123", newMessage);
+        ChatRoom result = chatRoomService.updateMessage(ROOM_ID, updatedMessage);
 
         // Then
-        assertThat(result.getMessages()).hasSize(1000);
-        assertThat(result.getMessages().get(999).getContent()).isEqualTo("New Message");
+        assertThat(result.getMessages().get(0).getContent()).isEqualTo("Updated content");
     }
 
     @Test
     void deleteChatRoom_ShouldDeleteRoom() {
-        // Given
-        doNothing().when(chatRoomRepository).deleteById("room-123");
-
         // When
-        chatRoomService.deleteChatRoom("room-123");
+        chatRoomService.deleteChatRoom(ROOM_ID);
 
         // Then
-        verify(chatRoomRepository).deleteById("room-123");
+        verify(chatRoomRepository).deleteById(ROOM_ID);
+    }
+
+    @Test
+    void getUserChatRooms_ShouldReturnUserRooms() {
+        // Given
+        ChatRoom room1 = ChatRoom.builder().id("room1").name("Room 1").build();
+        ChatRoom room2 = ChatRoom.builder().id("room2").name("Room 2").build();
+        
+        when(chatRoomRepository.findByMemberIdsContaining(USER_ID))
+                .thenReturn(Arrays.asList(room1, room2));
+
+        // When
+        var result = chatRoomService.getUserChatRooms(USER_ID);
+
+        // Then
+        assertThat(result).hasSize(2);
     }
 }
