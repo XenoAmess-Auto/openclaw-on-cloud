@@ -615,9 +615,13 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                 ? streamingToolCalls
                 : parseToolCalls(finalContent);
 
+        // 从内容中解析 Tool details 并填充到工具调用中
+        toolCalls = enrichToolCallsWithDetails(finalContent, toolCalls);
+
         log.info("finalizeStreamMessage: parsed {} tool calls for task {}", toolCalls.size(), task.getTaskId());
         if (!toolCalls.isEmpty()) {
-            toolCalls.forEach(tc -> log.info("  Tool: {} - {}", tc.getName(), tc.getDescription()));
+            toolCalls.forEach(tc -> log.info("  Tool: {} - result length={}", tc.getName(),
+                    tc.getResult() != null ? tc.getResult().length() : 0));
         }
 
         // 创建最终消息
@@ -751,6 +755,119 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
         }
 
         log.info("parseToolCalls: total {} tools found", toolCalls.size());
+        return toolCalls;
+    }
+
+    /**
+     * 从内容中解析 Tool details 并填充到工具调用中
+     */
+    private List<ChatRoom.Message.ToolCall> enrichToolCallsWithDetails(String content, List<ChatRoom.Message.ToolCall> toolCalls) {
+        if (content == null || toolCalls == null || toolCalls.isEmpty()) {
+            return toolCalls;
+        }
+
+        // 查找 **Tool details:** 部分
+        String detailsMarker = "**Tool details:**";
+        int detailsStart = content.indexOf(detailsMarker);
+
+        if (detailsStart == -1) {
+            // 尝试其他可能的格式
+            detailsMarker = "Tool details:";
+            detailsStart = content.indexOf(detailsMarker);
+        }
+
+        if (detailsStart == -1) {
+            log.debug("enrichToolCallsWithDetails: no Tool details section found");
+            return toolCalls;
+        }
+
+        log.info("enrichToolCallsWithDetails: found Tool details section at index {}", detailsStart);
+
+        // 提取 Tool details 部分（到下一个 ** 章节或文件结束）
+        int detailsContentStart = detailsStart + detailsMarker.length();
+        int nextSection = content.indexOf("**", detailsContentStart);
+        int detailsEnd = (nextSection != -1) ? nextSection : content.length();
+        String detailsSection = content.substring(detailsContentStart, detailsEnd).trim();
+
+        // 为每个工具调用查找对应的详细输出
+        for (ChatRoom.Message.ToolCall toolCall : toolCalls) {
+            String toolName = toolCall.getName();
+            if (toolName == null || toolName.isEmpty()) continue;
+
+            // 查找工具名开头的行
+            String toolHeader = "- `" + toolName + "`:";
+            int toolHeaderIndex = detailsSection.indexOf(toolHeader);
+
+            if (toolHeaderIndex == -1) {
+                // 尝试没有 ` 的格式
+                toolHeader = "- " + toolName + ":";
+                toolHeaderIndex = detailsSection.indexOf(toolHeader);
+            }
+
+            if (toolHeaderIndex == -1) {
+                // 尝试只匹配工具名（前面是换行或开头）
+                toolHeader = "`" + toolName + "`";
+                toolHeaderIndex = detailsSection.indexOf(toolHeader);
+            }
+
+            if (toolHeaderIndex == -1) continue;
+
+            // 找到工具内容开始的位置（工具名之后）
+            int contentStart = toolHeaderIndex + toolHeader.length();
+            // 跳过冒号和空白
+            while (contentStart < detailsSection.length() &&
+                   (detailsSection.charAt(contentStart) == ':' ||
+                    Character.isWhitespace(detailsSection.charAt(contentStart)))) {
+                contentStart++;
+            }
+
+            // 查找下一个工具的开始位置（以 - `tool_name` 或 - tool_name: 开头的行）
+            int nextToolIndex = -1;
+            String remaining = detailsSection.substring(contentStart);
+            String[] lines = remaining.split("\n");
+            StringBuilder toolResult = new StringBuilder();
+
+            for (int i = 0; i < lines.length; i++) {
+                String line = lines[i];
+                // 检查是否是下一个工具的开始
+                if (i > 0 && (line.startsWith("- `") ||
+                    (line.startsWith("- ") && line.contains(":")))) {
+                    // 这可能是下一个工具，停止收集
+                    boolean isNextTool = false;
+                    for (ChatRoom.Message.ToolCall otherTool : toolCalls) {
+                        if (otherTool != toolCall && otherTool.getName() != null) {
+                            if (line.contains(otherTool.getName())) {
+                                isNextTool = true;
+                                break;
+                            }
+                        }
+                    }
+                    if (isNextTool) break;
+                }
+                toolResult.append(line).append("\n");
+            }
+
+            String result = toolResult.toString().trim();
+            if (!result.isEmpty()) {
+                // 如果结果包含代码块，提取代码块内容
+                if (result.contains("```")) {
+                    int codeStart = result.indexOf("```");
+                    int codeEnd = result.indexOf("```", codeStart + 3);
+                    if (codeEnd > codeStart) {
+                        // 提取代码块内容（包括语言标识）
+                        String codeBlock = result.substring(codeStart, codeEnd + 3);
+                        toolCall.setResult(codeBlock);
+                    } else {
+                        toolCall.setResult(result);
+                    }
+                } else {
+                    toolCall.setResult(result);
+                }
+                log.info("enrichToolCallsWithDetails: set result for tool '{}' (length={})",
+                        toolName, result.length());
+            }
+        }
+
         return toolCalls;
     }
 

@@ -6,6 +6,7 @@ import com.ooc.repository.UserMentionSettingsRepository;
 import com.ooc.websocket.ChatWebSocketHandler;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -26,7 +27,7 @@ public class MentionService {
     private final UserMentionSettingsRepository settingsRepository;
     private final UserService userService;
     private final ChatRoomService chatRoomService;
-    private final ChatWebSocketHandler chatWebSocketHandler;
+    private final ObjectProvider<ChatWebSocketHandler> chatWebSocketHandlerProvider;
 
     // @username 或 @"复杂昵称" 的正则
     private static final Pattern MENTION_PATTERN = Pattern.compile("@([\\w\\u4e00-\\u9fa5]+|\"[^\"]+\")");
@@ -180,13 +181,16 @@ public class MentionService {
 
         // 发送实时 WebSocket 通知
         if (settings.isNotifyOnMention()) {
-            chatWebSocketHandler.sendMentionNotification(
+            ChatWebSocketHandler handler = chatWebSocketHandlerProvider.getIfAvailable();
+            if (handler != null) {
+                handler.sendMentionNotification(
                     mentionedUserId,
                     roomId,
                     roomName,
                     message.getSenderName(),
                     message.getContent()
-            );
+                );
+            }
         }
 
         // 推送通知（后续可接入 FCM/APNs）
