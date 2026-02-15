@@ -429,10 +429,11 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
             OpenClawPluginService.StreamEvent event,
             OpenClawTask task) {
 
-        log.info("Stream event for task {}: type={}, contentLength={}, totalBuilderLength={}",
+        log.info("Stream event for task {}: type={}, contentLength={}, toolName={}, totalBuilderLength={}",
                 task.getTaskId(),
                 event.type(),
                 event.content() != null ? event.content().length() : 0,
+                event.toolName(),
                 contentBuilder.get().length());
 
         if ("message".equals(event.type())) {
@@ -463,6 +464,47 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
             } else {
                 log.warn("Received empty content in message event for task {}", task.getTaskId());
             }
+        } else if ("tool_start".equals(event.type())) {
+            // 新工具调用开始
+            String toolId = event.messageId() != null ? event.messageId() : UUID.randomUUID().toString();
+            String toolName = event.toolName() != null ? event.toolName() : "unknown";
+            String toolInput = event.toolInput() != null ? event.toolInput() : "";
+
+            log.info("Tool call started for task {}: id={}, name={}", task.getTaskId(), toolId, toolName);
+
+            // 创建工具调用记录
+            ChatRoom.Message.ToolCall toolCall = ChatRoom.Message.ToolCall.builder()
+                    .id(toolId)
+                    .name(toolName)
+                    .description(toolInput)
+                    .status("running")
+                    .timestamp(Instant.now())
+                    .build();
+
+            // 添加到当前消息的工具调用列表
+            List<ChatRoom.Message.ToolCall> currentToolCalls = new ArrayList<>(streamingMessage.get().getToolCalls());
+            currentToolCalls.add(toolCall);
+
+            ChatRoom.Message updatedMsg = streamingMessage.get().toBuilder()
+                    .toolCalls(currentToolCalls)
+                    .isToolCall(true)
+                    .build();
+            streamingMessage.set(updatedMsg);
+
+            // 广播工具调用开始事件
+            broadcastToRoom(roomId, WebSocketMessage.builder()
+                    .type("tool_start")
+                    .message(ChatRoom.Message.builder()
+                            .id(messageId)
+                            .toolCalls(List.of(toolCall))
+                            .isToolCall(true)
+                            .build())
+                    .build());
+
+        } else if ("tool_delta".equals(event.type())) {
+            // 工具参数更新（可选，如果需要实时更新参数）
+            log.debug("Tool delta for task {}: {}", task.getTaskId(), event.content());
+
         } else if ("done".equals(event.type())) {
             // 流结束，在 onComplete 中处理
             log.info("Stream done event received for task {}", task.getTaskId());

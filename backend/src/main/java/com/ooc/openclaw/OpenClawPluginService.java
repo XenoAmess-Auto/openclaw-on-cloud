@@ -486,6 +486,30 @@ public class OpenClawPluginService {
                     JsonNode delta = firstChoice.path("delta");
                     content = delta.path("content").asText(null);
 
+                    // 检查工具调用
+                    JsonNode toolCalls = delta.path("tool_calls");
+                    if (toolCalls != null && !toolCalls.isMissingNode() && toolCalls.isArray() && toolCalls.size() > 0) {
+                        JsonNode firstToolCall = toolCalls.get(0);
+                        String toolId = firstToolCall.path("id").asText(null);
+                        String toolType = firstToolCall.path("type").asText("function");
+                        JsonNode function = firstToolCall.path("function");
+                        String toolName = function.path("name").asText(null);
+                        String toolArguments = function.path("arguments").asText(null);
+
+                        log.info("SSE tool_call detected: id={}, name={}, args={}",
+                                toolId, toolName,
+                                toolArguments != null ? toolArguments.substring(0, Math.min(100, toolArguments.length())) : "null");
+
+                        // 如果是新工具调用（有 id），发送 tool_start 事件
+                        if (toolId != null && !toolId.isEmpty() && toolName != null && !toolName.isEmpty()) {
+                            return Mono.just(new StreamEvent("tool_start", null, toolName, toolArguments, toolId, false));
+                        }
+                        // 如果是工具参数更新（没有 id，只有 arguments），发送 tool_delta 事件
+                        else if (toolArguments != null && !toolArguments.isEmpty()) {
+                            return Mono.just(new StreamEvent("tool_delta", toolArguments, null, null, null, false));
+                        }
+                    }
+
                     // 检查 finish_reason
                     String finishReason = firstChoice.path("finish_reason").asText(null);
                     boolean isDone = "stop".equals(finishReason) || "tool_calls".equals(finishReason);

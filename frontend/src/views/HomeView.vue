@@ -85,21 +85,53 @@
                   <div 
                     v-for="tool in (msg.toolCalls || [])" 
                     :key="tool.id" 
-                    :class="['tool-item', tool.status]"
+                    :class="['tool-item', tool.status || 'completed']"
                   >
                     <div class="tool-name">
+                      <span class="tool-icon-small">{{ getToolIcon(tool.name) }}</span>
                       <code>{{ tool.name }}</code>
-                      <span v-if="tool.status === 'running'" class="tool-status running">运行中...</span>
+                      <span v-if="tool.status === 'running'" class="tool-status running">
+                        <span class="tool-spinner"></span>
+                        运行中...
+                      </span>
                       <span v-else-if="tool.status === 'completed'" class="tool-status completed">✓ 完成</span>
-                      <span v-else-if="tool.status === 'error'" class="tool-status error">✗ 错误</span>
+                      <span v-else class="tool-status completed">✓ 完成</span>
                     </div>
-                    <div v-if="tool.description" class="tool-description">{{ tool.description }}</div>
+                    <div v-if="tool.description" class="tool-description">{{ formatToolDescription(tool.description) }}</div>
                     <div v-if="tool.result" class="tool-result">
                       <pre>{{ tool.result }}</pre>
                     </div>
                   </div>
                 </div>
                 <!-- 显示完整的回复内容 -->
+                <div class="message-content tool-call-content" v-html="renderContent(msg)"></div>
+              </div>
+              
+              <!-- OpenClaw 消息（可能包含工具调用） -->
+              <div 
+                v-else-if="msg.fromOpenClaw" 
+                class="tool-call-message openclaw-message"
+              >
+                <!-- 如果有工具调用，显示工具块 -->
+                <div v-if="msg.toolCalls?.length" class="tool-call-list">
+                  <div 
+                    v-for="tool in msg.toolCalls" 
+                    :key="tool.id" 
+                    :class="['tool-item', tool.status || 'completed']"
+                  >
+                    <div class="tool-name">
+                      <span class="tool-icon-small">{{ getToolIcon(tool.name) }}</span>
+                      <code>{{ tool.name }}</code>
+                      <span v-if="tool.status === 'running'" class="tool-status running">
+                        <span class="tool-spinner"></span>
+                        运行中...
+                      </span>
+                      <span v-else class="tool-status completed">✓ 完成</span>
+                    </div>
+                    <div v-if="tool.description" class="tool-description">{{ formatToolDescription(tool.description) }}</div>
+                  </div>
+                </div>
+                <!-- 显示回复内容 -->
                 <div class="message-content tool-call-content" v-html="renderContent(msg)"></div>
               </div>
               
@@ -110,7 +142,6 @@
                   'message',
                   {
                     'from-me': msg.senderId === authStore.user?.id,
-                    'from-openclaw': msg.fromOpenClaw,
                     'mentioned-me': isMentionedMe(msg)
                   }
                 ]"
@@ -852,6 +883,79 @@ function getInitials(name: string): string {
   return name.slice(0, 2).toUpperCase()
 }
 
+// 获取工具图标
+function getToolIcon(toolName: string): string {
+  const iconMap: Record<string, string> = {
+    'read': '📄',
+    'write': '✏️',
+    'edit': '🔧',
+    'exec': '⚡',
+    'web_search': '🔍',
+    'weather': '🌤️',
+    'browser': '🌐',
+    'canvas': '🎨',
+    'nodes': '📱',
+    'cron': '⏰',
+    'message': '💬',
+    'gateway': '🔌',
+    'sessions_spawn': '🚀',
+    'memory_search': '🧠',
+    'tts': '🔊',
+    'github': '🐙',
+    'gh': '🐙',
+  }
+  return iconMap[toolName] || '🔧'
+}
+
+// 格式化工具描述（截断过长的参数）
+function formatToolDescription(description: string): string {
+  if (!description) return ''
+  // 如果是 JSON 格式的参数，尝试解析并简化
+  try {
+    const parsed = JSON.parse(description)
+    // 提取关键信息
+    const keys = Object.keys(parsed)
+    if (keys.length === 0) return ''
+    
+    // 优先显示 file_path 或 command
+    if (parsed.file_path) {
+      const path = parsed.file_path as string
+      // 截断过长的路径
+      if (path.length > 60) {
+        return '...' + path.slice(-57)
+      }
+      return path
+    }
+    if (parsed.command) {
+      const cmd = parsed.command as string
+      if (cmd.length > 60) {
+        return cmd.slice(0, 57) + '...'
+      }
+      return cmd
+    }
+    if (parsed.query) {
+      return `搜索: ${parsed.query}`
+    }
+    
+    // 显示第一个非空值
+    for (const key of keys) {
+      const value = parsed[key]
+      if (value && typeof value === 'string') {
+        if (value.length > 60) {
+          return `${key}: ${value.slice(0, 57)}...`
+        }
+        return `${key}: ${value}`
+      }
+    }
+  } catch (e) {
+    // 不是 JSON，直接返回并截断
+    if (description.length > 80) {
+      return description.slice(0, 77) + '...'
+    }
+  }
+  return description
+}
+
 // 格式化正在输入提示
 function formatTypingUsers(users: string[]): string {
   if (users.length === 1) {
@@ -1442,11 +1546,22 @@ function isSameDay(d1: Date, d2: Date): boolean {
   border-radius: 8px;
   padding: 0.75rem;
   border-left: 3px solid var(--border-color);
+  transition: all 0.2s ease;
 }
 
 .tool-item.running {
   border-left-color: #3b82f6;
   background: rgba(59, 130, 246, 0.05);
+  animation: tool-pulse 2s infinite;
+}
+
+@keyframes tool-pulse {
+  0%, 100% {
+    background: rgba(59, 130, 246, 0.05);
+  }
+  50% {
+    background: rgba(59, 130, 246, 0.1);
+  }
 }
 
 .tool-item.completed {
@@ -1466,19 +1581,45 @@ function isSameDay(d1: Date, d2: Date): boolean {
   margin-bottom: 0.25rem;
 }
 
+.tool-icon-small {
+  font-size: 0.9rem;
+  margin-right: 0.25rem;
+}
+
 .tool-name code {
-  background: rgba(0, 0, 0, 0.1);
+  background: rgba(0, 0, 0, 0.08);
   padding: 0.125rem 0.375rem;
   border-radius: 4px;
   font-family: monospace;
   font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.tool-spinner {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 2px solid rgba(59, 130, 246, 0.3);
+  border-top-color: #3b82f6;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-right: 4px;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .tool-status {
   font-size: 0.75rem;
-  padding: 0.125rem 0.375rem;
+  padding: 0.125rem 0.5rem;
   border-radius: 4px;
   margin-left: auto;
+  display: flex;
+  align-items: center;
+  font-weight: 500;
 }
 
 .tool-status.running {
@@ -1500,6 +1641,8 @@ function isSameDay(d1: Date, d2: Date): boolean {
   font-size: 0.8125rem;
   color: var(--text-secondary);
   margin-top: 0.25rem;
+  font-family: monospace;
+  word-break: break-all;
 }
 
 .tool-result {
@@ -1517,6 +1660,20 @@ function isSameDay(d1: Date, d2: Date): boolean {
   margin: 0;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+/* OpenClaw 消息样式 */
+.openclaw-message {
+  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+  border: 1px solid #bae6fd;
+}
+
+.openclaw-message .tool-call-content {
+  border-top-color: #bae6fd;
+}
+
+.openclaw-message .tool-item {
+  background: rgba(255, 255, 255, 0.8);
 }
 
 /* 时间分隔线 */

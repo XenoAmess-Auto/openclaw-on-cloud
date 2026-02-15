@@ -250,6 +250,24 @@ export const useChatStore = defineStore('chat', () => {
           }
         }
         break
+      case 'tool_start':
+        // 工具调用开始 - 实时更新工具调用状态
+        {
+          const index = messages.value.findIndex(m => m.id === data.message.id)
+          if (index !== -1) {
+            const updatedMsg = { ...messages.value[index] }
+            // 合并工具调用列表
+            const existingToolCalls = updatedMsg.toolCalls || []
+            const newToolCalls = data.message.toolCalls || []
+            updatedMsg.toolCalls = [...existingToolCalls, ...newToolCalls]
+            updatedMsg.isToolCall = true
+            messages.value.splice(index, 1, updatedMsg)
+            console.log('[WebSocket] tool_start - added tool call:', newToolCalls[0]?.name)
+          } else {
+            console.warn('[WebSocket] tool_start - message not found:', data.message.id)
+          }
+        }
+        break
       case 'stream_end':
         // 流式消息结束 - 替换为完整消息
         {
