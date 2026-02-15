@@ -228,7 +228,9 @@ export const useChatStore = defineStore('chat', () => {
         payload.attachments = attachments.map(att => ({
           type: 'image',
           mimeType: att.mimeType,
-          content: att.dataUrl.replace(/^data:[^;]+;base64,/, '') // 移除 data URL 前缀，只保留 base64 内容
+          // 使用 URL 而不是 base64 内容
+          // 如果是 data URL，提取路径部分；否则直接使用 URL
+          url: att.dataUrl.startsWith('data:') ? null : att.dataUrl
         }))
       }
       ws.value.send(JSON.stringify(payload))

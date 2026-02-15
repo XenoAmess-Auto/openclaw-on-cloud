@@ -188,15 +188,32 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                 // 将类型转换为大写以保持一致性
                 String typeUpper = att.getType() != null ? att.getType().toUpperCase() : "FILE";
                 String mimeType = att.getMimeType() != null ? att.getMimeType() : "image/png";
-                log.info("Processing attachment: type={}, mimeType={}, contentLength={}",
-                        typeUpper, mimeType, att.getContent() != null ? att.getContent().length() : 0);
+                
+                String url;
+                long size;
+                
+                // 优先使用 URL（文件路径），如果没有则使用 base64 内容
+                if (att.getUrl() != null && !att.getUrl().isEmpty()) {
+                    url = att.getUrl();
+                    size = 0; // URL 方式不计算大小
+                    log.info("Processing attachment: type={}, mimeType={}, url={}", typeUpper, mimeType, url);
+                } else if (att.getContent() != null && !att.getContent().isEmpty()) {
+                    url = "data:" + mimeType + ";base64," + att.getContent();
+                    size = att.getContent().length() * 3 / 4;
+                    log.info("Processing attachment: type={}, mimeType={}, contentLength={}",
+                            typeUpper, mimeType, att.getContent().length());
+                } else {
+                    log.warn("Attachment has neither url nor content, skipping");
+                    continue;
+                }
+                
                 messageAttachments.add(ChatRoom.Message.Attachment.builder()
                         .id(UUID.randomUUID().toString())
                         .type(typeUpper)
                         .contentType(mimeType)
                         .name("image.png")
-                        .url("data:" + mimeType + ";base64," + att.getContent())
-                        .size(att.getContent() != null ? att.getContent().length() * 3 / 4 : 0)
+                        .url(url)
+                        .size(size)
                         .build());
             }
         }
@@ -920,5 +937,6 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
         private String type;      // 类型，如 "image"
         private String mimeType;  // MIME 类型，如 "image/png"
         private String content;   // Base64 编码的内容（不含 data URL 前缀）
+        private String url;       // 文件 URL（如 /uploads/xxx.png），优先使用
     }
 }

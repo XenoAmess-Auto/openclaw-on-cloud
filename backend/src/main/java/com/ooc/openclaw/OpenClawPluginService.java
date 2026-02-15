@@ -59,6 +59,44 @@ public class OpenClawPluginService {
     }
 
     /**
+     * 读取 /uploads/ 路径的文件并转为 data URL
+     */
+    private String readFileToDataUrl(String url, String mimeType) {
+        try {
+            // 提取文件名
+            String filename = url.substring(url.lastIndexOf("/") + 1);
+            String oocBasePath = System.getProperty("user.dir");
+            java.nio.file.Path filePath = java.nio.file.Paths.get(oocBasePath, "uploads", filename);
+            
+            if (!java.nio.file.Files.exists(filePath)) {
+                log.warn("File not found: {}", filePath);
+                return null;
+            }
+            
+            byte[] fileBytes = java.nio.file.Files.readAllBytes(filePath);
+            String base64 = java.util.Base64.getEncoder().encodeToString(fileBytes);
+            
+            // 使用提供的 mimeType，如果没有则根据文件扩展名推断
+            String contentType = mimeType;
+            if (contentType == null || contentType.isEmpty()) {
+                contentType = "image/png"; // 默认
+                if (filename.endsWith(".jpg") || filename.endsWith(".jpeg")) {
+                    contentType = "image/jpeg";
+                } else if (filename.endsWith(".gif")) {
+                    contentType = "image/gif";
+                } else if (filename.endsWith(".webp")) {
+                    contentType = "image/webp";
+                }
+            }
+            
+            return "data:" + contentType + ";base64," + base64;
+        } catch (Exception e) {
+            log.error("Failed to read file to data URL: {}", url, e);
+            return null;
+        }
+    }
+
+    /**
      * 发送消息到 OpenClaw 并获取回复（支持附件）
      */
     public Mono<OpenClawResponse> sendMessage(String sessionId, String message, 
@@ -81,17 +119,35 @@ public class OpenClawPluginService {
         // 添加图片附件内容块
         if (attachments != null && !attachments.isEmpty()) {
             for (ChatWebSocketHandler.Attachment att : attachments) {
-                if ("image".equals(att.getType()) && att.getContent() != null) {
-                    Map<String, Object> imageBlock = new HashMap<>();
-                    imageBlock.put("type", "image_url");
+                if ("image".equals(att.getType())) {
+                    String imageDataUrl = null;
                     
-                    Map<String, String> imageUrl = new HashMap<>();
-                    // 构造 data URL: data:image/png;base64,...
-                    String dataUrl = "data:" + att.getMimeType() + ";base64," + att.getContent();
-                    imageUrl.put("url", dataUrl);
+                    // 优先使用 URL（可能是 /uploads/xxx.png 或完整 URL）
+                    if (att.getUrl() != null && !att.getUrl().isEmpty()) {
+                        String url = att.getUrl();
+                        if (url.startsWith("/uploads/")) {
+                            // 需要读取文件并转为 base64
+                            imageDataUrl = readFileToDataUrl(url, att.getMimeType());
+                        } else if (url.startsWith("data:")) {
+                            // 已经是 data URL，直接使用
+                            imageDataUrl = url;
+                        } else {
+                            // 其他 URL，直接使用（假设是 http/https）
+                            imageDataUrl = url;
+                        }
+                    } else if (att.getContent() != null && !att.getContent().isEmpty()) {
+                        // 使用 base64 内容构造 data URL
+                        imageDataUrl = "data:" + att.getMimeType() + ";base64," + att.getContent();
+                    }
                     
-                    imageBlock.put("image_url", imageUrl);
-                    contentBlocks.add(imageBlock);
+                    if (imageDataUrl != null) {
+                        Map<String, Object> imageBlock = new HashMap<>();
+                        imageBlock.put("type", "image_url");
+                        Map<String, String> imageUrl = new HashMap<>();
+                        imageUrl.put("url", imageDataUrl);
+                        imageBlock.put("image_url", imageUrl);
+                        contentBlocks.add(imageBlock);
+                    }
                 }
             }
         }
@@ -311,14 +367,35 @@ public class OpenClawPluginService {
 
         if (attachments != null && !attachments.isEmpty()) {
             for (ChatWebSocketHandler.Attachment att : attachments) {
-                if ("image".equals(att.getType()) && att.getContent() != null) {
-                    Map<String, Object> imageBlock = new HashMap<>();
-                    imageBlock.put("type", "image_url");
-                    Map<String, String> imageUrl = new HashMap<>();
-                    String dataUrl = "data:" + att.getMimeType() + ";base64," + att.getContent();
-                    imageUrl.put("url", dataUrl);
-                    imageBlock.put("image_url", imageUrl);
-                    contentBlocks.add(imageBlock);
+                if ("image".equals(att.getType())) {
+                    String imageDataUrl = null;
+                    
+                    // 优先使用 URL（可能是 /uploads/xxx.png 或完整 URL）
+                    if (att.getUrl() != null && !att.getUrl().isEmpty()) {
+                        String url = att.getUrl();
+                        if (url.startsWith("/uploads/")) {
+                            // 需要读取文件并转为 base64
+                            imageDataUrl = readFileToDataUrl(url, att.getMimeType());
+                        } else if (url.startsWith("data:")) {
+                            // 已经是 data URL，直接使用
+                            imageDataUrl = url;
+                        } else {
+                            // 其他 URL，直接使用（假设是 http/https）
+                            imageDataUrl = url;
+                        }
+                    } else if (att.getContent() != null && !att.getContent().isEmpty()) {
+                        // 使用 base64 内容构造 data URL
+                        imageDataUrl = "data:" + att.getMimeType() + ";base64," + att.getContent();
+                    }
+                    
+                    if (imageDataUrl != null) {
+                        Map<String, Object> imageBlock = new HashMap<>();
+                        imageBlock.put("type", "image_url");
+                        Map<String, String> imageUrl = new HashMap<>();
+                        imageUrl.put("url", imageDataUrl);
+                        imageBlock.put("image_url", imageUrl);
+                        contentBlocks.add(imageBlock);
+                    }
                 }
             }
         }
