@@ -737,31 +737,110 @@ function isMentionedMe(msg: Message): boolean {
   return false
 }
 
-function renderContent(msg: Message) {
-  // 防御性处理：确保 content 不为 null/undefined
-  let content = msg.content || ''
+/**
+ * 解析内容为多个节（Section）
+ * 支持的分隔标记：
+ * - **Tools used:** 工具调用列表
+ * - **Tool details:** 工具详细输出
+ * - **Tools used:** / **Tool details:** 等标题行
+ */
+function parseContentSections(content: string): { type: string; title: string; content: string }[] {
+  if (!content) return []
 
-  // 处理转义字符：将字符串 \n \t 转为真正的换行和制表符
-  content = content.replace(/\\n/g, '\n').replace(/\\t/g, '\t')
+  const sections: { type: string; title: string; content: string }[] = []
 
-  // Step 1: 渲染 Markdown（不进行 @提及替换，DOMPurify 会清理特殊标记）
-  let htmlContent: string
+  // 定义节分隔标记
+  const sectionMarkers = [
+    { regex: /\*\*Tools used:\*\*/i, type: 'tools-used', title: 'Tools used' },
+    { regex: /\*\*Tool details:\*\*/i, type: 'tool-details', title: 'Tool details' }
+  ]
+
+  // 找到所有标记的位置
+  const markers: { index: number; type: string; title: string; length: number }[] = []
+
+  sectionMarkers.forEach(marker => {
+    const regex = new RegExp(marker.regex.source, 'gi')
+    let match
+    while ((match = regex.exec(content)) !== null) {
+      markers.push({
+        index: match.index,
+        type: marker.type,
+        title: marker.title,
+        length: match[0].length
+      })
+    }
+  })
+
+  // 按位置排序
+  markers.sort((a, b) => a.index - b.index)
+
+  // 如果没有找到任何标记，整个内容作为正文
+  if (markers.length === 0) {
+    return [{ type: 'main', title: '', content: content.trim() }]
+  }
+
+  // 第一个标记之前的内容是正文
+  const firstMarker = markers[0]
+  if (firstMarker.index > 0) {
+    const mainContent = content.substring(0, firstMarker.index).trim()
+    if (mainContent) {
+      sections.push({ type: 'main', title: '', content: mainContent })
+    }
+  }
+
+  // 处理每个标记对应的节
+  for (let i = 0; i < markers.length; i++) {
+    const marker = markers[i]
+    const nextMarker = markers[i + 1]
+    const endIndex = nextMarker ? nextMarker.index : content.length
+
+    // 提取节内容（不包括标记本身）
+    let sectionContent = content.substring(marker.index + marker.length, endIndex).trim()
+
+    // 移除节内容前面的换行符
+    sectionContent = sectionContent.replace(/^\n+/, '')
+
+    sections.push({
+      type: marker.type,
+      title: marker.title,
+      content: sectionContent
+    })
+  }
+
+  return sections
+}
+
+/**
+ * 渲染单个节的内容为 HTML
+ */
+function renderSectionHtml(sectionContent: string): string {
+  if (!sectionContent) return ''
+
   try {
-    console.log('[renderContent] Input content:', content.substring(0, 100))
-    // 使用 marked.marked 进行同步解析（marked v17+）
-    const parsed = (marked as any).marked?.(content) || marked.parse(content, { async: false })
-    htmlContent = String(parsed)
-    console.log('[renderContent] Parsed HTML:', htmlContent.substring(0, 100))
+    const parsed = (marked as any).marked?.(sectionContent) || marked.parse(sectionContent, { async: false })
+    let html = String(parsed)
 
-    // 安全检查：如果解析结果看起来像 Promise 或没有 HTML 标签，使用 fallback
-    if (htmlContent === '[object Promise]' || !htmlContent.includes('<')) {
-      console.warn('[renderContent] Invalid parsed content, using fallback')
+    if (html === '[object Promise]' || !html.includes('<')) {
       throw new Error('Invalid parsed content')
     }
+
+    // XSS 清理
+    html = DOMPurify.sanitize(html, {
+      ALLOWED_TAGS: [
+        'p', 'br', 'hr',
+        'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+        'ul', 'ol', 'li',
+        'strong', 'em', 'code', 'pre', 'blockquote',
+        'a', 'img', 'table', 'thead', 'tbody', 'tr', 'th', 'td',
+        'del', 'ins', 'sup', 'sub', 'div', 'span'
+      ],
+      ALLOWED_ATTR: ['href', 'src', 'alt', 'title', 'target', 'class']
+    })
+
+    return html
   } catch (e) {
-    console.error('[renderContent] Markdown parsing error:', e)
-    // 解析失败时的 fallback
-    htmlContent = content
+    // Fallback 渲染
+    return sectionContent
       .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
       .replace(/\*(.+?)\*/g, '<em>$1</em>')
       .replace(/`(.+?)`/g, '<code>$1</code>')
@@ -772,63 +851,106 @@ function renderContent(msg: Message) {
       .replace(/^- (.+)$/gm, '<li>$1</li>')
       .replace(/\n/g, '<br>')
   }
+}
 
-  // XSS 清理
-  htmlContent = DOMPurify.sanitize(htmlContent, {
-    ALLOWED_TAGS: [
-      'p', 'br', 'hr',
-      'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
-      'ul', 'ol', 'li',
-      'strong', 'em', 'code', 'pre', 'blockquote',
-      'a', 'img', 'table', 'thead', 'tbody', 'tr', 'th', 'td',
-      'del', 'ins', 'sup', 'sub'
-    ],
-    ALLOWED_ATTR: ['href', 'src', 'alt', 'title', 'target', 'class']
+function renderContent(msg: Message) {
+  // 防御性处理：确保 content 不为 null/undefined
+  let content = msg.content || ''
+
+  // 处理转义字符：将字符串 \n \t 转为真正的换行和制表符
+  content = content.replace(/\\n/g, '\n').replace(/\\t/g, '\t')
+
+  // 解析内容为多个节
+  const sections = parseContentSections(content)
+
+  // 如果没有分节（或只有一个节），使用原有渲染逻辑
+  if (sections.length <= 1) {
+    return renderSectionHtml(content) + renderAttachmentsHtml(msg)
+  }
+
+  // 有多个节，渲染为可折叠的分节样式
+  let html = '<div class="content-sections">'
+
+  sections.forEach((section, index) => {
+    const sectionId = `section-${msg.id}-${index}`
+
+    if (section.type === 'main') {
+      // 正文节直接显示
+      html += `<div class="content-section content-section-main">${renderSectionHtml(section.content)}</div>`
+    } else {
+      // 工具相关节使用折叠卡片
+      const isExpanded = index === 1 // 第一个非正文节默认展开
+      html += `
+        <div class="content-section content-section-collapsible ${isExpanded ? 'expanded' : ''}" data-section-id="${sectionId}">
+          <button class="section-header-btn" onclick="this.closest('.content-section-collapsible').classList.toggle('expanded')">
+            <span class="section-icon">${getSectionIcon(section.type)}</span>
+            <span class="section-title">${section.title}</span>
+            <span class="section-toggle">${isExpanded ? '▼' : '▶'}</span>
+          </button>
+          <div class="section-body">
+            ${renderSectionHtml(section.content)}
+          </div>
+        </div>
+      `
+    }
   })
 
-  // Step 2: 在 HTML 中查找并高亮 @提及（在 sanitization 之后进行）
-  // 使用正则匹配文本节点中的 @提及
-  htmlContent = htmlContent.replace(/(@所有人|@everyone|@all)/gi, '<span class="mention mention-all">$1</span>')
-  htmlContent = htmlContent.replace(/(@在线|@here)/gi, '<span class="mention mention-here">$1</span>')
-  htmlContent = htmlContent.replace(/(@openclaw)/gi, '<span class="mention">$1</span>')
-  
+  html += '</div>'
+
+  // Step 2: 在 HTML 中查找并高亮 @提及
+  html = html.replace(/(@所有人|@everyone|@all)/gi, '<span class="mention mention-all">$1</span>')
+  html = html.replace(/(@在线|@here)/gi, '<span class="mention mention-here">$1</span>')
+  html = html.replace(/(@openclaw)/gi, '<span class="mention">$1</span>')
+
   // 处理其他用户提及
   if (msg.mentions) {
     msg.mentions.forEach(mention => {
       const regex = new RegExp(`@${mention.userName}`, 'g')
-      htmlContent = htmlContent.replace(regex, `<span class="mention">@${mention.userName}</span>`)
+      html = html.replace(regex, `<span class="mention">@${mention.userName}</span>`)
     })
   }
 
-  // Step 4: 渲染附件图片
-  let attachmentsHtml = ''
-  if (msg.attachments && msg.attachments.length > 0) {
-    attachmentsHtml = '<div class="message-attachments">' +
-      msg.attachments.map(att => {
-        // 更可靠的图片检测：检查 type、contentType 或 url
-        const typeStr = (att.type || '').toUpperCase()
-        const contentTypeStr = (att.contentType || '').toLowerCase()
-        const urlStr = (att.url || '').toLowerCase()
+  return html + renderAttachmentsHtml(msg)
+}
 
-        // 多种方式检测图片
-        const isImage = typeStr === 'IMAGE' ||
-                       contentTypeStr.startsWith('image/') ||
-                       urlStr.startsWith('data:image/') ||
-                       urlStr.endsWith('.png') ||
-                       urlStr.endsWith('.jpg') ||
-                       urlStr.endsWith('.jpeg') ||
-                       urlStr.endsWith('.gif') ||
-                       urlStr.endsWith('.webp')
-
-        if (isImage) {
-          return `<img src="${att.url}" alt="${att.name || '图片'}" class="message-image" loading="lazy" />`
-        }
-        return `<a href="${att.url}" target="_blank" class="message-file">${att.name || '附件'}</a>`
-      }).join('') +
-      '</div>'
+/**
+ * 获取节图标
+ */
+function getSectionIcon(type: string): string {
+  switch (type) {
+    case 'tools-used': return '🛠️'
+    case 'tool-details': return '📋'
+    default: return '📄'
   }
+}
 
-  return htmlContent + attachmentsHtml
+/**
+ * 渲染附件 HTML
+ */
+function renderAttachmentsHtml(msg: Message): string {
+  if (!msg.attachments || msg.attachments.length === 0) return ''
+
+  return '<div class="message-attachments">' +
+    msg.attachments.map(att => {
+      const typeStr = (att.type || '').toUpperCase()
+      const contentTypeStr = (att.contentType || '').toLowerCase()
+      const urlStr = (att.url || '').toLowerCase()
+
+      const isImage = typeStr === 'IMAGE' ||
+                     contentTypeStr.startsWith('image/') ||
+                     urlStr.startsWith('data:image/') ||
+                     urlStr.endsWith('.png') ||
+                     urlStr.endsWith('.jpg') ||
+                     urlStr.endsWith('.jpeg') ||
+                     urlStr.endsWith('.gif') ||
+                     urlStr.endsWith('.webp')
+
+      if (isImage) {
+        return `<img src="${att.url}" alt="${att.name || '图片'}" class="message-image" loading="lazy" />`
+      }
+      return `<a href="${att.url}" target="_blank" class="message-file">${att.name || '附件'}</a>`
+    }).join('') +
+    '</div>'
 }
 
 function getInitials(name: string): string {
@@ -1297,6 +1419,152 @@ function isSameDay(d1: Date, d2: Date): boolean {
 .message.from-me .message-content :deep(.mention) {
   color: rgba(255,255,255,0.95);
   background: rgba(255,255,255,0.2);
+}
+
+/* ========== 分节内容样式 ========== */
+.message-content :deep(.content-sections) {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.message-content :deep(.content-section) {
+  width: 100%;
+}
+
+.message-content :deep(.content-section-main) {
+  /* 正文节不需要特殊样式 */
+}
+
+/* 可折叠节 */
+.message-content :deep(.content-section-collapsible) {
+  background: rgba(0, 0, 0, 0.03);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.message-content :deep(.section-header-btn) {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.625rem 0.875rem;
+  background: rgba(0, 0, 0, 0.04);
+  border: none;
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  text-align: left;
+  transition: background 0.2s;
+}
+
+.message-content :deep(.section-header-btn:hover) {
+  background: rgba(0, 0, 0, 0.07);
+}
+
+.message-content :deep(.section-icon) {
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+.message-content :deep(.section-title) {
+  flex: 1;
+}
+
+.message-content :deep(.section-toggle) {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+  transition: transform 0.2s;
+}
+
+.message-content :deep(.content-section-collapsible.expanded .section-toggle) {
+  transform: rotate(0deg);
+}
+
+.message-content :deep(.content-section-collapsible:not(.expanded) .section-toggle) {
+  transform: rotate(-90deg);
+}
+
+.message-content :deep(.section-body) {
+  font-size: 0.875rem;
+  line-height: 1.6;
+  max-height: 0;
+  padding: 0 0.875rem;
+  overflow: hidden;
+  transition: max-height 0.3s ease-out, padding 0.3s ease;
+}
+
+.message-content :deep(.content-section-collapsible.expanded .section-body) {
+  max-height: 2000px; /* 足够大的值 */
+  padding: 0.75rem 0.875rem;
+}
+
+.message-content :deep(.section-body pre) {
+  max-width: 100%;
+  width: 100%;
+  overflow-x: auto;
+  white-space: pre-wrap !important;
+  word-wrap: break-word !important;
+  word-break: break-all !important;
+  box-sizing: border-box;
+  background: rgba(0, 0, 0, 0.05);
+  padding: 0.75rem;
+  border-radius: 6px;
+  margin: 0.5rem 0;
+}
+
+.message-content :deep(.section-body pre code) {
+  white-space: pre-wrap !important;
+  word-wrap: break-word !important;
+  word-break: break-all !important;
+  display: block;
+  max-width: 100%;
+  background: transparent;
+  padding: 0;
+}
+
+.message-content :deep(.section-body ul),
+.message-content :deep(.section-body ol) {
+  margin: 0.5rem 0;
+  padding-left: 1.25rem;
+}
+
+.message-content :deep(.section-body li) {
+  margin: 0.25rem 0;
+}
+
+.message-content :deep(.section-body p) {
+  margin: 0.5rem 0;
+}
+
+.message-content :deep(.section-body p:first-child) {
+  margin-top: 0;
+}
+
+.message-content :deep(.section-body p:last-child) {
+  margin-bottom: 0;
+}
+
+/* 深色模式适配 */
+@media (prefers-color-scheme: dark) {
+  .message-content :deep(.content-section-collapsible) {
+    background: rgba(255, 255, 255, 0.03);
+  }
+
+  .message-content :deep(.section-header-btn) {
+    background: rgba(255, 255, 255, 0.05);
+  }
+
+  .message-content :deep(.section-header-btn:hover) {
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  .message-content :deep(.section-body pre) {
+    background: rgba(255, 255, 255, 0.08);
+  }
 }
 
 /* 消息中的图片 */

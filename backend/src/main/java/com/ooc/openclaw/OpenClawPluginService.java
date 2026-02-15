@@ -388,16 +388,15 @@ public class OpenClawPluginService {
                 .exchangeToFlux(response -> {
                     if (response.statusCode().is2xxSuccessful()) {
                         return response.bodyToFlux(String.class)
-                                .flatMap(line -> {
-                                    // SSE 响应可能包含多行 data: 事件，需要按行分割
-                                    return Flux.fromArray(line.split("\n"))
-                                            .map(String::trim)
-                                            .filter(l -> !l.isEmpty());
-                                })
-                                .doOnNext(line -> log.info("SSE raw line: {}", line.substring(0, Math.min(100, line.length()))))
+                                .doOnNext(line -> log.debug("SSE chunk: {}", line))
                                 .flatMap(this::parseSseLine)
-                                .doOnNext(event -> log.info("Parsed event: type={}, content={}", event.type(),
-                                        event.content() != null ? event.content().substring(0, Math.min(50, event.content().length())) : "null"))
+                                .doOnNext(event -> {
+                                    if ("message".equals(event.type()) && event.content() != null) {
+                                        log.debug("Parsed message event: {} chars", event.content().length());
+                                    } else {
+                                        log.debug("Parsed event: type={}", event.type());
+                                    }
+                                })
                                 .onErrorResume(error -> {
                                     // 区分真正的错误和正常的连接关闭
                                     String errorMsg = error.getMessage();
