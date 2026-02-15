@@ -119,7 +119,7 @@ public class OpenClawPluginService {
         // 添加图片附件内容块
         if (attachments != null && !attachments.isEmpty()) {
             for (ChatWebSocketHandler.Attachment att : attachments) {
-                if ("image".equals(att.getType())) {
+                if ("image".equalsIgnoreCase(att.getType())) {
                     String imageDataUrl = null;
                     
                     // 优先使用 URL（可能是 /uploads/xxx.png 或完整 URL）
@@ -367,7 +367,7 @@ public class OpenClawPluginService {
 
         if (attachments != null && !attachments.isEmpty()) {
             for (ChatWebSocketHandler.Attachment att : attachments) {
-                if ("image".equals(att.getType())) {
+                if ("image".equalsIgnoreCase(att.getType())) {
                     String imageDataUrl = null;
                     
                     // 优先使用 URL（可能是 /uploads/xxx.png 或完整 URL）
