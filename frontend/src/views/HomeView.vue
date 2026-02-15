@@ -63,7 +63,7 @@
             </div>
           </div>
           
-          <div class="message-container" ref="messageContainer" @scroll="handleScroll">
+          <div class="message-container" ref="messageContainer">
             <!-- 加载更多提示 -->
             <div v-if="chatStore.hasMoreMessages || chatStore.loadingMore" class="load-more-container">
               <button 
@@ -484,18 +484,32 @@ onMounted(async () => {
     await chatStore.connect(currentRoomId.value)
     loadRoomMembers()
   }
+  // 绑定滚动事件
+  messageContainer.value?.addEventListener('scroll', handleScroll)
 })
 
 onUnmounted(() => {
   chatStore.disconnect()
+  // 清理滚动事件和定时器
+  messageContainer.value?.removeEventListener('scroll', handleScroll)
+  if (scrollLoadDebounceTimer) {
+    clearTimeout(scrollLoadDebounceTimer)
+  }
 })
 
 // 监听路由变化，切换聊天室
 watch(() => route.params.roomId, async (newRoomId) => {
+  // 清理旧的事件绑定
+  messageContainer.value?.removeEventListener('scroll', handleScroll)
+  
   if (newRoomId) {
     chatStore.disconnect()
     await chatStore.connect(newRoomId as string)
     loadRoomMembers()
+    // 新容器创建后绑定滚动事件
+    nextTick(() => {
+      messageContainer.value?.addEventListener('scroll', handleScroll)
+    })
   } else {
     chatStore.disconnect()
     roomMembers.value = []
@@ -564,35 +578,71 @@ function scrollToBottom() {
 
 // 滚动位置记录，用于加载更多后保持位置
 let scrollHeightBeforeLoad = 0
+let scrollTopBeforeLoad = 0
+
+// 防抖定时器
+let scrollLoadDebounceTimer: number | null = null
 
 // 处理滚动事件 - 当滚动到顶部附近时自动加载更多
 function handleScroll() {
   if (!messageContainer.value) return
   
   const container = messageContainer.value
-  // 当距离顶部小于 50px 且有更多消息时自动加载
-  if (container.scrollTop < 50 && chatStore.hasMoreMessages && !chatStore.loadingMore) {
-    loadMoreMessages()
+  // 当距离顶部小于 100px 且有更多消息时自动加载（增加阈值减少误触发）
+  if (container.scrollTop < 100 && chatStore.hasMoreMessages && !chatStore.loadingMore) {
+    // 防抖：避免快速滚动时多次触发
+    if (scrollLoadDebounceTimer) {
+      clearTimeout(scrollLoadDebounceTimer)
+    }
+    scrollLoadDebounceTimer = window.setTimeout(() => {
+      // 再次检查条件，因为定时器期间状态可能变化
+      if (messageContainer.value && messageContainer.value.scrollTop < 100) {
+        loadMoreMessages()
+      }
+    }, 150)
   }
 }
 
 // 加载更多历史消息
 async function loadMoreMessages() {
-  if (!currentRoomId.value) return
+  if (!currentRoomId.value || !messageContainer.value) return
   
-  // 记录当前滚动高度
-  if (messageContainer.value) {
-    scrollHeightBeforeLoad = messageContainer.value.scrollHeight
-  }
+  // 记录当前滚动位置和高度
+  const container = messageContainer.value
+  scrollHeightBeforeLoad = container.scrollHeight
+  scrollTopBeforeLoad = container.scrollTop
+  
+  // 暂时禁用滚动事件监听，防止加载过程中触发更多请求
+  container.removeEventListener('scroll', handleScroll)
   
   const success = await chatStore.loadMoreMessages(currentRoomId.value)
   
-  if (success && messageContainer.value) {
-    // 加载完成后，保持滚动位置（防止跳到底部）
+  if (success) {
+    // 加载完成后，在 nextTick 后恢复滚动位置
     nextTick(() => {
-      const newScrollHeight = messageContainer.value!.scrollHeight
+      const newContainer = messageContainer.value
+      if (!newContainer) return
+      
+      const newScrollHeight = newContainer.scrollHeight
       const heightDiff = newScrollHeight - scrollHeightBeforeLoad
-      messageContainer.value!.scrollTop = heightDiff
+      
+      // 恢复滚动位置：保持在同一视觉位置（新内容高度 + 原来的 scrollTop）
+      newContainer.scrollTop = heightDiff + scrollTopBeforeLoad
+      
+      // 延迟重新绑定滚动事件，等待内容稳定（特别是图片加载）
+      setTimeout(() => {
+        newContainer.addEventListener('scroll', handleScroll)
+        // 再次微调滚动位置，处理图片加载后的高度变化
+        const finalHeightDiff = newContainer.scrollHeight - scrollHeightBeforeLoad
+        if (Math.abs(finalHeightDiff - heightDiff) > 10) {
+          newContainer.scrollTop = finalHeightDiff + scrollTopBeforeLoad
+        }
+      }, 100)
+    })
+  } else {
+    // 加载失败也重新绑定事件
+    nextTick(() => {
+      messageContainer.value?.addEventListener('scroll', handleScroll)
     })
   }
 }
