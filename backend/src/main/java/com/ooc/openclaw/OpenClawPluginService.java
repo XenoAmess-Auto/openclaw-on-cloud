@@ -13,6 +13,16 @@ import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+import javax.imageio.IIOImage;
+import javax.imageio.ImageIO;
+import javax.imageio.ImageWriteParam;
+import javax.imageio.ImageWriter;
+import javax.imageio.stream.ImageOutputStream;
+import java.awt.Graphics2D;
+import java.awt.Image;
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -21,6 +31,12 @@ import java.util.concurrent.ConcurrentHashMap;
 @Service
 @RequiredArgsConstructor
 public class OpenClawPluginService {
+
+    // 图片压缩配置 - 限制最大尺寸以减少请求体大小
+    private static final int MAX_IMAGE_WIDTH = 1024;
+    private static final int MAX_IMAGE_HEIGHT = 1024;
+    private static final int MAX_IMAGE_SIZE_MB = 1; // 压缩后最大 1MB
+    private static final float JPEG_QUALITY = 0.85f;
 
     private final OpenClawProperties properties;
     private final WebClient.Builder webClientBuilder;
@@ -82,6 +98,16 @@ public class OpenClawPluginService {
             }
             
             byte[] fileBytes = java.nio.file.Files.readAllBytes(filePath);
+            
+            // 压缩图片以减少请求体大小
+            byte[] compressedBytes = compressImageIfNeeded(fileBytes, mimeType);
+            if (compressedBytes != null) {
+                fileBytes = compressedBytes;
+                log.info("Compressed image from {} to {} bytes ({}% reduction)", 
+                    java.nio.file.Files.size(filePath), fileBytes.length,
+                    Math.round((1.0 - (double)fileBytes.length / java.nio.file.Files.size(filePath)) * 100));
+            }
+            
             String base64 = java.util.Base64.getEncoder().encodeToString(fileBytes);
             
             // 使用提供的 mimeType，如果没有则根据文件扩展名推断
@@ -105,6 +131,97 @@ public class OpenClawPluginService {
     }
 
     /**
+     * 压缩图片以限制文件大小
+     * @param imageBytes 原始图片字节
+     * @param mimeType MIME类型
+     * @return 压缩后的图片字节，如果不需要压缩则返回null
+     */
+    private byte[] compressImageIfNeeded(byte[] imageBytes, String mimeType) {
+        try {
+            // 如果已经小于1MB，不需要压缩
+            if (imageBytes.length <= MAX_IMAGE_SIZE_MB * 1024 * 1024) {
+                return null;
+            }
+            
+            log.info("Image size {} bytes exceeds limit, compressing...", imageBytes.length);
+            
+            // 读取图片
+            BufferedImage originalImage = ImageIO.read(new ByteArrayInputStream(imageBytes));
+            if (originalImage == null) {
+                log.warn("Could not read image for compression");
+                return null;
+            }
+            
+            int originalWidth = originalImage.getWidth();
+            int originalHeight = originalImage.getHeight();
+            
+            // 计算缩放比例
+            double scale = Math.min(
+                (double) MAX_IMAGE_WIDTH / originalWidth,
+                (double) MAX_IMAGE_HEIGHT / originalHeight
+            );
+            
+            // 如果图片尺寸在限制内且文件大小超限，尝试降低质量
+            if (scale >= 1.0) {
+                scale = 1.0;
+            }
+            
+            int newWidth = (int) (originalWidth * scale);
+            int newHeight = (int) (originalHeight * scale);
+            
+            log.info("Resizing image from {}x{} to {}x{}", originalWidth, originalHeight, newWidth, newHeight);
+            
+            // 创建缩放后的图片
+            Image scaledImage = originalImage.getScaledInstance(newWidth, newHeight, Image.SCALE_SMOOTH);
+            BufferedImage resizedImage = new BufferedImage(newWidth, newHeight, BufferedImage.TYPE_INT_RGB);
+            Graphics2D g2d = resizedImage.createGraphics();
+            g2d.drawImage(scaledImage, 0, 0, null);
+            g2d.dispose();
+            
+            // 使用JPEG格式压缩，调整质量
+            ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+            
+            // 尝试不同的压缩质量
+            float quality = JPEG_QUALITY;
+            byte[] result = null;
+            
+            while (quality >= 0.3f) {
+                outputStream.reset();
+                
+                ImageWriter writer = ImageIO.getImageWritersByFormatName("jpg").next();
+                ImageWriteParam param = writer.getDefaultWriteParam();
+                param.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);
+                param.setCompressionQuality(quality);
+                
+                try (ImageOutputStream ios = ImageIO.createImageOutputStream(outputStream)) {
+                    writer.setOutput(ios);
+                    writer.write(null, new IIOImage(resizedImage, null, null), param);
+                }
+                writer.dispose();
+                
+                result = outputStream.toByteArray();
+                
+                if (result.length <= MAX_IMAGE_SIZE_MB * 1024 * 1024) {
+                    log.info("Compressed image to {} bytes with quality {}", result.length, quality);
+                    break;
+                }
+                
+                quality -= 0.1f;
+            }
+            
+            if (result != null && result.length < imageBytes.length) {
+                return result;
+            }
+            
+            return null;
+            
+        } catch (Exception e) {
+            log.error("Failed to compress image", e);
+            return null;
+        }
+    }
+
+    /**
      * 从完整路径读取文件并转为 data URL
      */
     private String readFileToDataUrlFromFullPath(String fullPath, String mimeType) {
@@ -117,6 +234,15 @@ public class OpenClawPluginService {
             }
             
             byte[] fileBytes = java.nio.file.Files.readAllBytes(filePath);
+            
+            // 压缩图片以减少请求体大小
+            byte[] compressedBytes = compressImageIfNeeded(fileBytes, mimeType);
+            if (compressedBytes != null) {
+                fileBytes = compressedBytes;
+                log.info("Compressed image from {} to {} bytes", 
+                    java.nio.file.Files.size(filePath), fileBytes.length);
+            }
+            
             String base64 = java.util.Base64.getEncoder().encodeToString(fileBytes);
             
             // 提取文件名
