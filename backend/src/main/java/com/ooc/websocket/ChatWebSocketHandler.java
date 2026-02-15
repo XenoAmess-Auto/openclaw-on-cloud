@@ -505,8 +505,11 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                     .type("tool_start")
                     .message(ChatRoom.Message.builder()
                             .id(messageId)
+                            .senderId("openclaw")
+                            .senderName("OpenClaw")
                             .toolCalls(List.of(toolCall))
                             .isToolCall(true)
+                            .fromOpenClaw(true)
                             .build())
                     .build());
 
