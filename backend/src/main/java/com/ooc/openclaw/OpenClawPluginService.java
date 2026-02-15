@@ -67,10 +67,17 @@ public class OpenClawPluginService {
             // 提取文件名
             String filename = url.substring(url.lastIndexOf("/") + 1);
             String oocBasePath = System.getProperty("user.dir");
+            
+            // 首先尝试在当前工作目录下查找（向后兼容）
             java.nio.file.Path filePath = java.nio.file.Paths.get(oocBasePath, "uploads", filename);
             
+            // 如果找不到，尝试在父目录查找（后端运行在 backend/ 子目录的情况）
             if (!java.nio.file.Files.exists(filePath)) {
-                log.warn("File not found: {}", filePath);
+                filePath = java.nio.file.Paths.get(oocBasePath, "..", "uploads", filename).normalize();
+            }
+            
+            if (!java.nio.file.Files.exists(filePath)) {
+                log.warn("File not found: {} (tried {} and parent)", filename, oocBasePath);
                 return null;
             }
             
