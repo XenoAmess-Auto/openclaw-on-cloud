@@ -96,3 +96,4 @@ logs/
 tmp/
 temp/
 *.tmp
+uploads/
