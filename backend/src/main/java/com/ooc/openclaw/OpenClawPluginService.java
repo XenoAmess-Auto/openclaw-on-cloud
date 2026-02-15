@@ -554,80 +554,52 @@ public class OpenClawPluginService {
 
     /**
      * 发送消息到 OpenClaw 并获取流式回复（内部实现）
+     * 
+     * 注意：OpenClaw 的 OpenAI 兼容层只支持文本内容，不支持 image_url 类型的 content block。
+     * 所以我们将图片 URL 嵌入到文本中，让 OpenClaw 可以通过 web_fetch 工具获取图片内容。
      */
     private Flux<StreamEvent> sendMessageStreamInternal(String sessionId, String message,
             List<ChatWebSocketHandler.Attachment> attachments, String userId, String userName) {
 
         String processedMessage = convertUploadsPath(message);
-        List<Map<String, Object>> contentBlocks = new ArrayList<>();
-
-        if (processedMessage != null && !processedMessage.isEmpty()) {
-            Map<String, Object> textBlock = new HashMap<>();
-            textBlock.put("type", "text");
-            textBlock.put("text", userName + ": " + processedMessage);
-            contentBlocks.add(textBlock);
-        }
+        
+        // 构建纯文本消息（OpenClaw 的 OpenAI 兼容层只支持纯文本）
+        StringBuilder messageBuilder = new StringBuilder();
+        messageBuilder.append(userName).append(": ").append(processedMessage != null ? processedMessage : "");
 
         log.info("[sendMessageStream] Processing {} attachments", attachments != null ? attachments.size() : 0);
 
+        // 收集图片 URL，嵌入到文本中
+        List<String> imageUrls = new ArrayList<>();
         if (attachments != null && !attachments.isEmpty()) {
             for (ChatWebSocketHandler.Attachment att : attachments) {
                 log.info("[sendMessageStream] Attachment: type={}, mimeType={}, url={}",
                         att.getType(), att.getMimeType(), att.getUrl());
 
                 if ("image".equalsIgnoreCase(att.getType())) {
-                    String imageDataUrl = null;
-
-                    // 优先使用 URL（可能是 /uploads/xxx.png 或完整 URL）
-                    if (att.getUrl() != null && !att.getUrl().isEmpty()) {
-                        String url = att.getUrl();
-                        log.info("[sendMessageStream] Processing URL: {}", url);
-                        if (url.startsWith("/uploads/")) {
-                            // 相对路径 /uploads/xxx.png，需要读取文件并转为 base64
-                            imageDataUrl = readFileToDataUrl(url, att.getMimeType());
-                            log.info("[sendMessageStream] Converted to data URL: {}", imageDataUrl != null ? "success" : "failed");
-                        } else if (url.contains("/uploads/")) {
-                            // 完整路径包含 /uploads/，提取文件名并读取
-                            imageDataUrl = readFileToDataUrlFromFullPath(url, att.getMimeType());
-                            log.info("[sendMessageStream] Converted full path to data URL: {}", imageDataUrl != null ? "success" : "failed");
-                        } else if (url.startsWith("data:")) {
-                            // 已经是 data URL，直接使用
-                            imageDataUrl = url;
-                            log.info("[sendMessageStream] Using data URL directly");
-                        } else {
-                            // 其他 URL，直接使用（假设是 http/https）
-                            imageDataUrl = url;
-                            log.info("[sendMessageStream] Using external URL");
+                    String imageUrl = att.getUrl();
+                    if (imageUrl != null && !imageUrl.isEmpty()) {
+                        // 将相对路径转换为完整 URL
+                        if (imageUrl.startsWith("/uploads/")) {
+                            imageUrl = "http://localhost:8081" + imageUrl;
                         }
-                    } else if (att.getContent() != null && !att.getContent().isEmpty()) {
-                        // 使用 base64 内容构造 data URL
-                        imageDataUrl = "data:" + att.getMimeType() + ";base64," + att.getContent();
-                        log.info("[sendMessageStream] Using base64 content");
-                    } else {
-                        log.warn("[sendMessageStream] Attachment has neither URL nor content");
+                        imageUrls.add(imageUrl);
+                        log.info("[sendMessageStream] Added image URL: {}", imageUrl);
                     }
-
-                    if (imageDataUrl != null) {
-                        Map<String, Object> imageBlock = new HashMap<>();
-                        imageBlock.put("type", "image_url");
-                        Map<String, String> imageUrl = new HashMap<>();
-                        imageUrl.put("url", imageDataUrl);
-                        imageBlock.put("image_url", imageUrl);
-                        contentBlocks.add(imageBlock);
-                        log.info("[sendMessageStream] Added image block, total blocks: {}", contentBlocks.size());
-                    }
-                } else {
-                    log.warn("[sendMessageStream] Attachment type '{}' is not 'image', skipping", att.getType());
                 }
             }
         }
-
-        if (contentBlocks.isEmpty()) {
-            Map<String, Object> textBlock = new HashMap<>();
-            textBlock.put("type", "text");
-            textBlock.put("text", userName + ": [图片]");
-            contentBlocks.add(textBlock);
+        
+        // 如果有图片，在消息末尾添加图片 URL
+        if (!imageUrls.isEmpty()) {
+            messageBuilder.append("\n\n[图片附件]:\n");
+            for (int i = 0; i < imageUrls.size(); i++) {
+                messageBuilder.append("图片 ").append(i + 1).append(": ").append(imageUrls.get(i)).append("\n");
+            }
+            messageBuilder.append("\n请使用 web_fetch 工具获取图片内容并分析。");
         }
+
+        String finalMessage = messageBuilder.toString();
 
         List<Map<String, Object>> messages = new ArrayList<>();
         Map<String, Object> systemMsg = new HashMap<>();
@@ -655,13 +627,17 @@ public class OpenClawPluginService {
             For `exec` tool: include the command output.
             For `web_search` tool: include the search results.
             For `weather` queries: use exec with curl to wttr.in, e.g., `curl -s "wttr.in/LOCATION?format=3"`
+            For `web_fetch` tool: include the fetched content.
             For other tools: include the relevant output data.
+            
+            When user provides image URLs, use the `web_fetch` tool to fetch and analyze them.
             """);
         messages.add(systemMsg);
 
         Map<String, Object> userMsg = new HashMap<>();
         userMsg.put("role", "user");
-        userMsg.put("content", contentBlocks);
+        // 使用纯文本格式（OpenClaw 的 OpenAI 兼容层不支持 content blocks 数组）
+        userMsg.put("content", finalMessage);
         messages.add(userMsg);
 
         Map<String, Object> request = new HashMap<>();
@@ -673,10 +649,10 @@ public class OpenClawPluginService {
         // Enable tool calling - let OpenClaw use available tools
         request.put("tool_choice", "auto");
 
-        log.info("Sending streaming request to OpenClaw: sessionId={}, textLength={}, imageCount={}",
+        log.info("Sending streaming request to OpenClaw: sessionId={}, messageLength={}, imageCount={}",
                 sessionId,
-                processedMessage != null ? processedMessage.length() : 0,
-                attachments != null ? attachments.size() : 0);
+                finalMessage.length(),
+                imageUrls.size());
 
         return getWebClient().post()
                 .uri("/v1/chat/completions")
