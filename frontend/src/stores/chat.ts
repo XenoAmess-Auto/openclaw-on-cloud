@@ -225,13 +225,19 @@ export const useChatStore = defineStore('chat', () => {
       }
       // 如果有附件，添加到消息中
       if (attachments.length > 0) {
-        payload.attachments = attachments.map(att => ({
-          type: 'image',
-          mimeType: att.mimeType,
-          // 使用 URL 而不是 base64 内容
-          // 如果是 data URL，提取路径部分；否则直接使用 URL
-          url: att.dataUrl.startsWith('data:') ? null : att.dataUrl
-        }))
+        payload.attachments = attachments.map(att => {
+          let url = att.dataUrl
+          // 过滤掉无效的 URL（blob URL 或 data URL 不应该被发送到后端）
+          if (url.startsWith('blob:') || url.startsWith('data:')) {
+            console.warn('[sendMessage] Invalid URL detected, skipping:', url.substring(0, 50))
+            url = ''
+          }
+          return {
+            type: 'image',
+            mimeType: att.mimeType,
+            url: url
+          }
+        }).filter(att => att.url) // 过滤掉空 URL 的附件
       }
       ws.value.send(JSON.stringify(payload))
     }

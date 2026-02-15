@@ -690,8 +690,10 @@ async function handlePaste(event: ClipboardEvent) {
 
   try {
     for (const file of imageFiles) {
-      const previewUrl = URL.createObjectURL(file)
+      // 先上传文件到服务器
       const response = await fileApi.upload(file)
+      // 使用上传后返回的 URL（服务器可访问），而不是本地 blob URL
+      const previewUrl = response.data.url
       attachments.value.push({
         ...response.data,
         previewUrl
@@ -712,13 +714,14 @@ async function handleFileSelect(event: Event) {
   if (!files || files.length === 0) return
 
   isUploading.value = true
-  
+
   try {
     for (const file of Array.from(files)) {
-      // 创建预览URL（图片）
-      const previewUrl = file.type.startsWith('image/') ? URL.createObjectURL(file) : undefined
-      
+      // 先上传文件到服务器
       const response = await fileApi.upload(file)
+      // 使用上传后返回的 URL（服务器可访问），而不是本地 blob URL
+      const previewUrl = response.data.url
+
       attachments.value.push({
         ...response.data,
         previewUrl
