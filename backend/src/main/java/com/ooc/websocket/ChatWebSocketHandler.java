@@ -12,6 +12,7 @@ import com.ooc.service.OocSessionService;
 import com.ooc.service.UserService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.TextMessage;
@@ -28,15 +29,29 @@ import java.util.concurrent.atomic.AtomicReference;
 
 @Slf4j
 @Component
-@RequiredArgsConstructor
 public class ChatWebSocketHandler extends TextWebSocketHandler {
 
     private final ChatRoomService chatRoomService;
     private final OocSessionService oocSessionService;
     private final OpenClawPluginService openClawPluginService;
     private final UserService userService;
-    private final MentionService mentionService;
     private final ObjectMapper objectMapper;
+
+    @Lazy
+    @org.springframework.beans.factory.annotation.Autowired
+    private MentionService mentionService;
+
+    public ChatWebSocketHandler(ChatRoomService chatRoomService,
+                                OocSessionService oocSessionService,
+                                OpenClawPluginService openClawPluginService,
+                                UserService userService,
+                                ObjectMapper objectMapper) {
+        this.chatRoomService = chatRoomService;
+        this.oocSessionService = oocSessionService;
+        this.openClawPluginService = openClawPluginService;
+        this.userService = userService;
+        this.objectMapper = objectMapper;
+    }
 
     // roomId -> Set<WebSocketSession>
     private final Map<String, Set<WebSocketSession>> roomSessions = new ConcurrentHashMap<>();
