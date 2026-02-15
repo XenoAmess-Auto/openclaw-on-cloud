@@ -8,6 +8,8 @@ import org.junit.jupiter.api.io.TempDir;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -20,6 +22,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
 class FileStorageServiceTest {
 
     @Mock
@@ -38,7 +41,7 @@ class FileStorageServiceTest {
                 "image/jpeg", "image/png", "image/gif", "image/webp", 
                 "application/pdf", "text/plain"
         });
-        when(fileProperties.getMaxSize()).thenReturn(10);
+        when(fileProperties.getMaxSize()).thenReturn(10L);
         when(fileProperties.getUrlPrefix()).thenReturn("/uploads");
         
         // Trigger @PostConstruct
