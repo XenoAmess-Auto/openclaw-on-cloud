@@ -194,16 +194,44 @@ public class ChatRoomController {
     public ResponseEntity<List<ChatRoom.Message>> getChatRoomMessages(
             @PathVariable String roomId,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size) {
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(required = false) String before) {
         ChatRoom room = chatRoomService.getChatRoom(roomId)
                 .orElseThrow(() -> new RuntimeException("Chat room not found"));
 
         List<ChatRoom.Message> messages = room.getMessages();
-        if (messages == null) {
+        if (messages == null || messages.isEmpty()) {
             return ResponseEntity.ok(List.of());
         }
 
-        // 分页处理（简单的内存分页）
+        // 基于时间戳的游标分页
+        if (before != null && !before.isEmpty()) {
+            try {
+                Instant beforeTimestamp = Instant.parse(before);
+                // 找到第一个 timestamp < before 的消息索引
+                int startIndex = -1;
+                for (int i = messages.size() - 1; i >= 0; i--) {
+                    if (messages.get(i).getTimestamp() != null && 
+                        messages.get(i).getTimestamp().isBefore(beforeTimestamp)) {
+                        startIndex = i;
+                        break;
+                    }
+                }
+                
+                if (startIndex < 0) {
+                    return ResponseEntity.ok(List.of());
+                }
+                
+                // 从 startIndex 往前取 size 条（更旧的消息）
+                int endIndex = Math.max(0, startIndex - size + 1);
+                List<ChatRoom.Message> pagedMessages = messages.subList(endIndex, startIndex + 1);
+                return ResponseEntity.ok(pagedMessages);
+            } catch (Exception e) {
+                log.error("Failed to parse before timestamp: {}", before, e);
+            }
+        }
+
+        // 默认分页（简单的内存分页，返回最新的消息）
         int start = page * size;
         int end = Math.min(start + size, messages.size());
 

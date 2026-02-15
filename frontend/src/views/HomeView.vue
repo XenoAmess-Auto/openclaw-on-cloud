@@ -63,7 +63,22 @@
             </div>
           </div>
           
-          <div class="message-container" ref="messageContainer">
+          <div class="message-container" ref="messageContainer" @scroll="handleScroll">
+            <!-- 加载更多提示 -->
+            <div v-if="chatStore.hasMoreMessages || chatStore.loadingMore" class="load-more-container">
+              <button 
+                v-if="!chatStore.loadingMore" 
+                class="load-more-btn"
+                @click="loadMoreMessages"
+              >
+                ↑ 加载更多历史消息
+              </button>
+              <div v-else class="load-more-loading">
+                <span class="loading-spinner"></span>
+                加载中...
+              </div>
+            </div>
+            
             <template v-for="(msg, index) in chatStore.messages" :key="msg.id">
               <!-- 时间分隔线 -->
               <div v-if="shouldShowDateSeparator(index)" class="date-separator">
@@ -544,6 +559,41 @@ async function dismissRoom() {
 function scrollToBottom() {
   if (messageContainer.value) {
     messageContainer.value.scrollTop = messageContainer.value.scrollHeight
+  }
+}
+
+// 滚动位置记录，用于加载更多后保持位置
+let scrollHeightBeforeLoad = 0
+
+// 处理滚动事件 - 当滚动到顶部附近时自动加载更多
+function handleScroll() {
+  if (!messageContainer.value) return
+  
+  const container = messageContainer.value
+  // 当距离顶部小于 50px 且有更多消息时自动加载
+  if (container.scrollTop < 50 && chatStore.hasMoreMessages && !chatStore.loadingMore) {
+    loadMoreMessages()
+  }
+}
+
+// 加载更多历史消息
+async function loadMoreMessages() {
+  if (!currentRoomId.value) return
+  
+  // 记录当前滚动高度
+  if (messageContainer.value) {
+    scrollHeightBeforeLoad = messageContainer.value.scrollHeight
+  }
+  
+  const success = await chatStore.loadMoreMessages(currentRoomId.value)
+  
+  if (success && messageContainer.value) {
+    // 加载完成后，保持滚动位置（防止跳到底部）
+    nextTick(() => {
+      const newScrollHeight = messageContainer.value!.scrollHeight
+      const heightDiff = newScrollHeight - scrollHeightBeforeLoad
+      messageContainer.value!.scrollTop = heightDiff
+    })
   }
 }
 
@@ -1237,6 +1287,55 @@ function isSameDay(d1: Date, d2: Date): boolean {
   display: flex;
   flex-direction: column;
   gap: 1rem;
+}
+
+/* 加载更多消息 */
+.load-more-container {
+  display: flex;
+  justify-content: center;
+  padding: 0.5rem 0;
+  min-height: 40px;
+}
+
+.load-more-btn {
+  padding: 0.5rem 1rem;
+  background: var(--bg-color);
+  border: 1px solid var(--border-color);
+  border-radius: 20px;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.load-more-btn:hover {
+  background: var(--surface-color);
+  border-color: var(--primary-color);
+  color: var(--primary-color);
+}
+
+.load-more-loading {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.loading-spinner {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--border-color);
+  border-top-color: var(--primary-color);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .message {

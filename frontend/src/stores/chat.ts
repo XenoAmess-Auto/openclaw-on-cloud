@@ -21,6 +21,10 @@ export const useChatStore = defineStore('chat', () => {
   
   // 正在输入的用户
   const typingUsers = ref<Map<string, { name: string; timeout: number }>>(new Map())
+  
+  // 分页相关状态
+  const hasMoreMessages = ref(false)
+  const loadingMore = ref(false)
 
   // 重连相关状态
   const reconnectAttempts = ref(0)
@@ -222,6 +226,7 @@ export const useChatStore = defineStore('chat', () => {
     switch (data.type) {
       case 'history':
         messages.value = data.messages || []
+        hasMoreMessages.value = data.hasMore || false
         break
       case 'message':
         messages.value.push(data.message)
@@ -335,18 +340,62 @@ export const useChatStore = defineStore('chat', () => {
     return Array.from(typingUsers.value.values()).map(u => u.name)
   })
 
+  // 加载更多历史消息
+  async function loadMoreMessages(roomId: string): Promise<boolean> {
+    if (loadingMore.value || !hasMoreMessages.value || messages.value.length === 0) {
+      return false
+    }
+
+    loadingMore.value = true
+    try {
+      // 获取最早一条消息的时间戳作为游标
+      const oldestMessage = messages.value[0]
+      const before = oldestMessage?.timestamp
+
+      if (!before) {
+        return false
+      }
+
+      const response = await chatRoomApi.getMessages(roomId, { before, size: 10 })
+      const olderMessages = response.data || []
+
+      if (olderMessages.length === 0) {
+        hasMoreMessages.value = false
+        return false
+      }
+
+      // 将旧消息插入到消息列表开头
+      messages.value.unshift(...olderMessages)
+      
+      // 如果返回的消息少于请求的条数，说明没有更多了
+      if (olderMessages.length < 10) {
+        hasMoreMessages.value = false
+      }
+
+      return true
+    } catch (err) {
+      console.error('Failed to load more messages:', err)
+      return false
+    } finally {
+      loadingMore.value = false
+    }
+  }
+
   return {
     rooms,
     currentRoom,
     messages,
     loading,
     isConnected,
+    hasMoreMessages,
+    loadingMore,
     typingUserList,
     fetchRooms,
     createRoom,
     connect,
     disconnect,
     sendMessage,
-    sendTyping
+    sendTyping,
+    loadMoreMessages
   }
 })

@@ -1,9 +1,15 @@
 import apiClient from './client'
-import type { ChatRoom, MemberDto } from '@/types'
+import type { ChatRoom, MemberDto, Message } from '@/types'
 
 export interface CreateRoomRequest {
   name: string
   description?: string
+}
+
+export interface GetMessagesParams {
+  page?: number
+  size?: number
+  before?: string
 }
 
 export const chatRoomApi = {
@@ -29,5 +35,15 @@ export const chatRoomApi = {
     apiClient.delete<ChatRoom>(`/chat-rooms/${roomId}/members/${userId}`),
   
   deleteRoom: (roomId: string) => 
-    apiClient.delete(`/chat-rooms/${roomId}`)
+    apiClient.delete(`/chat-rooms/${roomId}`),
+
+  getMessages: (roomId: string, params?: GetMessagesParams) => {
+    const searchParams = new URLSearchParams()
+    if (params?.page !== undefined) searchParams.append('page', params.page.toString())
+    if (params?.size !== undefined) searchParams.append('size', params.size.toString())
+    if (params?.before) searchParams.append('before', params.before)
+    
+    const queryString = searchParams.toString()
+    return apiClient.get<Message[]>(`/chat-rooms/${roomId}/messages${queryString ? '?' + queryString : ''}`)
+  }
 }

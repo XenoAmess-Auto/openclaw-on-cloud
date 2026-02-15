@@ -123,12 +123,21 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
         userInfoMap.put(session, userInfo);
         roomSessions.computeIfAbsent(roomId, k -> ConcurrentHashMap.newKeySet()).add(session);
 
-        // 发送历史消息
+        // 发送历史消息（只发送最新的10条）
         chatRoomService.getChatRoom(roomId).ifPresent(room -> {
             try {
+                List<ChatRoom.Message> allMessages = room.getMessages();
+                List<ChatRoom.Message> recentMessages = allMessages;
+                
+                // 只取最近10条消息
+                if (allMessages != null && allMessages.size() > 10) {
+                    recentMessages = allMessages.subList(allMessages.size() - 10, allMessages.size());
+                }
+                
                 WebSocketMessage historyMsg = WebSocketMessage.builder()
                         .type("history")
-                        .messages(room.getMessages())
+                        .messages(recentMessages)
+                        .hasMore(allMessages != null && allMessages.size() > 10)
                         .build();
                 session.sendMessage(new TextMessage(objectMapper.writeValueAsString(historyMsg)));
             } catch (IOException e) {
@@ -896,6 +905,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
         private ChatRoom.Message message;
         private List<ChatRoom.Message> messages;
         private List<Attachment> attachments; // 附件列表
+        private Boolean hasMore; // 是否还有更多历史消息
     }
 
     // 附件数据传输对象
