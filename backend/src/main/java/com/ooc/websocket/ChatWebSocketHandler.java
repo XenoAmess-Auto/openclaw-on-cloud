@@ -683,10 +683,17 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
             toolsMarker = "Tools used:";
             toolsStart = content.indexOf(toolsMarker);
         }
+        
+        // 尝试中文格式
+        if (toolsStart == -1) {
+            toolsMarker = "**使用的工具：**";
+            toolsStart = content.indexOf(toolsMarker);
+        }
 
         if (toolsStart == -1) {
             log.debug("parseToolCalls: no Tools used section found in content of length {}", content.length());
-            return toolCalls;
+            // 尝试从内容中直接检测工具调用（备选方案）
+            return detectToolsFromContent(content);
         }
 
         log.info("parseToolCalls: found Tools used section at index {}", toolsStart);
@@ -706,13 +713,14 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
 
         String toolsSection = content.substring(toolsStart, Math.min(toolsEnd, content.length()));
         log.debug("parseToolCalls: tools section length = {}", toolsSection.length());
+        log.debug("parseToolCalls: tools section content: {}", toolsSection);
 
         String[] toolLines = toolsSection.split("\n");
 
         for (String line : toolLines) {
             line = line.trim();
             // 支持多种格式：- `tool_name`: description 或 - tool_name: description
-            if (line.startsWith("- ")) {
+            if (line.startsWith("- ") || line.startsWith("• ") || line.startsWith("* ")) {
                 String toolName = null;
                 String description = "";
 
@@ -730,10 +738,11 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                 } else {
                     // 尝试格式：- tool_name: description
                     int colonIndex = line.indexOf(":");
-                    if (colonIndex > 2) {  // "- ".length() == 2
-                        toolName = line.substring(2, colonIndex).trim();
-                        if (toolName.contains(" ")) {
-                            // 如果名称包含空格，可能不是有效的工具名
+                    int spaceAfterPrefix = line.indexOf(" ");
+                    if (spaceAfterPrefix > 0 && colonIndex > spaceAfterPrefix) {
+                        toolName = line.substring(spaceAfterPrefix + 1, colonIndex).trim();
+                        if (toolName.contains(" ") && !toolName.matches("[a-z_]+")) {
+                            // 如果名称包含空格且不像工具名，可能不是有效的工具名
                             toolName = null;
                         } else {
                             description = line.substring(colonIndex + 1).trim();
@@ -742,6 +751,8 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                 }
 
                 if (toolName != null && !toolName.isEmpty()) {
+                    // 清理工具名（去除可能的标点符号）
+                    toolName = toolName.replaceAll("[：:]$", "").trim();
                     log.info("parseToolCalls: found tool '{}' with description '{}'", toolName, description);
                     toolCalls.add(ChatRoom.Message.ToolCall.builder()
                             .id(UUID.randomUUID().toString())
@@ -755,6 +766,51 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
         }
 
         log.info("parseToolCalls: total {} tools found", toolCalls.size());
+        return toolCalls;
+    }
+    
+    /**
+     * 从内容中直接检测工具调用（备选方案）
+     * 用于当标准格式解析失败时
+     */
+    private List<ChatRoom.Message.ToolCall> detectToolsFromContent(String content) {
+        List<ChatRoom.Message.ToolCall> toolCalls = new ArrayList<>();
+        
+        // 常见工具名称列表
+        String[] commonTools = {
+            "memory_search", "read", "write", "edit", "exec", 
+            "web_search", "web_fetch", "weather", "browser", 
+            "canvas", "nodes", "cron", "message", "gateway",
+            "sessions_spawn", "tts", "github", "gh", "ordercli",
+            "openhue", "sonoscli", "eightctl", "gifgrep", "gemini",
+            "blogwatcher", "blucli", "healthcheck", "himalaya",
+            "nano-pdf", "obsidian", "openai-whisper", "skill-creator",
+            "songsee", "video-frames", "wacli", "1password", "gog"
+        };
+        
+        for (String toolName : commonTools) {
+            // 检查内容中是否包含工具名称（作为独立单词）
+            String pattern = "\\b" + toolName + "\\b";
+            if (content.toLowerCase().matches(".*" + pattern + ".*")) {
+                // 检查是否已经添加过
+                boolean alreadyAdded = toolCalls.stream()
+                    .anyMatch(tc -> tc.getName().equalsIgnoreCase(toolName));
+                if (!alreadyAdded) {
+                    log.info("detectToolsFromContent: detected tool '{}' from content", toolName);
+                    toolCalls.add(ChatRoom.Message.ToolCall.builder()
+                            .id(UUID.randomUUID().toString())
+                            .name(toolName)
+                            .description("从消息内容中检测到的工具调用")
+                            .status("completed")
+                            .timestamp(Instant.now())
+                            .build());
+                }
+            }
+        }
+        
+        if (!toolCalls.isEmpty()) {
+            log.info("detectToolsFromContent: total {} tools detected", toolCalls.size());
+        }
         return toolCalls;
     }
 
@@ -775,6 +831,28 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
             detailsMarker = "Tool details:";
             detailsStart = content.indexOf(detailsMarker);
         }
+        
+        // 尝试中文格式
+        if (detailsStart == -1) {
+            detailsMarker = "**工具详情：**";
+            detailsStart = content.indexOf(detailsMarker);
+        }
+        
+        // 尝试从 Tools used 部分之后查找工具详情
+        if (detailsStart == -1) {
+            // 如果没有明确的 Tool details 标记，尝试从 Tools used 部分之后解析
+            String toolsMarker = "**Tools used:**";
+            int toolsStart = content.indexOf(toolsMarker);
+            if (toolsStart == -1) {
+                toolsMarker = "Tools used:";
+                toolsStart = content.indexOf(toolsMarker);
+            }
+            if (toolsStart != -1) {
+                // 从 Tools used 之后开始查找工具详情
+                detailsStart = toolsStart;
+                detailsMarker = toolsMarker;
+            }
+        }
 
         if (detailsStart == -1) {
             log.debug("enrichToolCallsWithDetails: no Tool details section found");
@@ -788,32 +866,39 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
         int nextSection = content.indexOf("**", detailsContentStart);
         int detailsEnd = (nextSection != -1) ? nextSection : content.length();
         String detailsSection = content.substring(detailsContentStart, detailsEnd).trim();
+        
+        log.debug("enrichToolCallsWithDetails: details section length = {}", detailsSection.length());
 
         // 为每个工具调用查找对应的详细输出
         for (ChatRoom.Message.ToolCall toolCall : toolCalls) {
             String toolName = toolCall.getName();
             if (toolName == null || toolName.isEmpty()) continue;
 
-            // 查找工具名开头的行
-            String toolHeader = "- `" + toolName + "`:";
-            int toolHeaderIndex = detailsSection.indexOf(toolHeader);
-
-            if (toolHeaderIndex == -1) {
-                // 尝试没有 ` 的格式
-                toolHeader = "- " + toolName + ":";
-                toolHeaderIndex = detailsSection.indexOf(toolHeader);
-            }
-
-            if (toolHeaderIndex == -1) {
-                // 尝试只匹配工具名（前面是换行或开头）
-                toolHeader = "`" + toolName + "`";
-                toolHeaderIndex = detailsSection.indexOf(toolHeader);
+            // 查找工具名开头的行（支持多种格式）
+            String[] possibleHeaders = {
+                "- `" + toolName + "`:",
+                "- " + toolName + ":",
+                "• `" + toolName + "`:",
+                "• " + toolName + ":",
+                "`" + toolName + "`",
+                toolName + ":"
+            };
+            
+            int toolHeaderIndex = -1;
+            String matchedHeader = null;
+            
+            for (String header : possibleHeaders) {
+                toolHeaderIndex = detailsSection.indexOf(header);
+                if (toolHeaderIndex != -1) {
+                    matchedHeader = header;
+                    break;
+                }
             }
 
             if (toolHeaderIndex == -1) continue;
 
             // 找到工具内容开始的位置（工具名之后）
-            int contentStart = toolHeaderIndex + toolHeader.length();
+            int contentStart = toolHeaderIndex + matchedHeader.length();
             // 跳过冒号和空白
             while (contentStart < detailsSection.length() &&
                    (detailsSection.charAt(contentStart) == ':' ||
@@ -821,8 +906,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                 contentStart++;
             }
 
-            // 查找下一个工具的开始位置（以 - `tool_name` 或 - tool_name: 开头的行）
-            int nextToolIndex = -1;
+            // 查找下一个工具的开始位置
             String remaining = detailsSection.substring(contentStart);
             String[] lines = remaining.split("\n");
             StringBuilder toolResult = new StringBuilder();
@@ -830,13 +914,16 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
             for (int i = 0; i < lines.length; i++) {
                 String line = lines[i];
                 // 检查是否是下一个工具的开始
-                if (i > 0 && (line.startsWith("- `") ||
-                    (line.startsWith("- ") && line.contains(":")))) {
+                if (i > 0 && (line.startsWith("- `") || line.startsWith("- ") ||
+                    line.startsWith("• `") || line.startsWith("• "))) {
                     // 这可能是下一个工具，停止收集
                     boolean isNextTool = false;
                     for (ChatRoom.Message.ToolCall otherTool : toolCalls) {
                         if (otherTool != toolCall && otherTool.getName() != null) {
-                            if (line.contains(otherTool.getName())) {
+                            String otherName = otherTool.getName();
+                            if (line.contains("`" + otherName + "`") || 
+                                line.startsWith("- " + otherName + ":") ||
+                                line.startsWith("• " + otherName + ":")) {
                                 isNextTool = true;
                                 break;
                             }
@@ -844,7 +931,8 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                     }
                     if (isNextTool) break;
                 }
-                toolResult.append(line).append("\n");
+                if (i > 0) toolResult.append("\n");
+                toolResult.append(line);
             }
 
             String result = toolResult.toString().trim();
