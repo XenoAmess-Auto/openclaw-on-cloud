@@ -651,16 +651,15 @@ function sendMessage() {
   const content = inputMessage.value.trim()
   if ((!content && attachments.value.length === 0) || !chatStore.isConnected || !currentRoomId.value) return
 
-  // 构建消息内容
-  let messageContent = content
-  
-  // 添加附件信息到消息
-  if (attachments.value.length > 0) {
-    const attachmentUrls = attachments.value.map(a => `[文件: ${a.originalName}](${a.url})`).join('\n')
-    messageContent = content ? `${content}\n${attachmentUrls}` : attachmentUrls
-  }
+  // 转换附件格式以匹配 chatStore.sendMessage 期望的格式
+  const chatAttachments = attachments.value.map(att => ({
+    id: att.filename, // 使用文件名作为唯一标识
+    dataUrl: att.previewUrl || att.url, // 使用预览URL或上传后的URL
+    mimeType: att.contentType || 'image/png'
+  }))
 
-  chatStore.sendMessage(messageContent)
+  // 发送消息（内容 + 附件）
+  chatStore.sendMessage(content, chatAttachments)
   inputMessage.value = ''
   attachments.value = []
   showMentionList.value = false
