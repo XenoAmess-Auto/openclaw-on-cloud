@@ -339,6 +339,10 @@ public class OpenClawPluginService {
             IMPORTANT: When you use tools (read, write, edit, exec, web_search, weather, etc.), you MUST include detailed
             tool call information in your response in this format:
 
+            [Your actual response summary here - this will be shown to the user as the main message content]
+
+            ---
+
             **Tools used:**
             - `tool_name`: brief description
 
@@ -347,10 +351,6 @@ public class OpenClawPluginService {
               ```
               <tool output content here>
               ```
-
-            ---
-
-            Then provide your actual response summary above the separator.
 
             For `read` tool: include the file content you read.
             For `exec` tool: include the command output.
