@@ -41,6 +41,7 @@ public class OpenClawPluginService {
     private final OpenClawProperties properties;
     private final WebClient.Builder webClientBuilder;
     private final ObjectMapper objectMapper;
+    private final OpenClawWebSocketClient webSocketClient;
 
     // 内存中的会话状态管理
     private final Map<String, OpenClawSessionState> sessionStates = new ConcurrentHashMap<>();
@@ -435,15 +436,6 @@ public class OpenClawPluginService {
     }
 
     /**
-     * 关闭会话
-     */
-    public Mono<Void> closeSession(String sessionId) {
-        sessionStates.remove(sessionId);
-        log.info("Closed OpenClaw session: {}", sessionId);
-        return Mono.empty();
-    }
-
-    /**
      * 获取会话状态
      */
     public OpenClawSessionState getSessionState(String sessionId) {
@@ -481,6 +473,146 @@ public class OpenClawPluginService {
                 .doOnError(error -> log.error("Summarize error", error));
     }
 
+    /**
+     * 发送消息到 OpenClaw 并获取流式回复（内部实现）- WebSocket 版本
+     *
+     * 使用 WebSocket 协议连接到 OpenClaw Gateway，接收原生工具事件
+     */
+    private Flux<StreamEvent> sendMessageStreamInternal(String sessionId, String message,
+            List<ChatWebSocketHandler.Attachment> attachments, String userId, String userName) {
+
+        String processedMessage = convertUploadsPath(message);
+
+        // 构建消息
+        StringBuilder messageBuilder = new StringBuilder();
+        messageBuilder.append(userName).append(": ").append(processedMessage != null ? processedMessage : "");
+
+        log.info("[sendMessageStream] Processing {} attachments", attachments != null ? attachments.size() : 0);
+
+        // 收集图片 URL
+        List<String> imageUrls = new ArrayList<>();
+        if (attachments != null && !attachments.isEmpty()) {
+            for (ChatWebSocketHandler.Attachment att : attachments) {
+                log.info("[sendMessageStream] Attachment: type={}, mimeType={}, url={}",
+                        att.getType(), att.getMimeType(), att.getUrl());
+
+                if ("image".equalsIgnoreCase(att.getType())) {
+                    String imageUrl = att.getUrl();
+                    if (imageUrl != null && !imageUrl.isEmpty()) {
+                        // 将相对路径转换为完整 URL
+                        if (imageUrl.startsWith("/uploads/")) {
+                            imageUrl = "http://localhost:8081" + imageUrl;
+                        }
+                        imageUrls.add(imageUrl);
+                        log.info("[sendMessageStream] Added image URL: {}", imageUrl);
+                    }
+                }
+            }
+        }
+
+        // 如果有图片，在消息末尾添加图片 URL
+        if (!imageUrls.isEmpty()) {
+            messageBuilder.append("\n\n[图片附件]:\n");
+            for (int i = 0; i < imageUrls.size(); i++) {
+                messageBuilder.append("图片 ").append(i + 1).append(": ").append(imageUrls.get(i)).append("\n");
+            }
+            messageBuilder.append("\n请使用 web_fetch 工具获取图片内容并分析。");
+        }
+
+        String finalMessage = messageBuilder.toString();
+
+        // 构建系统提示词 - 简化版以减小消息大小
+        String systemPrompt = """
+            You are OpenClaw, a helpful AI assistant.
+
+            When you use tools, include tool call information in your response:
+            **Tools used:**
+            - `tool_name`: description
+            **Tool details:**
+            - `tool_name`:
+              ```
+              <tool output>
+              ```
+            """;
+
+        log.info("Sending WebSocket request to OpenClaw: sessionId={}, messageLength={}, imageCount={}",
+                sessionId, finalMessage.length(), imageUrls.size());
+
+        // 使用 WebSocket 客户端发送消息
+        return Flux.create(sink -> {
+            List<Map<String, Object>> contentBlocks = new ArrayList<>();
+
+            webSocketClient.sendMessage(sessionId, finalMessage, contentBlocks,
+                    new OpenClawWebSocketClient.ResponseHandler() {
+                        private final StringBuilder fullContent = new StringBuilder();
+
+                        @Override
+                        public void onTextChunk(String text) {
+                            fullContent.append(text);
+                            sink.next(new StreamEvent("message", text, null, null, null, false));
+                        }
+
+                        @Override
+                        public void onToolStart(String toolName, String toolCallId, Map<String, Object> args) {
+                            log.info("[OpenClaw WS] Tool start: {} ({})", toolName, toolCallId);
+                            sink.next(new StreamEvent("tool_start", null, toolName, args != null ? args.toString() : "", toolCallId, false));
+                        }
+
+                        @Override
+                        public void onToolUpdate(String toolCallId, Object partialResult) {
+                            // 可选：处理工具执行中的更新
+                            log.debug("[OpenClaw WS] Tool update: {}", toolCallId);
+                        }
+
+                        @Override
+                        public void onToolResult(String toolCallId, Object result, boolean isError) {
+                            log.info("[OpenClaw WS] Tool result: {} (error={})", toolCallId, isError);
+                            String resultStr = result != null ? result.toString() : "";
+                            sink.next(new StreamEvent("tool_result", resultStr, null, null, toolCallId, false));
+                        }
+
+                        @Override
+                        public void onComplete() {
+                            log.info("[OpenClaw WS] Stream completed");
+                            sink.next(new StreamEvent("done", null, null, null, null, true));
+                            sink.complete();
+
+                            // 更新会话状态
+                            updateSessionState(sessionId);
+                        }
+
+                        @Override
+                        public void onError(String error) {
+                            log.error("[OpenClaw WS] Stream error: {}", error);
+                            sink.next(new StreamEvent("error", error, null, null, null, true));
+                            sink.complete();
+                        }
+                    });
+        });
+    }
+
+    private void updateSessionState(String sessionId) {
+        OpenClawSessionState state = sessionStates.computeIfAbsent(sessionId, k ->
+            OpenClawSessionState.builder()
+                    .sessionId(sessionId)
+                    .instanceName("ooc-" + sessionId)
+                    .createdAt(Instant.now())
+                    .lastActivity(Instant.now())
+                    .build()
+        );
+        state.setLastActivity(Instant.now());
+    }
+
+    /**
+     * 关闭会话时同时关闭 WebSocket 连接
+     */
+    public Mono<Void> closeSession(String sessionId) {
+        sessionStates.remove(sessionId);
+        webSocketClient.closeSession(sessionId);
+        log.info("Closed OpenClaw session: {}", sessionId);
+        return Mono.empty();
+    }
+
     // OpenAI Chat Completion API 响应记录
     public record ChatCompletionResponse(
             String id,
@@ -495,12 +627,12 @@ public class OpenClawPluginService {
                 Message message,
                 String finish_reason
         ) {}
-        
+
         public record Message(
                 String role,
                 String content
         ) {}
-        
+
         public record Usage(
                 int prompt_tokens,
                 int completion_tokens,
@@ -550,315 +682,5 @@ public class OpenClawPluginService {
     public Flux<StreamEvent> sendMessageStream(String sessionId, String message,
             List<ChatWebSocketHandler.Attachment> attachments, String userId, String userName) {
         return sendMessageStreamInternal(sessionId, message, attachments, userId, userName);
-    }
-
-    /**
-     * 发送消息到 OpenClaw 并获取流式回复（内部实现）
-     * 
-     * 注意：OpenClaw 的 OpenAI 兼容层只支持文本内容，不支持 image_url 类型的 content block。
-     * 所以我们将图片 URL 嵌入到文本中，让 OpenClaw 可以通过 web_fetch 工具获取图片内容。
-     */
-    private Flux<StreamEvent> sendMessageStreamInternal(String sessionId, String message,
-            List<ChatWebSocketHandler.Attachment> attachments, String userId, String userName) {
-
-        String processedMessage = convertUploadsPath(message);
-        
-        // 构建纯文本消息（OpenClaw 的 OpenAI 兼容层只支持纯文本）
-        StringBuilder messageBuilder = new StringBuilder();
-        messageBuilder.append(userName).append(": ").append(processedMessage != null ? processedMessage : "");
-
-        log.info("[sendMessageStream] Processing {} attachments", attachments != null ? attachments.size() : 0);
-
-        // 收集图片 URL，嵌入到文本中
-        List<String> imageUrls = new ArrayList<>();
-        if (attachments != null && !attachments.isEmpty()) {
-            for (ChatWebSocketHandler.Attachment att : attachments) {
-                log.info("[sendMessageStream] Attachment: type={}, mimeType={}, url={}",
-                        att.getType(), att.getMimeType(), att.getUrl());
-
-                if ("image".equalsIgnoreCase(att.getType())) {
-                    String imageUrl = att.getUrl();
-                    if (imageUrl != null && !imageUrl.isEmpty()) {
-                        // 将相对路径转换为完整 URL
-                        if (imageUrl.startsWith("/uploads/")) {
-                            imageUrl = "http://localhost:8081" + imageUrl;
-                        }
-                        imageUrls.add(imageUrl);
-                        log.info("[sendMessageStream] Added image URL: {}", imageUrl);
-                    }
-                }
-            }
-        }
-        
-        // 如果有图片，在消息末尾添加图片 URL
-        if (!imageUrls.isEmpty()) {
-            messageBuilder.append("\n\n[图片附件]:\n");
-            for (int i = 0; i < imageUrls.size(); i++) {
-                messageBuilder.append("图片 ").append(i + 1).append(": ").append(imageUrls.get(i)).append("\n");
-            }
-            messageBuilder.append("\n请使用 web_fetch 工具获取图片内容并分析。");
-        }
-
-        String finalMessage = messageBuilder.toString();
-
-        List<Map<String, Object>> messages = new ArrayList<>();
-        Map<String, Object> systemMsg = new HashMap<>();
-        systemMsg.put("role", "system");
-        systemMsg.put("content", """
-            You are OpenClaw, a helpful AI assistant. Be concise and direct in your responses.
-
-            IMPORTANT: When you use tools (read, write, edit, exec, web_search, weather, etc.), you MUST include detailed
-            tool call information in your response in this format:
-
-            [Your actual response summary here - this will be shown to the user as the main message content]
-
-            ---
-
-            **Tools used:**
-            - `tool_name`: brief description
-
-            **Tool details:**
-            - `tool_name`:
-              ```
-              <tool output content here>
-              ```
-
-            For `read` tool: include the file content you read.
-            For `exec` tool: include the command output.
-            For `web_search` tool: include the search results.
-            For `weather` queries: use exec with curl to wttr.in, e.g., `curl -s "wttr.in/LOCATION?format=3"`
-            For `web_fetch` tool: include the fetched content.
-            For other tools: include the relevant output data.
-            
-            When user provides image URLs, use the `web_fetch` tool to fetch and analyze them.
-            """);
-        messages.add(systemMsg);
-
-        Map<String, Object> userMsg = new HashMap<>();
-        userMsg.put("role", "user");
-        // 使用纯文本格式（OpenClaw 的 OpenAI 兼容层不支持 content blocks 数组）
-        userMsg.put("content", finalMessage);
-        messages.add(userMsg);
-
-        Map<String, Object> request = new HashMap<>();
-        request.put("model", "openclaw:main");
-        request.put("messages", messages);
-        request.put("user", sessionId);
-        request.put("stream", true);
-        
-        // Enable tool calling - let OpenClaw use available tools
-        request.put("tool_choice", "auto");
-
-        log.info("Sending streaming request to OpenClaw: sessionId={}, messageLength={}, imageCount={}",
-                sessionId,
-                finalMessage.length(),
-                imageUrls.size());
-
-        return getWebClient().post()
-                .uri("/v1/chat/completions")
-                .header(HttpHeaders.AUTHORIZATION, "Bearer " + properties.getApiKey())
-                .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
-                .header(HttpHeaders.ACCEPT, "text/event-stream")
-                .bodyValue(request)
-                .exchangeToFlux(response -> {
-                    if (response.statusCode().is2xxSuccessful()) {
-                        return response.bodyToFlux(String.class)
-                                .flatMap(line -> {
-                                    // SSE 响应可能包含多行 data: 事件，需要按行分割
-                                    return Flux.fromArray(line.split("\n"))
-                                            .map(String::trim)
-                                            .filter(l -> !l.isEmpty());
-                                })
-                                .doOnNext(line -> log.info("SSE raw line: {}", line.substring(0, Math.min(100, line.length()))))
-                                .flatMap(this::parseSseLine)
-                                .doOnNext(event -> log.info("Parsed event: type={}, content={}", event.type(),
-                                        event.content() != null ? event.content().substring(0, Math.min(50, event.content().length())) : "null"))
-                                .onErrorResume(error -> {
-                                    // 区分真正的错误和正常的连接关闭
-                                    String errorMsg = error.getMessage();
-                                    boolean isPrematureClose = errorMsg != null && (
-                                        errorMsg.contains("premature close") ||
-                                        errorMsg.contains("connection reset") ||
-                                        errorMsg.contains("Connection reset") ||
-                                        errorMsg.contains("broken pipe") ||
-                                        errorMsg.contains("Broken pipe")
-                                    );
-                                    boolean isTimeout = errorMsg != null && (
-                                        errorMsg.contains("timeout") ||
-                                        errorMsg.contains("Timeout")
-                                    );
-
-                                    if (isPrematureClose) {
-                                        log.warn("SSE connection closed prematurely (client disconnected or network issue): {}", errorMsg);
-                                    } else if (isTimeout) {
-                                        log.warn("SSE stream timeout (OpenClaw tool execution may have taken too long): {}", errorMsg);
-                                    } else if (errorMsg == null) {
-                                        log.warn("SSE stream ended (possibly normal completion or null error)");
-                                    } else {
-                                        log.error("SSE stream error: {}", errorMsg, error);
-                                    }
-                                    return Flux.empty();
-                                });
-                    } else {
-                        return response.createError()
-                                .flatMapMany(error -> Flux.error(new RuntimeException("OpenClaw API error: " + response.statusCode())));
-                    }
-                })
-                .doOnNext(event -> {
-                    OpenClawSessionState state = sessionStates.computeIfAbsent(sessionId, k ->
-                        OpenClawSessionState.builder()
-                                .sessionId(sessionId)
-                                .instanceName("ooc-" + sessionId)
-                                .createdAt(Instant.now())
-                                .lastActivity(Instant.now())
-                                .build()
-                    );
-                    state.setLastActivity(Instant.now());
-                })
-                .doOnError(error -> log.error("OpenClaw streaming API error", error));
-    }
-
-    /**
-     * 解析 SSE 行
-     */
-    private Mono<StreamEvent> parseSseLine(String line) {
-        if (line == null || line.isEmpty()) {
-            return Mono.empty();
-        }
-
-        String data;
-        if (line.startsWith("data:")) {
-            data = line.substring(5).trim();
-        } else {
-            // 处理没有 data: 前缀的情况（bodyToFlux 可能已经处理了 SSE 格式）
-            data = line.trim();
-        }
-
-        if ("[DONE]".equals(data)) {
-            return Mono.just(new StreamEvent("done", null, null, null, null, true));
-        }
-
-        try {
-            JsonNode root = objectMapper.readTree(data);
-
-            // 调试日志 - 记录原始数据
-            log.info("SSE raw data: {}", data.substring(0, Math.min(200, data.length())));
-
-            if (root.has("error")) {
-                String errorMsg = root.path("error").path("message").asText("Unknown error");
-                log.error("SSE error: {}", errorMsg);
-                return Mono.just(new StreamEvent("error", errorMsg, null, null, null, true));
-            }
-
-            // 尝试多种可能的字段路径获取内容
-            String content = null;
-
-            // 1. 标准 OpenAI 格式: choices[0].delta.content
-            if (root.has("choices") && root.path("choices").isArray()) {
-                JsonNode choices = root.path("choices");
-                if (choices.size() > 0) {
-                    JsonNode firstChoice = choices.get(0);
-                    JsonNode delta = firstChoice.path("delta");
-                    content = delta.path("content").asText(null);
-
-                    // 检查工具调用
-                    JsonNode toolCalls = delta.path("tool_calls");
-                    if (toolCalls != null && !toolCalls.isMissingNode() && toolCalls.isArray() && toolCalls.size() > 0) {
-                        JsonNode firstToolCall = toolCalls.get(0);
-                        String toolId = firstToolCall.path("id").asText(null);
-                        String toolType = firstToolCall.path("type").asText("function");
-                        JsonNode function = firstToolCall.path("function");
-                        String toolName = function.path("name").asText(null);
-                        String toolArguments = function.path("arguments").asText(null);
-
-                        log.info("SSE tool_call detected: id={}, name={}, args={}",
-                                toolId, toolName,
-                                toolArguments != null ? toolArguments.substring(0, Math.min(100, toolArguments.length())) : "null");
-
-                        // 如果是新工具调用（有 id），发送 tool_start 事件
-                        if (toolId != null && !toolId.isEmpty() && toolName != null && !toolName.isEmpty()) {
-                            return Mono.just(new StreamEvent("tool_start", null, toolName, toolArguments, toolId, false));
-                        }
-                        // 如果是工具参数更新（没有 id，只有 arguments），发送 tool_delta 事件
-                        else if (toolArguments != null && !toolArguments.isEmpty()) {
-                            return Mono.just(new StreamEvent("tool_delta", toolArguments, null, null, null, false));
-                        }
-                    }
-
-                    // 检查 finish_reason
-                    String finishReason = firstChoice.path("finish_reason").asText(null);
-                    boolean isDone = "stop".equals(finishReason) || "tool_calls".equals(finishReason);
-
-                    log.info("SSE OpenAI format - content: {}, finishReason: {}",
-                            content != null ? "present(" + content.length() + " chars)" : "null",
-                            finishReason);
-
-                    if (content != null && !content.isEmpty()) {
-                        return Mono.just(new StreamEvent("message", content, null, null, null, isDone));
-                    } else if (isDone) {
-                        return Mono.just(new StreamEvent("done", null, null, null, null, true));
-                    }
-                }
-            }
-
-            // 2. 直接 content 字段 (有些格式直接在根级别)
-            if (content == null && root.has("content")) {
-                content = root.path("content").asText(null);
-                log.info("SSE root content format - content: {}",
-                        content != null ? "present(" + content.length() + " chars)" : "null");
-                if (content != null && !content.isEmpty()) {
-                    return Mono.just(new StreamEvent("message", content, null, null, null, false));
-                }
-            }
-
-            // 3. message 字段
-            if (content == null && root.has("message")) {
-                JsonNode message = root.path("message");
-                if (message.has("content")) {
-                    content = message.path("content").asText(null);
-                    log.info("SSE message.content format - content: {}",
-                            content != null ? "present(" + content.length() + " chars)" : "null");
-                    if (content != null && !content.isEmpty()) {
-                        return Mono.just(new StreamEvent("message", content, null, null, null, false));
-                    }
-                }
-            }
-
-            // 4. text 或 textDelta 字段
-            if (content == null && root.has("text")) {
-                content = root.path("text").asText(null);
-                log.info("SSE text format - content: {}",
-                        content != null ? "present(" + content.length() + " chars)" : "null");
-                if (content != null && !content.isEmpty()) {
-                    return Mono.just(new StreamEvent("message", content, null, null, null, false));
-                }
-            }
-
-            if (content == null && root.has("textDelta")) {
-                content = root.path("textDelta").asText(null);
-                log.info("SSE textDelta format - content: {}",
-                        content != null ? "present(" + content.length() + " chars)" : "null");
-                if (content != null && !content.isEmpty()) {
-                    return Mono.just(new StreamEvent("message", content, null, null, null, false));
-                }
-            }
-
-            // 5. 检查是否有 done/completed 标记
-            if (root.has("done") && root.path("done").asBoolean(false)) {
-                log.info("SSE done flag detected");
-                return Mono.just(new StreamEvent("done", null, null, null, null, true));
-            }
-
-            if (root.has("completed") && root.path("completed").asBoolean(false)) {
-                log.info("SSE completed flag detected");
-                return Mono.just(new StreamEvent("done", null, null, null, null, true));
-            }
-
-            log.warn("SSE unrecognized format: {}", data.substring(0, Math.min(200, data.length())));
-            return Mono.empty();
-        } catch (Exception e) {
-            log.warn("Failed to parse SSE line: {}", line.substring(0, Math.min(100, line.length())), e);
-            return Mono.empty();
-        }
     }
 }
