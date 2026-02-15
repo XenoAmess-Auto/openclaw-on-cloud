@@ -98,6 +98,44 @@ public class OpenClawPluginService {
     }
 
     /**
+     * 从完整路径读取文件并转为 data URL
+     */
+    private String readFileToDataUrlFromFullPath(String fullPath, String mimeType) {
+        try {
+            java.nio.file.Path filePath = java.nio.file.Paths.get(fullPath);
+            
+            if (!java.nio.file.Files.exists(filePath)) {
+                log.warn("File not found: {}", filePath);
+                return null;
+            }
+            
+            byte[] fileBytes = java.nio.file.Files.readAllBytes(filePath);
+            String base64 = java.util.Base64.getEncoder().encodeToString(fileBytes);
+            
+            // 提取文件名
+            String filename = filePath.getFileName().toString();
+            
+            // 使用提供的 mimeType，如果没有则根据文件扩展名推断
+            String contentType = mimeType;
+            if (contentType == null || contentType.isEmpty()) {
+                contentType = "image/png"; // 默认
+                if (filename.endsWith(".jpg") || filename.endsWith(".jpeg")) {
+                    contentType = "image/jpeg";
+                } else if (filename.endsWith(".gif")) {
+                    contentType = "image/gif";
+                } else if (filename.endsWith(".webp")) {
+                    contentType = "image/webp";
+                }
+            }
+            
+            return "data:" + contentType + ";base64," + base64;
+        } catch (Exception e) {
+            log.error("Failed to read file to data URL: {}", fullPath, e);
+            return null;
+        }
+    }
+
+    /**
      * 发送消息到 OpenClaw 并获取回复（支持附件）
      */
     public Mono<OpenClawResponse> sendMessage(String sessionId, String message, 
@@ -127,8 +165,11 @@ public class OpenClawPluginService {
                     if (att.getUrl() != null && !att.getUrl().isEmpty()) {
                         String url = att.getUrl();
                         if (url.startsWith("/uploads/")) {
-                            // 需要读取文件并转为 base64
+                            // 相对路径 /uploads/xxx.png，需要读取文件并转为 base64
                             imageDataUrl = readFileToDataUrl(url, att.getMimeType());
+                        } else if (url.contains("/uploads/")) {
+                            // 完整路径包含 /uploads/，提取文件名并读取
+                            imageDataUrl = readFileToDataUrlFromFullPath(url, att.getMimeType());
                         } else if (url.startsWith("data:")) {
                             // 已经是 data URL，直接使用
                             imageDataUrl = url;
@@ -409,9 +450,13 @@ public class OpenClawPluginService {
                         String url = att.getUrl();
                         log.info("[sendMessageStream] Processing URL: {}", url);
                         if (url.startsWith("/uploads/")) {
-                            // 需要读取文件并转为 base64
+                            // 相对路径 /uploads/xxx.png，需要读取文件并转为 base64
                             imageDataUrl = readFileToDataUrl(url, att.getMimeType());
                             log.info("[sendMessageStream] Converted to data URL: {}", imageDataUrl != null ? "success" : "failed");
+                        } else if (url.contains("/uploads/")) {
+                            // 完整路径包含 /uploads/，提取文件名并读取
+                            imageDataUrl = readFileToDataUrlFromFullPath(url, att.getMimeType());
+                            log.info("[sendMessageStream] Converted full path to data URL: {}", imageDataUrl != null ? "success" : "failed");
                         } else if (url.startsWith("data:")) {
                             // 已经是 data URL，直接使用
                             imageDataUrl = url;
