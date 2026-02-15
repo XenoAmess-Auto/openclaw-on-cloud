@@ -194,12 +194,15 @@
                 ref="inputRef"
                 :disabled="isUploading"
               />
-              <button
-                @click="sendMessage"
-                :disabled="(!inputMessage.trim() && attachments.length === 0) || !chatStore.isConnected || isUploading"
-              >
-                {{ isUploading ? '上传中...' : '发送' }}
-              </button>
+              <div class="send-section">
+                <button
+                  @click="sendMessage"
+                  :disabled="(!inputMessage.trim() && attachments.length === 0) || !chatStore.isConnected || isUploading"
+                >
+                  {{ isUploading ? '上传中...' : '发送' }}
+                </button>
+                <span v-if="sendDisabledReason" class="send-disabled-hint">{{ sendDisabledReason }}</span>
+              </div>
             </div>
             
             <!-- @提及下拉列表 -->
@@ -377,6 +380,20 @@ const isUploading = ref(false)
 // 是否为当前聊天室群主
 const isCreator = computed(() => {
   return chatStore.currentRoom?.creatorId === authStore.user?.username
+})
+
+// 计算不能发送的原因
+const sendDisabledReason = computed(() => {
+  if (isUploading.value) {
+    return '文件上传中，请稍候...'
+  }
+  if (!chatStore.isConnected) {
+    return '未连接到服务器，请检查网络'
+  }
+  if (!inputMessage.value.trim() && attachments.value.length === 0) {
+    return '请输入消息或上传附件'
+  }
+  return ''
 })
 
 // 所有可选项（快捷选项 + 用户）用于键盘导航
@@ -1722,6 +1739,22 @@ textarea:focus {
   cursor: not-allowed;
 }
 
+/* 发送区域 */
+.send-section {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.25rem;
+}
+
+.send-disabled-hint {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  max-width: 120px;
+  text-align: right;
+  line-height: 1.3;
+}
+
 /* @提及下拉列表 */
 .mention-list {
   position: absolute;
@@ -2249,6 +2282,11 @@ textarea:focus {
     border-radius: 10px;
   }
 
+  .send-disabled-hint {
+    font-size: 0.6875rem;
+    max-width: 100px;
+  }
+
   /* @提及列表 */
   .mention-list {
     left: 0.5rem;
@@ -2386,6 +2424,10 @@ textarea:focus {
   .input-wrapper button {
     padding: 0.5rem 0.875rem;
     height: 36px;
+  }
+
+  .send-disabled-hint {
+    display: none;
   }
 }
 
