@@ -3,6 +3,7 @@ package com.ooc.service;
 import com.ooc.entity.*;
 import com.ooc.repository.MentionRecordRepository;
 import com.ooc.repository.UserMentionSettingsRepository;
+import com.ooc.websocket.ChatWebSocketHandler;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -15,7 +16,6 @@ import java.time.ZoneId;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -26,6 +26,7 @@ public class MentionService {
     private final UserMentionSettingsRepository settingsRepository;
     private final UserService userService;
     private final ChatRoomService chatRoomService;
+    private final ChatWebSocketHandler chatWebSocketHandler;
 
     // @username 或 @"复杂昵称" 的正则
     private static final Pattern MENTION_PATTERN = Pattern.compile("@([\\w\\u4e00-\\u9fa5]+|\"[^\"]+\")");
@@ -177,8 +178,21 @@ public class MentionService {
         mentionRecordRepository.save(record);
         log.debug("Created mention record: {}", record.getId());
 
-        // TODO: 发送实时通知（WebSocket）
-        // TODO: 发送推送通知（如果用户开启）
+        // 发送实时 WebSocket 通知
+        if (settings.isNotifyOnMention()) {
+            chatWebSocketHandler.sendMentionNotification(
+                    mentionedUserId,
+                    roomId,
+                    roomName,
+                    message.getSenderName(),
+                    message.getContent()
+            );
+        }
+
+        // 推送通知（后续可接入 FCM/APNs）
+        if (settings.isPushNotification()) {
+            log.debug("Push notification would be sent to user {} (not implemented)", mentionedUserId);
+        }
     }
 
     private boolean isInDoNotDisturb(UserMentionSettings settings) {

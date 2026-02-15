@@ -44,6 +44,9 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
     // session -> userInfo
     private final Map<WebSocketSession, WebSocketUserInfo> userInfoMap = new ConcurrentHashMap<>();
 
+    // userId -> Set<WebSocketSession> (for notification)
+    private final Map<String, Set<WebSocketSession>> userSessions = new ConcurrentHashMap<>();
+
     // ========== 队列系统 ==========
     // roomId -> 任务队列
     private final Map<String, ConcurrentLinkedQueue<OpenClawTask>> roomTaskQueues = new ConcurrentHashMap<>();
@@ -82,6 +85,14 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
             Set<WebSocketSession> sessions = roomSessions.get(userInfo.getRoomId());
             if (sessions != null) {
                 sessions.remove(session);
+            }
+            // Remove from userSessions
+            Set<WebSocketSession> userSess = userSessions.get(userInfo.getUserId());
+            if (userSess != null) {
+                userSess.remove(session);
+                if (userSess.isEmpty()) {
+                    userSessions.remove(userInfo.getUserId());
+                }
             }
         }
     }
@@ -122,6 +133,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
 
         userInfoMap.put(session, userInfo);
         roomSessions.computeIfAbsent(roomId, k -> ConcurrentHashMap.newKeySet()).add(session);
+        userSessions.computeIfAbsent(userId, k -> ConcurrentHashMap.newKeySet()).add(session);
 
         // 发送历史消息（只发送最新的10条）
         chatRoomService.getChatRoom(roomId).ifPresent(room -> {
@@ -916,6 +928,58 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                 .type("message")
                 .message(message)
                 .build());
+    }
+
+    /**
+     * 发送通知到指定用户
+     */
+    public void sendNotification(String userId, NotificationMessage notification) {
+        Set<WebSocketSession> sessions = userSessions.get(userId);
+        if (sessions == null || sessions.isEmpty()) {
+            log.debug("User {} is not online, notification will not be sent", userId);
+            return;
+        }
+
+        try {
+            String payload = objectMapper.writeValueAsString(notification);
+            for (WebSocketSession s : sessions) {
+                if (s.isOpen()) {
+                    try {
+                        s.sendMessage(new TextMessage(payload));
+                        log.debug("Sent notification to user {}", userId);
+                    } catch (IOException e) {
+                        log.error("Failed to send notification to user {}", userId, e);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.error("Failed to serialize notification", e);
+        }
+    }
+
+    /**
+     * 发送提及通知
+     */
+    public void sendMentionNotification(String userId, String roomId, String roomName, String mentionerName, String messageContent) {
+        sendNotification(userId, NotificationMessage.builder()
+                .type("mention_notification")
+                .roomId(roomId)
+                .roomName(roomName)
+                .mentionerName(mentionerName)
+                .content(messageContent.substring(0, Math.min(200, messageContent.length())))
+                .timestamp(Instant.now())
+                .build());
+    }
+
+    @lombok.Data
+    @lombok.Builder
+    public static class NotificationMessage {
+        private String type;
+        private String roomId;
+        private String roomName;
+        private String mentionerName;
+        private String content;
+        private Instant timestamp;
     }
 
     @lombok.Data

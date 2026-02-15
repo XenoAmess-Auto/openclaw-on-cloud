@@ -3,6 +3,7 @@ package com.ooc.service;
 import com.ooc.entity.*;
 import com.ooc.repository.MentionRecordRepository;
 import com.ooc.repository.UserMentionSettingsRepository;
+import com.ooc.websocket.ChatWebSocketHandler;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -31,6 +32,9 @@ class MentionServiceTest {
 
     @Mock
     private ChatRoomService chatRoomService;
+
+    @Mock
+    private ChatWebSocketHandler chatWebSocketHandler;
 
     @InjectMocks
     private MentionService mentionService;
