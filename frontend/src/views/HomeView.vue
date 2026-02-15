@@ -1572,17 +1572,14 @@ function isSameDay(d1: Date, d2: Date): boolean {
 .message-content :deep(.message-image) {
   margin-top: 0.5rem;
   max-width: 100%;
-}
-
-.message-content :deep(.message-image img) {
-  max-width: 100%;
   max-height: 300px;
   border-radius: 8px;
   cursor: pointer;
   transition: transform 0.2s;
+  object-fit: contain;
 }
 
-.message-content :deep(.message-image img:hover) {
+.message-content :deep(.message-image:hover) {
   transform: scale(1.02);
 }
 

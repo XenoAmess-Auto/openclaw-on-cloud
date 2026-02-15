@@ -393,7 +393,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                                 () -> {
                                     log.info("OpenClaw streaming completed for task {}", taskId);
                                     task.setStatus(OpenClawTask.TaskStatus.COMPLETED);
-                                    finalizeStreamMessage(roomId, streamingMessageId, contentBuilder.get().toString(), task);
+                                    finalizeStreamMessage(roomId, streamingMessageId, contentBuilder.get().toString(), task, streamingMessage.get().getToolCalls());
                                     onTaskComplete(roomId);
                                 }
                         );
@@ -417,7 +417,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                                 () -> {
                                     log.info("OpenClaw streaming completed for task {}", taskId);
                                     task.setStatus(OpenClawTask.TaskStatus.COMPLETED);
-                                    finalizeStreamMessage(roomId, streamingMessageId, contentBuilder.get().toString(), task);
+                                    finalizeStreamMessage(roomId, streamingMessageId, contentBuilder.get().toString(), task, streamingMessage.get().getToolCalls());
                                     onTaskComplete(roomId);
                                 }
                         );
@@ -553,14 +553,15 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
     /**
      * 完成流式消息
      */
-    private void finalizeStreamMessage(String roomId, String messageId, String finalContent, OpenClawTask task) {
+    private void finalizeStreamMessage(String roomId, String messageId, String finalContent, OpenClawTask task, List<ChatRoom.Message.ToolCall> streamingToolCalls) {
         // 详细日志：记录内容状态以便诊断
-        log.info("Finalizing stream message for task {}: contentLength={}, isNull={}, isEmpty={}, isBlank={}",
+        log.info("Finalizing stream message for task {}: contentLength={}, isNull={}, isEmpty={}, isBlank={}, toolCalls={}",
                 task.getTaskId(),
                 finalContent != null ? finalContent.length() : -1,
                 finalContent == null,
                 finalContent != null ? finalContent.isEmpty() : "N/A",
-                finalContent != null ? finalContent.isBlank() : "N/A");
+                finalContent != null ? finalContent.isBlank() : "N/A",
+                streamingToolCalls != null ? streamingToolCalls.size() : 0);
 
         // 如果内容为空，设置为提示文本
         if (finalContent == null || finalContent.isEmpty()) {
@@ -571,8 +572,10 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
             log.warn("Stream message finalized with blank content (whitespace only) for task {}, content will be preserved", task.getTaskId());
         }
 
-        // 解析工具调用
-        List<ChatRoom.Message.ToolCall> toolCalls = parseToolCalls(finalContent);
+        // 使用流式过程中收集的工具调用（如果有），否则从内容解析
+        List<ChatRoom.Message.ToolCall> toolCalls = (streamingToolCalls != null && !streamingToolCalls.isEmpty())
+                ? streamingToolCalls
+                : parseToolCalls(finalContent);
 
         // 创建最终消息
         ChatRoom.Message finalMsg = ChatRoom.Message.builder()
