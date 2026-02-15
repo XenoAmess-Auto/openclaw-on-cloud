@@ -22,6 +22,12 @@ export const useChatStore = defineStore('chat', () => {
   // 正在输入的用户
   const typingUsers = ref<Map<string, { name: string; timeout: number }>>(new Map())
 
+  // 重连相关状态
+  const reconnectAttempts = ref(0)
+  const reconnectTimer = ref<number | null>(null)
+  const MAX_RECONNECT_ATTEMPTS = 5
+  const RECONNECT_DELAY = 3000 // 3秒后开始重连
+
   async function fetchRooms() {
     loading.value = true
     try {
@@ -38,23 +44,69 @@ export const useChatStore = defineStore('chat', () => {
     return response.data
   }
 
+  // 清理重连定时器
+  function clearReconnectTimer() {
+    if (reconnectTimer.value) {
+      clearTimeout(reconnectTimer.value)
+      reconnectTimer.value = null
+    }
+  }
+
+  // 执行重连
+  function scheduleReconnect(roomId: string) {
+    clearReconnectTimer()
+    
+    if (reconnectAttempts.value >= MAX_RECONNECT_ATTEMPTS) {
+      console.error('[WebSocket] Max reconnect attempts reached, giving up')
+      // 添加系统消息提示用户
+      messages.value.push({
+        id: `system-${Date.now()}`,
+        senderId: 'system',
+        senderName: '系统',
+        content: '连接已断开，请刷新页面重试',
+        timestamp: new Date().toISOString(),
+        openclawMentioned: false,
+        fromOpenClaw: false,
+        isSystem: true
+      } as Message)
+      return
+    }
+    
+    reconnectAttempts.value++
+    console.log(`[WebSocket] Scheduling reconnect attempt ${reconnectAttempts.value}/${MAX_RECONNECT_ATTEMPTS} in ${RECONNECT_DELAY}ms`)
+    
+    reconnectTimer.value = window.setTimeout(() => {
+      console.log(`[WebSocket] Executing reconnect attempt ${reconnectAttempts.value}`)
+      connect(roomId)
+    }, RECONNECT_DELAY)
+  }
+
   async function connect(roomId: string) {
     const authStore = useAuthStore()
     
-    let room = rooms.value.find(r => r.id === roomId)
-    
-    if (!room) {
-      try {
-        const response = await chatRoomApi.getRoom(roomId)
-        room = response.data
-      } catch (err) {
-        console.error('Failed to get room:', err)
-      }
+    // 如果已有连接，先断开
+    if (ws.value) {
+      ws.value.close()
+      ws.value = null
     }
     
-    currentRoom.value = room || null
-    messages.value = []
-    typingUsers.value.clear()
+    // 首次连接时（非重连）重置消息和状态
+    if (reconnectAttempts.value === 0) {
+      let room = rooms.value.find(r => r.id === roomId)
+      
+      if (!room) {
+        try {
+          const response = await chatRoomApi.getRoom(roomId)
+          room = response.data
+        } catch (err) {
+          console.error('Failed to get room:', err)
+        }
+      }
+      
+      currentRoom.value = room || null
+      messages.value = []
+      typingUsers.value.clear()
+    }
     
     // 构建 WebSocket URL：优先使用当前页面的 host，但处理端口问题
     // 开发环境：Vite 代理 /ws 到后端，使用相同 host:port
@@ -71,6 +123,26 @@ export const useChatStore = defineStore('chat', () => {
     socket.onopen = () => {
       console.log('[WebSocket] Connected to', wsUrl)
       isConnected.value = true
+      
+      // 连接成功，重置重连计数
+      if (reconnectAttempts.value > 0) {
+        console.log('[WebSocket] Reconnected successfully')
+        reconnectAttempts.value = 0
+        clearReconnectTimer()
+        
+        // 添加系统消息提示重连成功
+        messages.value.push({
+          id: `system-${Date.now()}`,
+          senderId: 'system',
+          senderName: '系统',
+          content: '已重新连接到服务器',
+          timestamp: new Date().toISOString(),
+          openclawMentioned: false,
+          fromOpenClaw: false,
+          isSystem: true
+        } as Message)
+      }
+      
       socket.send(JSON.stringify({
         type: 'join',
         roomId,
@@ -91,12 +163,26 @@ export const useChatStore = defineStore('chat', () => {
     socket.onclose = (event) => {
       console.log('[WebSocket] Closed:', event.code, event.reason)
       isConnected.value = false
+      ws.value = null
+      
+      // 如果是正常关闭（用户主动离开），不重连
+      // code 1000 = 正常关闭, code 1001 = 离开页面
+      if (event.code === 1000 || event.code === 1001) {
+        console.log('[WebSocket] Normal close, no reconnect needed')
+        return
+      }
+      
+      // 异常关闭，触发重连
+      scheduleReconnect(roomId)
     }
 
     ws.value = socket
   }
 
   function disconnect() {
+    clearReconnectTimer()
+    reconnectAttempts.value = 0
+    
     if (ws.value) {
       ws.value.close()
       ws.value = null
