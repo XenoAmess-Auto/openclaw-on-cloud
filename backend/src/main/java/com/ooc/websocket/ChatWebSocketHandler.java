@@ -176,6 +176,15 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                 hasAttachments ? attachments.size() : 0,
                 memberCount, mentionedOpenClaw, mentionResult.getMentions().size());
 
+        // 打印附件详情
+        if (hasAttachments) {
+            for (int i = 0; i < attachments.size(); i++) {
+                Attachment att = attachments.get(i);
+                log.info("Attachment [{}]: type={}, mimeType={}, url={}",
+                        i, att.getType(), att.getMimeType(), att.getUrl());
+            }
+        }
+
         // 获取房间名称
         String roomName = chatRoomService.getChatRoom(roomId)
                 .map(ChatRoom::getName)

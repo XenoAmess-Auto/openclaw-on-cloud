@@ -365,29 +365,41 @@ public class OpenClawPluginService {
             contentBlocks.add(textBlock);
         }
 
+        log.info("[sendMessageStream] Processing {} attachments", attachments != null ? attachments.size() : 0);
+
         if (attachments != null && !attachments.isEmpty()) {
             for (ChatWebSocketHandler.Attachment att : attachments) {
+                log.info("[sendMessageStream] Attachment: type={}, mimeType={}, url={}",
+                        att.getType(), att.getMimeType(), att.getUrl());
+
                 if ("image".equalsIgnoreCase(att.getType())) {
                     String imageDataUrl = null;
-                    
+
                     // 优先使用 URL（可能是 /uploads/xxx.png 或完整 URL）
                     if (att.getUrl() != null && !att.getUrl().isEmpty()) {
                         String url = att.getUrl();
+                        log.info("[sendMessageStream] Processing URL: {}", url);
                         if (url.startsWith("/uploads/")) {
                             // 需要读取文件并转为 base64
                             imageDataUrl = readFileToDataUrl(url, att.getMimeType());
+                            log.info("[sendMessageStream] Converted to data URL: {}", imageDataUrl != null ? "success" : "failed");
                         } else if (url.startsWith("data:")) {
                             // 已经是 data URL，直接使用
                             imageDataUrl = url;
+                            log.info("[sendMessageStream] Using data URL directly");
                         } else {
                             // 其他 URL，直接使用（假设是 http/https）
                             imageDataUrl = url;
+                            log.info("[sendMessageStream] Using external URL");
                         }
                     } else if (att.getContent() != null && !att.getContent().isEmpty()) {
                         // 使用 base64 内容构造 data URL
                         imageDataUrl = "data:" + att.getMimeType() + ";base64," + att.getContent();
+                        log.info("[sendMessageStream] Using base64 content");
+                    } else {
+                        log.warn("[sendMessageStream] Attachment has neither URL nor content");
                     }
-                    
+
                     if (imageDataUrl != null) {
                         Map<String, Object> imageBlock = new HashMap<>();
                         imageBlock.put("type", "image_url");
@@ -395,7 +407,10 @@ public class OpenClawPluginService {
                         imageUrl.put("url", imageDataUrl);
                         imageBlock.put("image_url", imageUrl);
                         contentBlocks.add(imageBlock);
+                        log.info("[sendMessageStream] Added image block, total blocks: {}", contentBlocks.size());
                     }
+                } else {
+                    log.warn("[sendMessageStream] Attachment type '{}' is not 'image', skipping", att.getType());
                 }
             }
         }
