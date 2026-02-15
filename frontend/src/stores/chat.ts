@@ -29,8 +29,8 @@ export const useChatStore = defineStore('chat', () => {
   // 重连相关状态
   const reconnectAttempts = ref(0)
   const reconnectTimer = ref<number | null>(null)
-  const MAX_RECONNECT_ATTEMPTS = 5
-  const RECONNECT_DELAY = 3000 // 3秒后开始重连
+  const MAX_RECONNECT_ATTEMPTS = 100 // 增加到100次（约8分钟），几乎无限重连
+  const RECONNECT_DELAY = 5000 // 5秒后开始重连
 
   async function fetchRooms() {
     loading.value = true
@@ -61,26 +61,37 @@ export const useChatStore = defineStore('chat', () => {
     clearReconnectTimer()
     
     if (reconnectAttempts.value >= MAX_RECONNECT_ATTEMPTS) {
-      console.error('[WebSocket] Max reconnect attempts reached, giving up')
-      // 添加系统消息提示用户
+      console.error('[WebSocket] Max reconnect attempts reached, continuing to retry...')
+      // 重置计数器继续尝试（几乎无限重连）
+      reconnectAttempts.value = 0
+    }
+    
+    reconnectAttempts.value++
+    const attemptNum = reconnectAttempts.value
+    console.log(`[WebSocket] Scheduling reconnect attempt ${attemptNum} in ${RECONNECT_DELAY}ms`)
+    
+    // 添加系统消息提示正在重连（只在第一次断开时显示）
+    const lastSystemMsg = messages.value[messages.value.length - 1]
+    const isRetryingMsg = lastSystemMsg?.senderId === 'system' && lastSystemMsg?.content?.includes('正在尝试重新连接')
+    
+    if (!isRetryingMsg) {
       messages.value.push({
         id: `system-${Date.now()}`,
         senderId: 'system',
         senderName: '系统',
-        content: '连接已断开，请刷新页面重试',
+        content: `未连接到服务器，正在尝试重新连接... (第${attemptNum}次)`,
         timestamp: new Date().toISOString(),
         openclawMentioned: false,
         fromOpenClaw: false,
         isSystem: true
       } as Message)
-      return
+    } else {
+      // 更新最后一条系统消息，显示重试次数
+      lastSystemMsg.content = `未连接到服务器，正在尝试重新连接... (第${attemptNum}次)`
     }
     
-    reconnectAttempts.value++
-    console.log(`[WebSocket] Scheduling reconnect attempt ${reconnectAttempts.value}/${MAX_RECONNECT_ATTEMPTS} in ${RECONNECT_DELAY}ms`)
-    
     reconnectTimer.value = window.setTimeout(() => {
-      console.log(`[WebSocket] Executing reconnect attempt ${reconnectAttempts.value}`)
+      console.log(`[WebSocket] Executing reconnect attempt ${attemptNum}`)
       connect(roomId)
     }, RECONNECT_DELAY)
   }
@@ -129,10 +140,19 @@ export const useChatStore = defineStore('chat', () => {
       isConnected.value = true
       
       // 连接成功，重置重连计数
-      if (reconnectAttempts.value > 0) {
+      const wasReconnecting = reconnectAttempts.value > 0
+      if (wasReconnecting) {
         console.log('[WebSocket] Reconnected successfully')
         reconnectAttempts.value = 0
         clearReconnectTimer()
+        
+        // 找到并移除"正在尝试重新连接"的系统消息
+        const retryMsgIndex = messages.value.findIndex(
+          m => m.senderId === 'system' && m.content?.includes('正在尝试重新连接')
+        )
+        if (retryMsgIndex !== -1) {
+          messages.value.splice(retryMsgIndex, 1)
+        }
         
         // 添加系统消息提示重连成功
         messages.value.push({
