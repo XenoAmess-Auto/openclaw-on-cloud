@@ -218,6 +218,7 @@ export const useChatStore = defineStore('chat', () => {
   }
 
   function sendMessage(content: string, attachments: Attachment[] = []) {
+    console.log('[chatStore.sendMessage] received attachments:', attachments.length, attachments)
     if (ws.value && ws.value.readyState === WebSocket.OPEN) {
       const payload: any = {
         type: 'message',
@@ -228,7 +229,7 @@ export const useChatStore = defineStore('chat', () => {
         payload.attachments = attachments.map(att => {
           let url = att.dataUrl
           // 过滤掉无效的 URL（blob URL 或 data URL 不应该被发送到后端）
-          if (url.startsWith('blob:') || url.startsWith('data:')) {
+          if (url?.startsWith('blob:') || url?.startsWith('data:')) {
             console.warn('[sendMessage] Invalid URL detected, skipping:', url.substring(0, 50))
             url = ''
           }
@@ -239,6 +240,7 @@ export const useChatStore = defineStore('chat', () => {
           }
         }).filter(att => att.url) // 过滤掉空 URL 的附件
       }
+      console.log('[chatStore.sendMessage] sending payload:', JSON.stringify(payload).substring(0, 500))
       ws.value.send(JSON.stringify(payload))
     }
   }

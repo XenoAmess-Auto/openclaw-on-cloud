@@ -649,6 +649,8 @@ async function loadMoreMessages() {
 
 function sendMessage() {
   const content = inputMessage.value.trim()
+  console.log('[sendMessage] attachments count:', attachments.value.length)
+  console.log('[sendMessage] attachments:', attachments.value.map(a => ({ filename: a.filename, url: a.url, previewUrl: a.previewUrl })))
   if ((!content && attachments.value.length === 0) || !chatStore.isConnected || !currentRoomId.value) return
 
   // 转换附件格式以匹配 chatStore.sendMessage 期望的格式
@@ -657,6 +659,7 @@ function sendMessage() {
     dataUrl: att.previewUrl || att.url, // 使用预览URL或上传后的URL
     mimeType: att.contentType || 'image/png'
   }))
+  console.log('[sendMessage] chatAttachments:', chatAttachments)
 
   // 发送消息（内容 + 附件）
   chatStore.sendMessage(content, chatAttachments)
