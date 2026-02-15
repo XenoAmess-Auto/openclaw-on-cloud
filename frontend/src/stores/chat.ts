@@ -62,9 +62,6 @@ export const useChatStore = defineStore('chat', () => {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
     const host = window.location.host
     
-    // 检查是否在开发环境（端口 3000 是 Vite 默认端口）
-    const isDev = host.includes(':3000')
-    
     // 构建 WebSocket URL
     // 开发环境：ws://localhost:3000/ws/chat（通过 Vite 代理）
     // 生产环境：直接使用 /ws 路径，让浏览器根据当前 host 连接
