@@ -1710,7 +1710,7 @@ function isSameDay(d1: Date, d2: Date): boolean {
   border-radius: 12px;
 }
 
-/* 工具调用消息 */
+/* 工具调用消息 - 使用 :deep() 确保 v-html 内容也能应用样式 */
 .tool-call-message {
   background: var(--bg-color);
   border: 1px solid var(--border-color);
@@ -1721,13 +1721,13 @@ function isSameDay(d1: Date, d2: Date): boolean {
   align-self: flex-start;
 }
 
-.tool-call-content {
+:deep(.tool-call-content) {
   margin-top: 0.75rem;
   padding-top: 0.75rem;
   border-top: 1px solid var(--border-color);
 }
 
-.tool-call-header {
+:deep(.tool-call-header) {
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -1736,7 +1736,7 @@ function isSameDay(d1: Date, d2: Date): boolean {
   border-bottom: 1px solid var(--border-color);
 }
 
-.tool-icon {
+:deep(.tool-icon) {
   font-size: 1.1rem;
   width: 28px;
   height: 28px;
@@ -1748,20 +1748,20 @@ function isSameDay(d1: Date, d2: Date): boolean {
   color: white;
 }
 
-.tool-title {
+:deep(.tool-title) {
   font-weight: 600;
   font-size: 0.875rem;
   color: var(--text-primary);
 }
 
-.tool-call-list {
+:deep(.tool-call-list) {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 0.75rem;
 }
 
 /* 工具卡片样式 */
-.tool-item {
+:deep(.tool-item) {
   background: white;
   border-radius: 12px;
   padding: 0;
@@ -1771,12 +1771,12 @@ function isSameDay(d1: Date, d2: Date): boolean {
   overflow: hidden;
 }
 
-.tool-item:hover {
+:deep(.tool-item:hover) {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   transform: translateY(-2px);
 }
 
-.tool-item.running {
+:deep(.tool-item.running) {
   border-color: #3b82f6;
   box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
   animation: tool-pulse 2s infinite;
@@ -1791,25 +1791,25 @@ function isSameDay(d1: Date, d2: Date): boolean {
   }
 }
 
-.tool-item.completed {
+:deep(.tool-item.completed) {
   border-color: #22c55e;
 }
 
-.tool-item.completed:hover {
+:deep(.tool-item.completed:hover) {
   box-shadow: 0 4px 12px rgba(34, 197, 94, 0.2);
 }
 
-.tool-item.error {
+:deep(.tool-item.error) {
   border-color: #ef4444;
   background: #fef2f2;
 }
 
-.tool-item.error:hover {
+:deep(.tool-item.error:hover) {
   box-shadow: 0 4px 12px rgba(239, 68, 68, 0.2);
 }
 
 /* 工具卡片头部 */
-.tool-item-header {
+:deep(.tool-item-header) {
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -1818,19 +1818,19 @@ function isSameDay(d1: Date, d2: Date): boolean {
   border-bottom: 1px solid #e5e7eb;
 }
 
-.tool-item.running .tool-item-header {
+:deep(.tool-item.running .tool-item-header) {
   background: linear-gradient(135deg, #eff6ff, #dbeafe);
 }
 
-.tool-item.completed .tool-item-header {
+:deep(.tool-item.completed .tool-item-header) {
   background: linear-gradient(135deg, #f0fdf4, #dcfce7);
 }
 
-.tool-item.error .tool-item-header {
+:deep(.tool-item.error .tool-item-header) {
   background: linear-gradient(135deg, #fef2f2, #fee2e2);
 }
 
-.tool-icon-small {
+:deep(.tool-icon-small) {
   font-size: 1rem;
   width: 24px;
   height: 24px;
@@ -1842,7 +1842,7 @@ function isSameDay(d1: Date, d2: Date): boolean {
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
 }
 
-.tool-name {
+:deep(.tool-name) {
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -1852,7 +1852,7 @@ function isSameDay(d1: Date, d2: Date): boolean {
   flex: 1;
 }
 
-.tool-name code {
+:deep(.tool-name code) {
   background: rgba(0, 0, 0, 0.08);
   padding: 0.125rem 0.375rem;
   border-radius: 4px;
@@ -1862,7 +1862,7 @@ function isSameDay(d1: Date, d2: Date): boolean {
   color: #4b5563;
 }
 
-.tool-status {
+:deep(.tool-status) {
   font-size: 0.75rem;
   padding: 0.25rem 0.5rem;
   border-radius: 20px;
@@ -1872,22 +1872,22 @@ function isSameDay(d1: Date, d2: Date): boolean {
   gap: 0.25rem;
 }
 
-.tool-status.running {
+:deep(.tool-status.running) {
   color: #3b82f6;
   background: rgba(59, 130, 246, 0.15);
 }
 
-.tool-status.completed {
+:deep(.tool-status.completed) {
   color: #22c55e;
   background: rgba(34, 197, 94, 0.15);
 }
 
-.tool-status.error {
+:deep(.tool-status.error) {
   color: #ef4444;
   background: rgba(239, 68, 68, 0.15);
 }
 
-.tool-spinner {
+:deep(.tool-spinner) {
   display: inline-block;
   width: 12px;
   height: 12px;
@@ -1897,25 +1897,24 @@ function isSameDay(d1: Date, d2: Date): boolean {
   animation: spin 1s linear infinite;
 }
 
-/* 工具卡片内容区 */
-.tool-item-body {
+:deep(.tool-item-body) {
   padding: 0.75rem;
 }
 
-.tool-description {
+:deep(.tool-description) {
   font-size: 0.8125rem;
   color: #6b7280;
   line-height: 1.5;
 }
 
-.tool-description :deep(.exec-command) {
+:deep(.tool-description .exec-command) {
   background: #f3f4f6;
   border-radius: 8px;
   padding: 0.5rem 0.75rem;
   margin-top: 0.25rem;
 }
 
-.tool-description :deep(.exec-label) {
+:deep(.tool-description .exec-label) {
   font-size: 0.7rem;
   color: #9ca3af;
   text-transform: uppercase;
@@ -1924,7 +1923,7 @@ function isSameDay(d1: Date, d2: Date): boolean {
   font-weight: 600;
 }
 
-.tool-description :deep(.exec-code) {
+:deep(.tool-description .exec-code) {
   font-family: 'SF Mono', 'Monaco', 'Menlo', 'Consolas', monospace;
   font-size: 0.8rem;
   color: #374151;
@@ -1934,8 +1933,7 @@ function isSameDay(d1: Date, d2: Date): boolean {
   line-height: 1.4;
 }
 
-/* 工具结果区 */
-.tool-result {
+:deep(.tool-result) {
   margin-top: 0.5rem;
   padding: 0.5rem 0.75rem;
   background: #f9fafb;
@@ -1943,7 +1941,7 @@ function isSameDay(d1: Date, d2: Date): boolean {
   border-left: 3px solid #d1d5db;
 }
 
-.tool-result pre {
+:deep(.tool-result pre) {
   font-family: 'SF Mono', monospace;
   font-size: 0.75rem;
   color: #4b5563;
@@ -1952,127 +1950,6 @@ function isSameDay(d1: Date, d2: Date): boolean {
   word-break: break-word;
   max-height: 200px;
   overflow-y: auto;
-}
-
-.tool-icon-small {
-  font-size: 0.9rem;
-  margin-right: 0.25rem;
-}
-
-.tool-name code {
-  background: rgba(0, 0, 0, 0.08);
-  padding: 0.125rem 0.375rem;
-  border-radius: 4px;
-  font-family: monospace;
-  font-size: 0.8rem;
-  font-weight: 600;
-}
-
-.tool-spinner {
-  display: inline-block;
-  width: 12px;
-  height: 12px;
-  border: 2px solid rgba(59, 130, 246, 0.3);
-  border-top-color: #3b82f6;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-  margin-right: 4px;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-.tool-status {
-  font-size: 0.75rem;
-  padding: 0.125rem 0.5rem;
-  border-radius: 4px;
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-  font-weight: 500;
-}
-
-.tool-status.running {
-  color: #3b82f6;
-  background: rgba(59, 130, 246, 0.1);
-}
-
-.tool-status.completed {
-  color: #22c55e;
-  background: rgba(34, 197, 94, 0.1);
-}
-
-.tool-status.error {
-  color: #ef4444;
-  background: rgba(239, 68, 68, 0.1);
-}
-
-.tool-description {
-  font-size: 0.8125rem;
-  color: var(--text-secondary);
-  margin-top: 0.25rem;
-  font-family: monospace;
-  word-break: break-all;
-}
-
-.tool-result {
-  margin-top: 0.5rem;
-  padding: 0.5rem;
-  background: rgba(0, 0, 0, 0.05);
-  border-radius: 6px;
-  overflow-x: auto;
-}
-
-.tool-result pre {
-  font-family: monospace;
-  font-size: 0.75rem;
-  color: var(--text-secondary);
-  margin: 0;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-/* Exec 命令样式 */
-.exec-command {
-  background: rgba(0, 0, 0, 0.06);
-  border-radius: 8px;
-  padding: 0.5rem 0.75rem;
-  margin-top: 0.25rem;
-}
-
-.exec-label {
-  font-size: 0.7rem;
-  color: var(--text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin-bottom: 0.25rem;
-  font-weight: 600;
-}
-
-.exec-code {
-  font-family: 'SF Mono', 'Monaco', 'Menlo', 'Consolas', monospace;
-  font-size: 0.8rem;
-  color: #374151;
-  margin: 0;
-  white-space: pre-wrap;
-  word-break: break-all;
-  line-height: 1.4;
-}
-
-/* 搜索查询样式 */
-.search-query {
-  color: #1e40af;
-  font-weight: 500;
-}
-
-/* 文件路径样式 */
-.file-path {
-  color: #047857;
-  font-family: monospace;
-  font-size: 0.8rem;
 }
 
 /* OpenClaw 消息样式 */
