@@ -138,8 +138,9 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                 nickname = user.getNickname();
             }
             avatar = user.getAvatar();
+            log.info("User {} joined, avatar: {}", userName, avatar != null ? avatar : "(null)");
         } catch (Exception e) {
-            log.warn("Failed to get user info for {}", userName);
+            log.warn("Failed to get user info for {}", userName, e);
         }
 
         WebSocketUserInfo userInfo = WebSocketUserInfo.builder()
@@ -272,6 +273,10 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                 .mentionHere(mentionResult.isMentionHere())
                 .attachments(messageAttachments)
                 .build();
+
+        log.info("Message built - sender: {}, senderAvatar: {}", 
+                userInfo.getUserName(), 
+                userInfo.getAvatar() != null ? userInfo.getAvatar() : "(null)");
 
         chatRoomService.addMessage(roomId, message);
 
@@ -1250,6 +1255,28 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                 .type("message")
                 .message(message)
                 .build());
+    }
+
+    /**
+     * 更新用户的头像信息（当用户在设置页面更新头像时调用）
+     */
+    public void updateUserAvatar(String userId, String newAvatarUrl) {
+        Set<WebSocketSession> sessions = userSessions.get(userId);
+        if (sessions == null || sessions.isEmpty()) {
+            log.debug("User {} is not online, avatar update will apply on next connection", userId);
+            return;
+        }
+
+        int updatedCount = 0;
+        for (WebSocketSession session : sessions) {
+            WebSocketUserInfo userInfo = userInfoMap.get(session);
+            if (userInfo != null) {
+                // 创建新的 userInfo 对象（因为 Lombok @Data 是可变的，但这里我们直接修改）
+                userInfo.setAvatar(newAvatarUrl);
+                updatedCount++;
+            }
+        }
+        log.info("Updated avatar for user {} in {} WebSocket session(s)", userId, updatedCount);
     }
 
     /**
