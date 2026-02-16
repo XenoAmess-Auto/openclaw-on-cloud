@@ -1755,8 +1755,8 @@ function isSameDay(d1: Date, d2: Date): boolean {
 }
 
 :deep(.tool-call-list) {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  display: flex;
+  flex-direction: column;
   gap: 0.75rem;
 }
 
