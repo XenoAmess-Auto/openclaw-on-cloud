@@ -90,17 +90,32 @@
                 <span class="system-text">{{ msg.content }}</span>
               </div>
               
-              <!-- 工具调用消息 - 工具调用信息保持在原文位置渲染 -->
-              <div v-else-if="msg.isToolCall || msg.toolCalls?.length" class="tool-call-message">
-                <div class="message-content tool-call-content" v-html="renderContent(msg)"></div>
-              </div>
-              
-              <!-- OpenClaw 消息（可能包含工具调用）- 工具调用保持在原文位置 -->
+              <!-- OpenClaw 消息（包含工具调用） -->
               <div 
                 v-else-if="msg.fromOpenClaw" 
-                class="tool-call-message openclaw-message"
+                :class="[
+                  'message',
+                  'openclaw-message-container',
+                  { 'has-tool-calls': msg.toolCalls?.length || msg.isToolCall }
+                ]"
               >
-                <!-- 直接渲染回复内容，工具调用随 Markdown 渲染 -->
+                <!-- 头像 -->
+                <div class="message-avatar">
+                  <img v-if="msg.senderAvatar" :src="msg.senderAvatar" :alt="msg.senderName" />
+                  <div v-else class="avatar-placeholder">🤖</div>
+                </div>
+                
+                <div class="message-body openclaw-body">
+                  <div class="message-header">
+                    <span class="sender">{{ msg.senderName }}</span>
+                    <span class="time">{{ formatTime(msg.timestamp) }}</span>
+                  </div>
+                  <div class="message-content" v-html="renderContent(msg)"></div>
+                </div>
+              </div>
+              
+              <!-- 纯工具调用消息（不含 fromOpenClaw） -->
+              <div v-else-if="msg.isToolCall || msg.toolCalls?.length" class="tool-call-message">
                 <div class="message-content tool-call-content" v-html="renderContent(msg)"></div>
               </div>
               
@@ -964,13 +979,24 @@ function renderContent(msg: Message) {
       'ul', 'ol', 'li',
       'strong', 'em', 'code', 'pre', 'blockquote',
       'a', 'img', 'table', 'thead', 'tbody', 'tr', 'th', 'td',
-      'del', 'ins', 'sup', 'sub'
+      'del', 'ins', 'sup', 'sub',
+      // 工具卡片相关标签
+      'div', 'span'
     ],
     ALLOWED_ATTR: ['href', 'src', 'alt', 'title', 'target', 'class']
   })
 
   // 插入工具调用卡片（替换占位符）
-  htmlContent = htmlContent.replace('<!--TOOL_CALLS_PLACEHOLDER-->', toolCallsHtml)
+  if (toolCallsHtml) {
+    // 尝试替换占位符，如果不存在则直接插入到开头
+    if (htmlContent.includes('TOOL_CALLS_PLACEHOLDER')) {
+      htmlContent = htmlContent.replace(/&lt;!--TOOL_CALLS_PLACEHOLDER--&gt;/g, toolCallsHtml)
+      htmlContent = htmlContent.replace(/<!--TOOL_CALLS_PLACEHOLDER-->/g, toolCallsHtml)
+    } else {
+      // 占位符被清理了，直接插入到开头
+      htmlContent = toolCallsHtml + '\n' + htmlContent
+    }
+  }
 
   // Step 2: 在 HTML 中查找并高亮 @提及（在 sanitization 之后进行）
   // 使用正则匹配文本节点中的 @提及
@@ -1816,6 +1842,31 @@ function isSameDay(d1: Date, d2: Date): boolean {
 
 .openclaw-message .tool-item {
   background: rgba(255, 255, 255, 0.8);
+}
+
+/* OpenClaw 消息容器样式 */
+.openclaw-message-container {
+  display: flex;
+  gap: 0.75rem;
+  max-width: 80%;
+  min-width: 0;
+  align-self: flex-start;
+}
+
+.openclaw-message-container .openclaw-body {
+  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+  border: 1px solid #bae6fd;
+  border-radius: 12px;
+  flex: 1;
+  min-width: 0;
+}
+
+.openclaw-message-container .openclaw-body .message-content {
+  padding: 0;
+}
+
+.openclaw-message-container.has-tool-calls .openclaw-body {
+  padding: 0.75rem 1rem;
 }
 
 /* 时间分隔线 */
