@@ -75,8 +75,8 @@ pnpm build
 pkill -9 -f "vite preview" 2>/dev/null || true
 sleep 2
 
-# 启动 (使用 vite preview 读取 vite.config.ts 代理配置)
-cd dist
+# 启动 (必须在 frontend 目录下运行，读取 vite.config.ts 代理配置)
+cd /home/xenoamess/.openclaw/workspace/openclaw-on-cloud/frontend
 nohup npx vite preview --port 3000 --host > /tmp/frontend.log 2>&1 &
 echo "Frontend started"
 ```
@@ -131,7 +131,7 @@ pnpm build
 echo "[4/4] 启动前端..."
 pkill -9 -f "vite preview" 2>/dev/null || true
 sleep 2
-cd dist
+cd frontend
 nohup npx vite preview --port 3000 --host > /tmp/frontend.log 2>&1 &
 echo "Frontend PID: $!"
 
