@@ -521,19 +521,8 @@ public class OpenClawPluginService {
 
         String finalMessage = messageBuilder.toString();
 
-        // 构建系统提示词 - 简化版以减小消息大小
-        String systemPrompt = """
-            You are OpenClaw, a helpful AI assistant.
-
-            When you use tools, include tool call information in your response:
-            **Tools used:**
-            - `tool_name`: description
-            **Tool details:**
-            - `tool_name`:
-              ```
-              <tool output>
-              ```
-            """;
+        // 构建系统提示词 - 最小化以减少消息大小
+        String systemPrompt = "You are OpenClaw. When using tools, format: **Tools used:** - tool_name. **Tool details:** - tool_name: ```output```";;
 
         log.info("Sending WebSocket request to OpenClaw: sessionId={}, messageLength={}, imageCount={}",
                 sessionId, finalMessage.length(), imageUrls.size());
