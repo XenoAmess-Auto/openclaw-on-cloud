@@ -949,12 +949,8 @@ function renderContent(msg: Message) {
 // 生成工具调用卡片 HTML（从 toolCalls 数组）
 function generateToolCallsHtml(toolCalls: Message['toolCalls']): string {
   if (!toolCalls || toolCalls.length === 0) return ''
-  
+
   return `<div class="tool-call-section">
-    <div class="tool-call-header">
-      <span class="tool-icon">🔧</span>
-      <span class="tool-title">工具调用</span>
-    </div>
     <div class="tool-call-list">
       ${toolCalls.map(tool => `
         <div class="tool-item ${tool.status || 'completed'}">
@@ -962,7 +958,7 @@ function generateToolCallsHtml(toolCalls: Message['toolCalls']): string {
             <span class="tool-icon-small">${getToolIcon(tool.name)}</span>
             <span class="tool-name"><code>${tool.name}</code></span>
             <span class="tool-status ${tool.status || 'completed'}">
-              ${tool.status === 'running' ? '<span class="tool-spinner"></span> 执行中' : 
+              ${tool.status === 'running' ? '<span class="tool-spinner"></span> 执行中' :
                 tool.status === 'error' ? '✗ 失败' : '✓ 完成'}
             </span>
           </div>
@@ -981,12 +977,8 @@ function generateToolCallsHtml(toolCalls: Message['toolCalls']): string {
 // 生成工具调用卡片 HTML（从解析的工具数组）
 function generateToolCallsHtmlFromArray(tools: Array<{name: string, desc: string}>): string {
   if (!tools || tools.length === 0) return ''
-  
+
   return `<div class="tool-call-section">
-    <div class="tool-call-header">
-      <span class="tool-icon">🔧</span>
-      <span class="tool-title">工具调用</span>
-    </div>
     <div class="tool-call-list">
       ${tools.map(tool => `
         <div class="tool-item completed">
