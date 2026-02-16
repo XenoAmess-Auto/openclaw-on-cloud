@@ -1,0 +1,51 @@
+# Build outputs
+dist/
+*.tsbuildinfo
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Node modules
+node_modules/
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Capacitor
+# 保留 Android 项目配置，但忽略构建产物和本地配置
+android/.gradle/
+android/app/build/
+android/build/
+android/captures/
+android/local.properties  # 本地 SDK 路径，不提交
+android/*.iml
+android/.idea/
+android/.externalNativeBuild
+android/.cxx/
+
+# 保留这些文件
+!android/app/src/main/assets/
+!android/app/src/main/res/
+!android/app/src/main/AndroidManifest.xml
+!android/app/build.gradle
+!android/build.gradle
+!android/settings.gradle
+!android/variables.gradle
+!android/gradle.properties
+!android/gradlew
+!android/gradlew.bat
+!android/gradle/wrapper/
