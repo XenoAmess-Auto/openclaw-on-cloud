@@ -68,14 +68,16 @@ pnpm build
 
 ### 2. 启动
 
+使用 `vite preview` (支持代理配置)：
+
 ```bash
-# 停止旧进程 (serve)
-ps aux | grep "serve -l 3000" | grep -v grep | awk '{print $2}' | xargs kill 2>/dev/null || true
+# 停止旧进程
+pkill -9 -f "vite preview" 2>/dev/null || true
 sleep 2
 
-# 启动静态服务
+# 启动 (使用 vite preview 读取 vite.config.ts 代理配置)
 cd dist
-nohup npx serve -l 3000 > /tmp/frontend.log 2>&1 &
+nohup npx vite preview --port 3000 --host > /tmp/frontend.log 2>&1 &
 echo "Frontend started"
 ```
 
@@ -127,10 +129,10 @@ cd ../frontend
 pnpm build
 
 echo "[4/4] 启动前端..."
-ps aux | grep "serve -l 3000" | grep -v grep | awk '{print $2}' | xargs kill 2>/dev/null || true
+pkill -9 -f "vite preview" 2>/dev/null || true
 sleep 2
 cd dist
-nohup npx serve -l 3000 > /tmp/frontend.log 2>&1 &
+nohup npx vite preview --port 3000 --host > /tmp/frontend.log 2>&1 &
 echo "Frontend PID: $!"
 
 # 等待前端启动
