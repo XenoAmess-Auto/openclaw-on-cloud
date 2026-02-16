@@ -213,14 +213,70 @@ public class OpenClawWebSocketClient {
         Map<String, Object> params = new HashMap<>();
         params.put("sessionKey", "ooc-" + sessionId);
 
-        // 支持多模态内容：如果有图片附件，使用 content 参数发送内容块
-        if (contentBlocks != null && contentBlocks.size() > 1) {
-            // 有多模态内容块（文本+图片），使用 content 参数
-            params.put("content", contentBlocks);
-            log.info("[OpenClaw WS] Sending multimodal content with {} blocks", contentBlocks.size());
+        // 从 contentBlocks 中提取文本和图片
+        StringBuilder messageBuilder = new StringBuilder();
+        List<Map<String, Object>> attachments = new ArrayList<>();
+        
+        if (contentBlocks != null && !contentBlocks.isEmpty()) {
+            for (Map<String, Object> block : contentBlocks) {
+                String blockType = (String) block.get("type");
+                if ("text".equals(blockType)) {
+                    String text = (String) block.get("text");
+                    if (text != null) {
+                        messageBuilder.append(text).append("\n\n");
+                    }
+                } else if ("image_url".equals(blockType)) {
+                    @SuppressWarnings("unchecked")
+                    Map<String, String> imageUrl = (Map<String, String>) block.get("image_url");
+                    if (imageUrl != null) {
+                        String url = imageUrl.get("url");
+                        if (url != null && url.startsWith("data:")) {
+                            // 解析 data URL: data:image/png;base64,xxx
+                            int commaIndex = url.indexOf(',');
+                            if (commaIndex > 0) {
+                                String header = url.substring(5, commaIndex); // 去掉 "data:"
+                                String base64Content = url.substring(commaIndex + 1);
+                                
+                                // 解析 MIME type
+                                String mimeType = "image/png";
+                                if (header.contains("image/jpeg")) {
+                                    mimeType = "image/jpeg";
+                                } else if (header.contains("image/gif")) {
+                                    mimeType = "image/gif";
+                                } else if (header.contains("image/webp")) {
+                                    mimeType = "image/webp";
+                                }
+                                
+                                Map<String, Object> attachment = new HashMap<>();
+                                attachment.put("type", "image");
+                                attachment.put("mimeType", mimeType);
+                                attachment.put("fileName", "image." + mimeType.split("/")[1]);
+                                attachment.put("content", base64Content);
+                                attachments.add(attachment);
+                                
+                                log.info("[OpenClaw WS] Added image attachment: mimeType={}, contentLength={}", 
+                                        mimeType, base64Content.length());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        // 如果没有内容，使用原始 message
+        String finalMessage = messageBuilder.length() > 0 ? 
+                messageBuilder.toString().trim() : 
+                (message != null ? message : "");
+        
+        params.put("message", finalMessage);
+        
+        // 添加附件（如果有）
+        if (!attachments.isEmpty()) {
+            params.put("attachments", attachments);
+            log.info("[OpenClaw WS] Sending message with {} attachments, message length: {}", 
+                    attachments.size(), finalMessage.length());
         } else {
-            // 纯文本模式，使用 message 参数
-            params.put("message", message != null ? message : "");
+            log.info("[OpenClaw WS] Sending message (no attachments), length: {}", finalMessage.length());
         }
 
         params.put("deliver", false);

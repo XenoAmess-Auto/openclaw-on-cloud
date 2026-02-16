@@ -42,6 +42,7 @@ public class OpenClawPluginService {
     private final WebClient.Builder webClientBuilder;
     private final ObjectMapper objectMapper;
     private final OpenClawWebSocketClient webSocketClient;
+    private final com.ooc.config.FileProperties fileProperties;
 
     // 内存中的会话状态管理
     private final Map<String, OpenClawSessionState> sessionStates = new ConcurrentHashMap<>();
@@ -83,21 +84,38 @@ public class OpenClawPluginService {
         try {
             // 提取文件名
             String filename = url.substring(url.lastIndexOf("/") + 1);
-            String oocBasePath = System.getProperty("user.dir");
             
-            // 首先尝试在当前工作目录下查找（向后兼容）
-            java.nio.file.Path filePath = java.nio.file.Paths.get(oocBasePath, "uploads", filename);
+            // 使用配置的 uploadDir 作为基础路径
+            String uploadDir = fileProperties.getUploadDir();
+            java.nio.file.Path filePath = java.nio.file.Paths.get(uploadDir, filename);
             
-            // 如果找不到，尝试在父目录查找（后端运行在 backend/ 子目录的情况）
+            // 如果找不到，尝试从 URL 中提取完整路径
             if (!java.nio.file.Files.exists(filePath)) {
+                // 尝试直接使用 url 作为相对路径
+                filePath = java.nio.file.Paths.get(url.substring(1)); // 去掉开头的 /
+                if (!filePath.isAbsolute()) {
+                    filePath = java.nio.file.Paths.get(System.getProperty("user.dir")).resolve(filePath);
+                }
+            }
+            
+            // 向后兼容：尝试在工作目录下查找
+            if (!java.nio.file.Files.exists(filePath)) {
+                String oocBasePath = System.getProperty("user.dir");
+                filePath = java.nio.file.Paths.get(oocBasePath, "uploads", filename);
+            }
+            
+            // 再尝试父目录
+            if (!java.nio.file.Files.exists(filePath)) {
+                String oocBasePath = System.getProperty("user.dir");
                 filePath = java.nio.file.Paths.get(oocBasePath, "..", "uploads", filename).normalize();
             }
             
             if (!java.nio.file.Files.exists(filePath)) {
-                log.warn("File not found: {} (tried {} and parent)", filename, oocBasePath);
+                log.warn("File not found: {} (tried uploadDir: {})", filename, fileProperties.getUploadDir());
                 return null;
             }
             
+            log.info("Reading file from: {}", filePath);
             byte[] fileBytes = java.nio.file.Files.readAllBytes(filePath);
             
             // 压缩图片以减少请求体大小
