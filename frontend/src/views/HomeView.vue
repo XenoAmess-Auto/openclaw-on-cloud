@@ -871,7 +871,7 @@ function renderContent(msg: Message) {
   
   // 优先使用 msg.toolCalls 数据（来自实时 tool_start 事件或后端解析）
   if (msg.toolCalls && msg.toolCalls.length > 0) {
-    // 生成工具调用卡片 HTML
+    // 生成工具调用卡片 HTML - 新卡片样式
     toolCallsHtml = `<div class="tool-call-section">
       <div class="tool-call-header">
         <span class="tool-icon">🔧</span>
@@ -880,16 +880,20 @@ function renderContent(msg: Message) {
       <div class="tool-call-list">
         ${msg.toolCalls.map(tool => `
           <div class="tool-item ${tool.status || 'completed'}">
-            <div class="tool-name">
+            <div class="tool-item-header">
               <span class="tool-icon-small">${getToolIcon(tool.name)}</span>
-              <code>${tool.name}</code>
+              <span class="tool-name"><code>${tool.name}</code></span>
               <span class="tool-status ${tool.status || 'completed'}">
                 ${tool.status === 'running' ? '<span class="tool-spinner"></span> 执行中' : 
                   tool.status === 'error' ? '✗ 失败' : '✓ 完成'}
               </span>
             </div>
-            ${tool.description ? `<div class="tool-description">${formatToolDescription(tool.name, tool.description)}</div>` : ''}
-            ${tool.result ? `<div class="tool-result"><pre>${escapeHtml(tool.result)}</pre></div>` : ''}
+            ${tool.description ? `<div class="tool-item-body">
+              <div class="tool-description">${formatToolDescription(tool.name, tool.description)}</div>
+            </div>` : ''}
+            ${tool.result ? `<div class="tool-item-body">
+              <div class="tool-result"><pre>${escapeHtml(tool.result)}</pre></div>
+            </div>` : ''}
           </div>
         `).join('')}
       </div>
@@ -920,7 +924,7 @@ function renderContent(msg: Message) {
       }
       
       if (tools.length > 0) {
-        // 生成工具调用卡片 HTML
+        // 生成工具调用卡片 HTML - 新卡片样式
         toolCallsHtml = `<div class="tool-call-section">
           <div class="tool-call-header">
             <span class="tool-icon">🔧</span>
@@ -929,12 +933,12 @@ function renderContent(msg: Message) {
           <div class="tool-call-list">
             ${tools.map(tool => `
               <div class="tool-item completed">
-                <div class="tool-name">
+                <div class="tool-item-header">
                   <span class="tool-icon-small">${getToolIcon(tool.name)}</span>
-                  <code>${tool.name}</code>
+                  <span class="tool-name"><code>${tool.name}</code></span>
                   <span class="tool-status completed">✓ 完成</span>
                 </div>
-                ${tool.desc ? `<div class="tool-description">${escapeHtml(tool.desc)}</div>` : ''}
+                ${tool.desc ? `<div class="tool-item-body"><div class="tool-description">${escapeHtml(tool.desc)}</div></div>` : ''}
               </div>
             `).join('')}
           </div>
@@ -1733,7 +1737,15 @@ function isSameDay(d1: Date, d2: Date): boolean {
 }
 
 .tool-icon {
-  font-size: 1rem;
+  font-size: 1.1rem;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #3b82f6, #6366f1);
+  border-radius: 6px;
+  color: white;
 }
 
 .tool-title {
@@ -1743,41 +1755,91 @@ function isSameDay(d1: Date, d2: Date): boolean {
 }
 
 .tool-call-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 0.75rem;
 }
 
+/* 工具卡片样式 */
 .tool-item {
-  background: var(--surface-color);
-  border-radius: 8px;
-  padding: 0.75rem;
-  border-left: 3px solid var(--border-color);
+  background: white;
+  border-radius: 12px;
+  padding: 0;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
   transition: all 0.2s ease;
+  overflow: hidden;
+}
+
+.tool-item:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  transform: translateY(-2px);
 }
 
 .tool-item.running {
-  border-left-color: #3b82f6;
-  background: rgba(59, 130, 246, 0.05);
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
   animation: tool-pulse 2s infinite;
 }
 
 @keyframes tool-pulse {
   0%, 100% {
-    background: rgba(59, 130, 246, 0.05);
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
   }
   50% {
-    background: rgba(59, 130, 246, 0.1);
+    box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.3);
   }
 }
 
 .tool-item.completed {
-  border-left-color: #22c55e;
+  border-color: #22c55e;
+}
+
+.tool-item.completed:hover {
+  box-shadow: 0 4px 12px rgba(34, 197, 94, 0.2);
 }
 
 .tool-item.error {
-  border-left-color: #ef4444;
-  background: rgba(239, 68, 68, 0.05);
+  border-color: #ef4444;
+  background: #fef2f2;
+}
+
+.tool-item.error:hover {
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.2);
+}
+
+/* 工具卡片头部 */
+.tool-item-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  background: linear-gradient(135deg, #f8fafc, #f1f5f9);
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.tool-item.running .tool-item-header {
+  background: linear-gradient(135deg, #eff6ff, #dbeafe);
+}
+
+.tool-item.completed .tool-item-header {
+  background: linear-gradient(135deg, #f0fdf4, #dcfce7);
+}
+
+.tool-item.error .tool-item-header {
+  background: linear-gradient(135deg, #fef2f2, #fee2e2);
+}
+
+.tool-icon-small {
+  font-size: 1rem;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: white;
+  border-radius: 6px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
 }
 
 .tool-name {
@@ -1785,7 +1847,111 @@ function isSameDay(d1: Date, d2: Date): boolean {
   align-items: center;
   gap: 0.5rem;
   font-size: 0.875rem;
+  font-weight: 600;
+  color: #1f2937;
+  flex: 1;
+}
+
+.tool-name code {
+  background: rgba(0, 0, 0, 0.08);
+  padding: 0.125rem 0.375rem;
+  border-radius: 4px;
+  font-family: 'SF Mono', monospace;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #4b5563;
+}
+
+.tool-status {
+  font-size: 0.75rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 20px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.tool-status.running {
+  color: #3b82f6;
+  background: rgba(59, 130, 246, 0.15);
+}
+
+.tool-status.completed {
+  color: #22c55e;
+  background: rgba(34, 197, 94, 0.15);
+}
+
+.tool-status.error {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.15);
+}
+
+.tool-spinner {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 2px solid rgba(59, 130, 246, 0.3);
+  border-top-color: #3b82f6;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+/* 工具卡片内容区 */
+.tool-item-body {
+  padding: 0.75rem;
+}
+
+.tool-description {
+  font-size: 0.8125rem;
+  color: #6b7280;
+  line-height: 1.5;
+}
+
+.tool-description :deep(.exec-command) {
+  background: #f3f4f6;
+  border-radius: 8px;
+  padding: 0.5rem 0.75rem;
+  margin-top: 0.25rem;
+}
+
+.tool-description :deep(.exec-label) {
+  font-size: 0.7rem;
+  color: #9ca3af;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
   margin-bottom: 0.25rem;
+  font-weight: 600;
+}
+
+.tool-description :deep(.exec-code) {
+  font-family: 'SF Mono', 'Monaco', 'Menlo', 'Consolas', monospace;
+  font-size: 0.8rem;
+  color: #374151;
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-all;
+  line-height: 1.4;
+}
+
+/* 工具结果区 */
+.tool-result {
+  margin-top: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background: #f9fafb;
+  border-radius: 8px;
+  border-left: 3px solid #d1d5db;
+}
+
+.tool-result pre {
+  font-family: 'SF Mono', monospace;
+  font-size: 0.75rem;
+  color: #4b5563;
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 200px;
+  overflow-y: auto;
 }
 
 .tool-icon-small {
