@@ -888,7 +888,7 @@ function renderContent(msg: Message) {
                   tool.status === 'error' ? '✗ 失败' : '✓ 完成'}
               </span>
             </div>
-            ${tool.description ? `<div class="tool-description">${escapeHtml(tool.description)}</div>` : ''}
+            ${tool.description ? `<div class="tool-description">${formatToolDescription(tool.name, tool.description)}</div>` : ''}
             ${tool.result ? `<div class="tool-result"><pre>${escapeHtml(tool.result)}</pre></div>` : ''}
           </div>
         `).join('')}
@@ -1048,6 +1048,45 @@ function escapeHtml(text: string): string {
   const div = document.createElement('div')
   div.textContent = text
   return div.innerHTML
+}
+
+// 格式化工具描述（美化 exec 等工具的显示）
+function formatToolDescription(toolName: string, description: string): string {
+  if (!description) return ''
+  
+  // 对于 exec 工具，提取并格式化命令
+  if (toolName === 'exec' || toolName === ' Exec') {
+    // 尝试提取 command 参数
+    const cmdMatch = description.match(/command=["'](.+?)["']/s)
+    if (cmdMatch) {
+      const cmd = cmdMatch[1].replace(/\\"/g, '"').replace(/\\n/g, '\n')
+      // 截断过长的命令
+      const displayCmd = cmd.length > 200 ? cmd.substring(0, 200) + '...' : cmd
+      return `<div class="exec-command">
+        <div class="exec-label">命令</div>
+        <pre class="exec-code">${escapeHtml(displayCmd)}</pre>
+      </div>`
+    }
+  }
+  
+  // 对于 web_search，高亮搜索词
+  if (toolName === 'web_search') {
+    const queryMatch = description.match(/query=["'](.+?)["']/)
+    if (queryMatch) {
+      return `<span class="search-query">🔍 ${escapeHtml(queryMatch[1])}</span>`
+    }
+  }
+  
+  // 对于 read/write/edit，显示文件路径
+  if (['read', 'write', 'edit'].includes(toolName)) {
+    const pathMatch = description.match(/path=["'](.+?)["']/)
+    if (pathMatch) {
+      return `<span class="file-path">📄 ${escapeHtml(pathMatch[1])}</span>`
+    }
+  }
+  
+  // 默认返回转义后的描述
+  return escapeHtml(description)
 }
 
 // 获取工具图标
@@ -1828,6 +1867,46 @@ function isSameDay(d1: Date, d2: Date): boolean {
   margin: 0;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+/* Exec 命令样式 */
+.exec-command {
+  background: rgba(0, 0, 0, 0.06);
+  border-radius: 8px;
+  padding: 0.5rem 0.75rem;
+  margin-top: 0.25rem;
+}
+
+.exec-label {
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 0.25rem;
+  font-weight: 600;
+}
+
+.exec-code {
+  font-family: 'SF Mono', 'Monaco', 'Menlo', 'Consolas', monospace;
+  font-size: 0.8rem;
+  color: #374151;
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-all;
+  line-height: 1.4;
+}
+
+/* 搜索查询样式 */
+.search-query {
+  color: #1e40af;
+  font-weight: 500;
+}
+
+/* 文件路径样式 */
+.file-path {
+  color: #047857;
+  font-family: monospace;
+  font-size: 0.8rem;
 }
 
 /* OpenClaw 消息样式 */
