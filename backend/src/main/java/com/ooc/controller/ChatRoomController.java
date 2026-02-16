@@ -399,10 +399,10 @@ public class ChatRoomController {
                     })
                     .subscribe();
             
-            // 等待流完成（最多60秒）
+            // 等待流完成（最多300秒/5分钟 - 工具调用可能需要较长时间）
             try {
-                if (!latch.await(60, java.util.concurrent.TimeUnit.SECONDS)) {
-                    log.warn("OpenClaw streaming timeout for room: {}", roomId);
+                if (!latch.await(300, java.util.concurrent.TimeUnit.SECONDS)) {
+                    log.warn("OpenClaw streaming timeout after 300s for room: {}", roomId);
                     String timeoutContent = responseBuilder.toString();
                     if (timeoutContent.isEmpty()) {
                         timeoutContent = "*(OpenClaw 响应超时)*";
