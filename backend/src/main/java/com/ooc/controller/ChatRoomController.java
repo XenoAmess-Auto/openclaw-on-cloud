@@ -269,6 +269,7 @@ public class ChatRoomController {
                 .isSystem(false)
                 .isToolCall(false)
                 .isStreaming(false)
+                .attachments(request.getAttachments() != null ? request.getAttachments() : new ArrayList<>())
                 .build();
 
         chatRoomService.addMessage(roomId, message);
