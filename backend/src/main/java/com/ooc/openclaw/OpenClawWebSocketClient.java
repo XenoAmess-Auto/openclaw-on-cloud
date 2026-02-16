@@ -213,16 +213,14 @@ public class OpenClawWebSocketClient {
         Map<String, Object> params = new HashMap<>();
         params.put("sessionKey", "ooc-" + sessionId);
 
-        // 如果有内容块（多模态），使用内容块格式
-        if (contentBlocks != null && !contentBlocks.isEmpty()) {
-            params.put("contentBlocks", contentBlocks);
-            // 多模态模式下，message 作为备用文本
-            if (message != null && !message.isEmpty()) {
-                params.put("message", message);
-            }
+        // 支持多模态内容：如果有图片附件，使用 content 参数发送内容块
+        if (contentBlocks != null && contentBlocks.size() > 1) {
+            // 有多模态内容块（文本+图片），使用 content 参数
+            params.put("content", contentBlocks);
+            log.info("[OpenClaw WS] Sending multimodal content with {} blocks", contentBlocks.size());
         } else {
-            // 纯文本模式
-            params.put("message", message);
+            // 纯文本模式，使用 message 参数
+            params.put("message", message != null ? message : "");
         }
 
         params.put("deliver", false);

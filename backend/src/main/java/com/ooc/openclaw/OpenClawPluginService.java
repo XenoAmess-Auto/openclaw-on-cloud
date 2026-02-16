@@ -552,7 +552,7 @@ public class OpenClawPluginService {
 
         // 使用 WebSocket 客户端发送消息
         return Flux.create(sink -> {
-            webSocketClient.sendMessage(sessionId, null, contentBlocks,
+            webSocketClient.sendMessage(sessionId, processedMessage, contentBlocks,
                     new OpenClawWebSocketClient.ResponseHandler() {
                         private final StringBuilder fullContent = new StringBuilder();
 
