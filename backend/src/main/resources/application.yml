@@ -33,7 +33,7 @@ openclaw:
 # 支持两种存储类型: local (本地文件系统) 或 s3 (S3 兼容存储)
 file:
   # 存储类型: local | s3
-  storage-type: ${FILE_STORAGE_TYPE:local}
+  storage-type: ${FILE_STORAGE_TYPE:s3}
 
   # ===== 本地存储配置 (storage-type = local) =====
   upload-dir: ${FILE_UPLOAD_DIR:/home/xenoamess/.openclaw/workspace/openclaw-on-cloud/uploads}
@@ -47,19 +47,19 @@ file:
     # AWS S3: https://s3.amazonaws.com 或 https://s3.{region}.amazonaws.com
     # MinIO: http://localhost:9000
     # Cloudflare R2: https://{account-id}.r2.cloudflarestorage.com
-    endpoint: ${S3_ENDPOINT:}
+    endpoint: ${S3_ENDPOINT:http://23.94.174.102:32000}
 
     # 区域 (AWS S3 需要正确设置，MinIO 可使用默认值)
     region: ${S3_REGION:us-east-1}
 
     # 存储桶名称
-    bucket: ${S3_BUCKET:}
+    bucket: ${S3_BUCKET:ooc-uploads}
 
     # 访问密钥
-    access-key: ${S3_ACCESS_KEY:}
+    access-key: ${S3_ACCESS_KEY:xenoamess}
 
     # 秘密密钥
-    secret-key: ${S3_SECRET_KEY:}
+    secret-key: ${S3_SECRET_KEY:5ehxd2ubsiudq7qitg2r4ggzqraietn0}
 
     # 是否使用路径样式访问 (MinIO 需要 true，AWS S3 需要 false)
     path-style-access: ${S3_PATH_STYLE:true}
