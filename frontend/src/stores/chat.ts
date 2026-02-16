@@ -3,7 +3,7 @@ import { ref, computed } from 'vue'
 import type { ChatRoom, Message } from '@/types'
 import { chatRoomApi } from '@/api/chatRoom'
 import { useAuthStore } from './auth'
-import { useConfigStore } from './config'
+import { getWsBaseUrl } from '@/utils/config'
 
 // 附件类型定义
 export interface Attachment {
@@ -99,7 +99,6 @@ export const useChatStore = defineStore('chat', () => {
 
   async function connect(roomId: string) {
     const authStore = useAuthStore()
-    const configStore = useConfigStore()
     
     // 如果已有连接，先断开
     if (ws.value) {
@@ -127,7 +126,7 @@ export const useChatStore = defineStore('chat', () => {
     
     // 构建 WebSocket URL
     // 使用配置的后端地址（如果没有配置则使用默认的当前域名:8081）
-    const wsBaseUrl = configStore.wsBaseUrl
+    const wsBaseUrl = getWsBaseUrl()
     const wsUrl = `${wsBaseUrl}/ws/chat`
     const socket = new WebSocket(wsUrl)
     

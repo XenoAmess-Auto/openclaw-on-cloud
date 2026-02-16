@@ -1,12 +1,10 @@
 import axios, { type AxiosInstance } from 'axios'
-import { useConfigStore } from '@/stores/config'
+import { getApiBaseUrl } from '@/utils/config'
 
 // 创建 API 客户端的工厂函数
 function createApiClient(): AxiosInstance {
-  const configStore = useConfigStore()
-  
   const client: AxiosInstance = axios.create({
-    baseURL: configStore.apiBaseUrl,
+    baseURL: getApiBaseUrl(),
     headers: {
       'Content-Type': 'application/json'
     }

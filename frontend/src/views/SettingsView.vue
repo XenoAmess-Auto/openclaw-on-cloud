@@ -42,7 +42,7 @@
               {{ configSaving ? '保存中...' : '保存后端配置' }}
             </button>
             <button 
-              v-if="configStore.config.baseUrl"
+              v-if="backendUrl"
               @click="backendUrl = ''; saveBackendConfig()" 
               class="btn-secondary"
               :disabled="configSaving"
@@ -161,11 +161,15 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted, computed } from 'vue'
 import { useAuthStore } from '@/stores/auth'
-import { useConfigStore } from '@/stores/config'
 import { fileApi } from '@/api/file'
+import {
+  loadConfig,
+  saveConfig as saveConfigUtil,
+  resetConfig as resetConfigUtil,
+  getBaseUrl
+} from '@/utils/config'
 
 const authStore = useAuthStore()
-const configStore = useConfigStore()
 const fileInput = ref<HTMLInputElement>()
 
 const avatarPreview = ref('')
@@ -189,7 +193,7 @@ const configError = ref('')
 const configSuccess = ref('')
 
 // 当前使用的后端地址
-const currentBackendUrl = computed(() => configStore.baseUrl)
+const currentBackendUrl = computed(() => getBaseUrl())
 
 onMounted(() => {
   // 初始化表单数据
@@ -199,7 +203,8 @@ onMounted(() => {
     avatarPreview.value = authStore.user.avatar || ''
   }
   // 初始化后端地址配置
-  backendUrl.value = configStore.config.baseUrl || ''
+  const config = loadConfig()
+  backendUrl.value = config.baseUrl || ''
 })
 
 function triggerFileInput() {
@@ -307,7 +312,7 @@ async function saveBackendConfig() {
     
     // 如果为空，则重置为默认
     if (!url) {
-      configStore.resetToDefault()
+      resetConfigUtil()
       configSuccess.value = '已恢复默认后端地址，刷新页面后生效'
       configSaving.value = false
       return
@@ -328,7 +333,7 @@ async function saveBackendConfig() {
       return
     }
 
-    configStore.saveConfig({ baseUrl: validatedUrl })
+    saveConfigUtil({ baseUrl: validatedUrl })
     configSuccess.value = '后端地址已保存，刷新页面后生效'
   } catch (error: any) {
     configError.value = error.message || '保存失败，请重试'
