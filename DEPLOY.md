@@ -68,7 +68,7 @@ pnpm build
 
 ### 2. 启动
 
-使用 `vite preview` (支持代理配置)：
+**必须使用 `vite preview`**（`serve` 不支持 API 代理）：
 
 ```bash
 # 停止旧进程
@@ -76,10 +76,12 @@ pkill -9 -f "vite preview" 2>/dev/null || true
 sleep 2
 
 # 启动 (必须在 frontend 目录下运行，读取 vite.config.ts 代理配置)
-cd /home/xenoamess/.openclaw/workspace/openclaw-on-cloud/frontend
+cd /path/to/openclaw-on-cloud/frontend
 nohup npx vite preview --port 3000 --host > /tmp/frontend.log 2>&1 &
 echo "Frontend started"
 ```
+
+**注意：** 如果在 `dist/` 目录下运行 `vite preview`，代理配置不会生效，导致 API 请求 404。
 
 ### 3. 验证
 
@@ -132,6 +134,7 @@ echo "[4/4] 启动前端..."
 pkill -9 -f "vite preview" 2>/dev/null || true
 sleep 2
 cd frontend
+# 注意：vite preview 必须在 frontend 目录运行，才能读取 vite.config.ts 中的代理配置
 nohup npx vite preview --port 3000 --host > /tmp/frontend.log 2>&1 &
 echo "Frontend PID: $!"
 
@@ -157,6 +160,94 @@ echo "  前端: tail -f /tmp/frontend.log"
 ---
 
 ## 常见问题
+
+### 前端 API 地址配置（关键）
+
+**问题：** 从外部 IP 访问时登录失败，浏览器控制台显示连接 `localhost:8081` 失败。
+
+**原因：** 
+- 开发环境使用 `/api` 相对路径，通过 Vite 代理到后端
+- 生产环境不能硬编码 `http://localhost:8081`，因为用户从外部访问时无法连接到你的 localhost
+
+**解决方案：**
+前端使用 `window.location.hostname` 动态检测当前 host：
+
+```typescript
+// src/api/client.ts
+const hostname = window.location.hostname
+const backendHost = hostname === 'localhost' ? 'localhost' : hostname
+const baseURL = `http://${backendHost}:8081/api`
+```
+
+这样访问 `http://23.94.174.102:3000` 时，前端会自动连接 `http://23.94.174.102:8081/api`。
+
+---
+
+### 为什么不能使用 `serve` 部署前端
+
+`serve` 是纯静态文件服务器，**不支持 API 代理**。前端请求 `/api` 会 404。
+
+必须使用 `vite preview`，它会读取 `vite.config.ts` 中的代理配置：
+
+```javascript
+// vite.config.ts
+server: {
+  proxy: {
+    '/api': { target: 'http://localhost:8081', changeOrigin: true },
+    '/ws': { target: 'ws://localhost:8081', ws: true }
+  }
+}
+```
+
+---
+
+### 浏览器缓存问题
+
+修改后如果仍看到旧行为，可能是浏览器缓存了 JS 文件。
+
+**强制刷新：**
+- Windows/Linux: `Ctrl + F5` 或 `Ctrl + Shift + R`
+- macOS: `Cmd + Shift + R`
+
+**或清除缓存后刷新：**
+Chrome DevTools → Network → Disable cache → 刷新页面
+
+---
+
+### 验证部署是否成功
+
+```bash
+# 1. 检查后端运行状态
+curl -s http://localhost:8081/api/chat-rooms -H "Authorization: Bearer test" -w " %{http_code}\n"
+# 期望输出: 403 (正常，token 无效)
+
+# 2. 检查前端是否能代理 API 请求
+curl -s http://localhost:3000/api/auth/public-key | head -5
+# 期望输出: {"publicKey":"-----BEGIN PUBLIC KEY-----..."}
+
+# 3. 检查 WebSocket 端口
+ss -tlnp | grep -E "(3000|8081)"
+# 期望看到两个端口都在监听
+```
+
+---
+
+### 从外部 IP 访问的注意事项
+
+如果用户通过 `http://<服务器IP>:3000` 访问：
+
+1. **确保后端绑定到 0.0.0.0**（Spring Boot 默认）
+2. **确保防火墙开放 3000 和 8081 端口**
+3. **前端代码必须使用 `window.location.hostname`** 而不是 `localhost`
+
+验证外部访问：
+```bash
+# 从其他机器测试
+curl -s http://<服务器IP>:8081/api/auth/public-key
+curl -s http://<服务器IP>:3000/api/auth/public-key
+```
+
+---
 
 ### 端口被占用
 
