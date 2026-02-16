@@ -903,8 +903,10 @@ function renderContent(msg: Message) {
     const toolsMatch = content.match(/(\*\*Tools used:\*\*.*?)(?=\n\n|$)/s)
     if (toolsMatch) {
       content = content.replace(toolsMatch[0], '\n<!--TOOL_CALLS_PLACEHOLDER-->\n')
+    } else {
+      // 如果没有找到 Tools used 部分，在内容前插入占位符
+      content = '<!--TOOL_CALLS_PLACEHOLDER-->\n\n' + content
     }
-    // 如果没有找到 Tools used 部分，不插入占位符，卡片不显示在内容中
   } else {
     // 回退：从内容中解析 **Tools used:** 部分
     const toolsMatch = content.match(/(\*\*Tools used:\*\*.*?)(?=\n\n|$)/s)
@@ -990,12 +992,14 @@ function renderContent(msg: Message) {
 
   // 插入工具调用卡片（替换占位符）
   if (toolCallsHtml) {
-    // 尝试替换占位符
+    // 尝试替换占位符，如果不存在则直接插入到开头
     if (htmlContent.includes('TOOL_CALLS_PLACEHOLDER')) {
       htmlContent = htmlContent.replace(/&lt;!--TOOL_CALLS_PLACEHOLDER--&gt;/g, toolCallsHtml)
       htmlContent = htmlContent.replace(/<!--TOOL_CALLS_PLACEHOLDER-->/g, toolCallsHtml)
+    } else {
+      // 占位符被清理了，直接插入到开头
+      htmlContent = toolCallsHtml + '\n' + htmlContent
     }
-    // 如果没有找到占位符，不插入工具卡片（说明原始文本中没有 Tools used 部分）
   }
 
   // Step 2: 在 HTML 中查找并高亮 @提及（在 sanitization 之后进行）
