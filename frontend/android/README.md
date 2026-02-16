@@ -5,23 +5,43 @@
 ## 前置要求
 
 1. **Node.js** 18+ 和 pnpm
-2. **Android Studio** (用于构建和调试)
-3. **JDK** 17+ (Android Studio 自带)
-4. **Android SDK** (通过 Android Studio 安装)
+2. **Android SDK** (用于构建 APK)
+   - 如果没有 Android Studio，可以只安装命令行工具
+   - 设置环境变量 `ANDROID_HOME` 或在 `android/local.properties` 中指定 SDK 路径
 
 ## 快速开始
 
-### 方法一：使用构建脚本（推荐）
+### 方法一：一键构建脚本（最简单）
 
 ```bash
-# 一键构建 Debug APK
+# 进入前端目录
+cd frontend
+
+# 运行构建脚本（自动完成所有步骤）
 ./scripts/build-android.sh
 ```
 
-构建完成后，APK 位于：
-- `android/app/build/outputs/apk/debug/app-debug.apk`
+脚本会自动执行：
+1. 安装依赖（如果未安装）
+2. 构建前端（`pnpm build`）
+3. 同步到 Android 项目（`npx cap sync android`）
+4. 构建 APK（`./gradlew assembleDebug`）
 
-### 方法二：手动构建
+构建完成后输出 APK 路径和文件大小。
+
+### 方法二：使用 package.json 脚本
+
+```bash
+# 1. 构建前端 + 同步到 Android + 构建 APK
+pnpm mobile:build
+
+# 2. 或者分步执行：
+pnpm build           # 构建前端
+pnpm android:sync    # 同步到 Android 项目
+pnpm android:build   # 构建 APK
+```
+
+### 方法三：手动执行每一步
 
 ```bash
 # 1. 安装依赖
@@ -38,25 +58,44 @@ cd android
 ./gradlew assembleDebug
 ```
 
-### 方法三：使用 Android Studio
+### 方法四：使用 Android Studio（调试用）
 
 ```bash
 # 同步后打开 Android Studio
-npx cap sync android
+pnpm android:open
+# 或
 npx cap open android
 ```
 
-然后在 Android Studio 中点击 "Build" → "Build Bundle(s) / APK(s)" → "Build APK(s)"
+然后在 Android Studio 中：
+- 点击 "Build" → "Build Bundle(s) / APK(s)" → "Build APK(s)"
+- 或使用设备运行/调试
 
-## 常用命令
+## 构建脚本参考
 
-| 命令 | 说明 |
-|------|------|
-| `pnpm android:sync` | 同步前端代码到 Android 项目 |
-| `pnpm android:build` | 构建 Android APK |
-| `pnpm android:open` | 在 Android Studio 中打开项目 |
-| `pnpm android:run` | 在连接的设备上运行应用 |
-| `pnpm mobile:build` | 完整构建流程（前端+同步+构建） |
+| 脚本 | 命令 | 说明 |
+|------|------|------|
+| **一键构建** | `./scripts/build-android.sh` | 完整的构建流程脚本 |
+| **移动端构建** | `pnpm mobile:build` | package.json 定义的完整构建 |
+| **同步** | `pnpm android:sync` | 同步前端代码到 Android 项目 |
+| **构建 APK** | `pnpm android:build` | 构建 Android APK |
+| **打开项目** | `pnpm android:open` | 在 Android Studio 中打开 |
+| **运行** | `pnpm android:run` | 在连接的设备上运行应用 |
+| **Capacitor 同步** | `npx cap sync android` | 底层同步命令 |
+| **Capacitor 打开** | `npx cap open android` | 底层打开命令 |
+
+## 输出位置
+
+构建成功后，APK 文件位于：
+
+```
+frontend/android/app/build/outputs/apk/debug/app-debug.apk
+```
+
+Release 版本：
+```
+frontend/android/app/build/outputs/apk/release/app-release.apk
+```
 
 ## 项目结构
 
@@ -65,10 +104,13 @@ frontend/
 ├── android/              # Android 原生项目
 │   ├── app/src/main/     # 应用源码
 │   │   ├── AndroidManifest.xml
-│   │   ├── assets/public/  # 前端构建产物（自动生成）
+│   │   ├── assets/public/  # 前端构建产物（自动生成，不提交）
 │   │   └── res/          # 资源文件
-│   └── build.gradle      # 构建配置
+│   ├── build.gradle      # 应用构建配置
+│   └── local.properties  # SDK 路径（本地文件，不提交）
 ├── capacitor.config.ts   # Capacitor 配置
+├── scripts/
+│   └── build-android.sh  # 一键构建脚本
 └── dist/                 # 前端构建输出
 ```
 
@@ -104,6 +146,7 @@ const config: CapacitorConfig = {
 ### 生成签名密钥
 
 ```bash
+cd android
 keytool -genkey -v -keystore ooc-release-key.keystore -alias ooc -keyalg RSA -keysize 2048 -validity 10000
 ```
 
@@ -154,6 +197,7 @@ Release APK 位于：`android/app/build/outputs/apk/release/app-release.apk`
 1. **HTTP 支持**：应用默认允许 HTTP 通信，用于连接后端服务器
 2. **文件权限**：已配置媒体文件读取权限，支持图片上传
 3. **WebSocket**：在移动设备上自动使用配置的后端地址
+4. **首次构建**：第一次构建会下载 Gradle，可能需要几分钟
 
 ## 故障排除
 
@@ -171,6 +215,13 @@ cd android
 ```bash
 # 强制重新同步
 npx cap sync android --force
+```
+
+### SDK 未找到
+
+```bash
+# 创建 local.properties 指定 SDK 路径
+echo "sdk.dir=/path/to/android-sdk" > android/local.properties
 ```
 
 ### 设备连接问题

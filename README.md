@@ -1,5 +1,23 @@
 # OpenClaw on Cloud
 
+## Android 应用构建
+
+使用 Capacitor 生成 Android APK：
+
+```bash
+cd frontend
+
+# 一键构建
+./scripts/build-android.sh
+
+# 或使用 pnpm 脚本
+pnpm mobile:build
+```
+
+APK 输出：`android/app/build/outputs/apk/debug/app-debug.apk`
+
+详见 [frontend/android/README.md](frontend/android/README.md)
+
 ## 项目结构
 
 ```
