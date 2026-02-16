@@ -1235,9 +1235,7 @@ function getToolIcon(toolName: string): string {
 
 // 获取消息头像 - 如果是当前用户，使用当前用户的最新头像
 function getMessageAvatar(msg: Message): string | undefined {
-  const isMe = msg.senderId === authStore.user?.id
-  console.log('[getMessageAvatar] senderId:', msg.senderId, 'user.id:', authStore.user?.id, 'isMe:', isMe, 'user.avatar:', authStore.user?.avatar, 'msg.avatar:', msg.senderAvatar)
-  if (isMe) {
+  if (msg.senderId === authStore.user?.id) {
     return authStore.user?.avatar || msg.senderAvatar
   }
   return msg.senderAvatar
