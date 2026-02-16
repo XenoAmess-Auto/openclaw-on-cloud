@@ -343,9 +343,10 @@ public class OpenClawWebSocketClient {
 
             switch (stream) {
                 case "assistant":
-                    String content = data.path("content").asText(null);
-                    if (content != null && !content.isEmpty()) {
-                        handler.onTextChunk(content);
+                    // OpenClaw 发送的是 delta（增量）和 text（累积），不是 content
+                    String delta = data.path("delta").asText(null);
+                    if (delta != null && !delta.isEmpty()) {
+                        handler.onTextChunk(delta);
                     }
                     break;
 
