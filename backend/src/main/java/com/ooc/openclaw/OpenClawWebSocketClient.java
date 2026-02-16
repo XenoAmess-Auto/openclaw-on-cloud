@@ -320,47 +320,6 @@ public class OpenClawWebSocketClient {
             // 调试：打印完整的 payload 结构
             log.debug("[OpenClaw WS] Chat event payload: {}", payload);
 
-            // chat 事件内容可能在不同位置，尝试多种路径
-            String content = null;
-            
-            // 1. 尝试直接的 content 字段
-            if (payload.has("content")) {
-                content = payload.path("content").asText(null);
-            }
-            
-            // 2. 尝试 message.content[0].text 结构
-            if (content == null || content.isEmpty()) {
-                JsonNode messageNode = payload.path("message");
-                if (messageNode.isObject() && messageNode.has("content")) {
-                    JsonNode contentArray = messageNode.path("content");
-                    if (contentArray.isArray() && contentArray.size() > 0) {
-                        JsonNode firstContent = contentArray.get(0);
-                        if (firstContent.has("text")) {
-                            content = firstContent.path("text").asText(null);
-                        }
-                    }
-                }
-            }
-            
-            // 3. 尝试直接的 text 字段
-            if (content == null || content.isEmpty()) {
-                if (payload.has("text")) {
-                    content = payload.path("text").asText(null);
-                }
-            }
-            
-            // 4. 尝试 delta 字段
-            if (content == null || content.isEmpty()) {
-                if (payload.has("delta")) {
-                    content = payload.path("delta").asText(null);
-                }
-            }
-
-            if (content != null && !content.isEmpty()) {
-                log.debug("[OpenClaw WS] Chat content received: {} chars", content.length());
-                handler.onTextChunk(content);
-            }
-
             // 检查是否是完成状态 (state: "final" 表示完成)
             String state = payload.path("state").asText("");
             boolean isComplete = payload.path("complete").asBoolean(false) || "final".equals(state);
@@ -368,6 +327,9 @@ public class OpenClawWebSocketClient {
                 log.debug("[OpenClaw WS] Chat completed, calling onComplete()");
                 handler.onComplete();
             }
+            
+            // 注意：不处理 chat 事件的内容，因为 agent 事件的 assistant 流已经处理了增量内容
+            // 同时处理 chat 事件的内容会导致重复（chat 发送累积内容，agent 发送增量内容）
         }
 
         private void handleAgentEvent(JsonNode payload) {
