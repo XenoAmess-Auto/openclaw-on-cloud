@@ -95,6 +95,7 @@ public class ChatRoom {
 
         @JsonProperty("toolCalls")
         @Builder.Default
+        @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
         private List<ToolCall> toolCalls = new ArrayList<>();
 
         @JsonProperty("mentions")

@@ -314,6 +314,13 @@ export const useChatStore = defineStore('chat', () => {
           })
           const index = messages.value.findIndex(m => m.id === data.message.id)
           if (index !== -1) {
+            // 保留现有的 toolCalls（如果后端没有发送）
+            const existingMsg = messages.value[index]
+            if (!data.message.toolCalls && existingMsg.toolCalls && existingMsg.toolCalls.length > 0) {
+              data.message.toolCalls = existingMsg.toolCalls
+              data.message.isToolCall = true
+              console.log('[WebSocket] stream_end - preserved existing toolCalls:', existingMsg.toolCalls.length)
+            }
             // 使用 splice 确保响应式更新
             messages.value.splice(index, 1, data.message)
             console.log('[WebSocket] stream_end - message replaced at index:', index)
