@@ -1291,8 +1291,14 @@ function isSameDay(d1: Date, d2: Date): boolean {
 <style scoped>
 .home-view {
   height: 100vh;
+  height: 100dvh; /* 动态视口高度，适配移动端 */
   display: flex;
   flex-direction: column;
+  /* 移动端安全区域适配 - 避免与状态栏、灵动岛、导航栏重叠 */
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
 }
 
 .header {

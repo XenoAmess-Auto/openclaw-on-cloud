@@ -191,10 +191,17 @@ function resetConfig() {
 <style scoped>
 .login-view {
   height: 100vh;
+  height: 100dvh;
   display: flex;
   align-items: center;
   justify-content: center;
   background: var(--bg-color);
+  /* 移动端安全区域适配 */
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+  box-sizing: border-box;
 }
 
 .login-box {
@@ -382,7 +389,8 @@ button:disabled {
     height: 100dvh;
     padding: 1rem;
     align-items: flex-start;
-    padding-top: 15vh;
+    /* 使用安全区域 + 额外间距，避免与状态栏/灵动岛重叠 */
+    padding-top: calc(env(safe-area-inset-top) + 2rem);
   }
 
   .login-box {

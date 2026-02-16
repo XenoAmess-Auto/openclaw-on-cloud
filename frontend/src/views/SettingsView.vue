@@ -349,7 +349,14 @@ async function saveBackendConfig() {
 <style scoped>
 .settings-view {
   min-height: 100vh;
+  min-height: 100dvh;
   background: var(--bg-color);
+  /* 移动端安全区域适配 */
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+  box-sizing: border-box;
 }
 
 .header {
