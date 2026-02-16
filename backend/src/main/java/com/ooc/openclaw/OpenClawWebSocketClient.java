@@ -18,6 +18,7 @@ import java.io.IOException;
 import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -41,6 +42,9 @@ public class OpenClawWebSocketClient {
     // 响应处理器: sessionId -> ResponseHandler
     private final Map<String, ResponseHandler> responseHandlers = new ConcurrentHashMap<>();
 
+    // 请求锁: sessionId -> AtomicBoolean，防止同一个session并发请求覆盖handler
+    private final Map<String, AtomicBoolean> requestLocks = new ConcurrentHashMap<>();
+
     // 连接配置
     private static final int CONNECT_TIMEOUT_MS = 10000;
     private static final int MAX_RECONNECT_ATTEMPTS = 3;
@@ -62,25 +66,43 @@ public class OpenClawWebSocketClient {
      */
     public void sendMessage(String sessionId, String message, List<Map<String, Object>> contentBlocks,
                            ResponseHandler handler) {
-        // 检查或创建连接
-        WebSocketSession session = getOrCreateSession(sessionId);
-        if (session == null) {
-            handler.onError("Failed to establish WebSocket connection to OpenClaw Gateway");
+        // 获取或创建该session的请求锁
+        AtomicBoolean lock = requestLocks.computeIfAbsent(sessionId, k -> new AtomicBoolean(false));
+
+        // 尝试获取锁，如果该session已有请求在处理，返回错误
+        if (!lock.compareAndSet(false, true)) {
+            log.warn("[OpenClaw WS] Session {} already has a request in progress, rejecting new request", sessionId);
+            handler.onError("Session is already processing a request. Please wait for it to complete.");
             return;
         }
 
-        // 注册响应处理器
-        responseHandlers.put(sessionId, handler);
-
-        // 构建并发送 chat.send 请求
         try {
-            String request = buildChatSendRequest(sessionId, message, contentBlocks);
-            log.info("[OpenClaw WS] Sending chat.send: sessionId={}, messageLength={}",
-                    sessionId, message != null ? message.length() : 0);
-            session.sendMessage(new TextMessage(request));
-        } catch (IOException e) {
-            log.error("[OpenClaw WS] Failed to send message", e);
-            handler.onError("Failed to send message: " + e.getMessage());
+            // 检查或创建连接
+            WebSocketSession session = getOrCreateSession(sessionId);
+            if (session == null) {
+                lock.set(false); // 释放锁
+                handler.onError("Failed to establish WebSocket connection to OpenClaw Gateway");
+                return;
+            }
+
+            // 注册响应处理器
+            responseHandlers.put(sessionId, handler);
+
+            // 构建并发送 chat.send 请求
+            try {
+                String request = buildChatSendRequest(sessionId, message, contentBlocks);
+                log.info("[OpenClaw WS] Sending chat.send: sessionId={}, messageLength={}",
+                        sessionId, message != null ? message.length() : 0);
+                session.sendMessage(new TextMessage(request));
+            } catch (IOException e) {
+                log.error("[OpenClaw WS] Failed to send message", e);
+                responseHandlers.remove(sessionId);
+                lock.set(false); // 释放锁
+                handler.onError("Failed to send message: " + e.getMessage());
+            }
+        } catch (Exception e) {
+            lock.set(false); // 确保异常时释放锁
+            throw e;
         }
     }
 
@@ -190,7 +212,19 @@ public class OpenClawWebSocketClient {
 
         Map<String, Object> params = new HashMap<>();
         params.put("sessionKey", "ooc-" + sessionId);
-        params.put("message", message);
+
+        // 如果有内容块（多模态），使用内容块格式
+        if (contentBlocks != null && !contentBlocks.isEmpty()) {
+            params.put("contentBlocks", contentBlocks);
+            // 多模态模式下，message 作为备用文本
+            if (message != null && !message.isEmpty()) {
+                params.put("message", message);
+            }
+        } else {
+            // 纯文本模式
+            params.put("message", message);
+        }
+
         params.put("deliver", false);
         params.put("idempotencyKey", UUID.randomUUID().toString());
 
@@ -221,6 +255,8 @@ public class OpenClawWebSocketClient {
     private class OpenClawGatewayHandler extends TextWebSocketHandler {
         private final String sessionId;
         private boolean connected = false;
+        // 跟踪已发送 start 事件的工具调用（OpenClaw 有时会跳过 start 直接发 update/result）
+        private final Set<String> startedToolCalls = ConcurrentHashMap.newKeySet();
 
         public OpenClawGatewayHandler(String sessionId) {
             this.sessionId = sessionId;
@@ -293,17 +329,33 @@ public class OpenClawWebSocketClient {
                     break;
                 case "agent.run.completed":
                     log.debug("[OpenClaw WS] Agent run completed: {}", payload.path("runId").asText());
-                    ResponseHandler handler = responseHandlers.get(sessionId);
-                    if (handler != null) {
-                        handler.onComplete();
+                    ResponseHandler completedHandler = responseHandlers.remove(sessionId);
+                    if (completedHandler != null) {
+                        try {
+                            completedHandler.onComplete();
+                        } finally {
+                            // 释放请求锁
+                            AtomicBoolean lock = requestLocks.get(sessionId);
+                            if (lock != null) {
+                                lock.set(false);
+                            }
+                        }
                     }
                     break;
                 case "agent.run.failed":
                     String error = payload.path("error").asText("Unknown error");
                     log.error("[OpenClaw WS] Agent run failed: {}", error);
-                    ResponseHandler h = responseHandlers.get(sessionId);
-                    if (h != null) {
-                        h.onError(error);
+                    ResponseHandler failedHandler = responseHandlers.remove(sessionId);
+                    if (failedHandler != null) {
+                        try {
+                            failedHandler.onError(error);
+                        } finally {
+                            // 释放请求锁
+                            AtomicBoolean lock = requestLocks.get(sessionId);
+                            if (lock != null) {
+                                lock.set(false);
+                            }
+                        }
                     }
                     break;
                 default:
@@ -325,9 +377,20 @@ public class OpenClawWebSocketClient {
             boolean isComplete = payload.path("complete").asBoolean(false) || "final".equals(state);
             if (isComplete) {
                 log.debug("[OpenClaw WS] Chat completed, calling onComplete()");
-                handler.onComplete();
+                // 移除handler并调用onComplete，然后释放锁
+                ResponseHandler completedHandler = responseHandlers.remove(sessionId);
+                if (completedHandler != null) {
+                    try {
+                        completedHandler.onComplete();
+                    } finally {
+                        AtomicBoolean lock = requestLocks.get(sessionId);
+                        if (lock != null) {
+                            lock.set(false);
+                        }
+                    }
+                }
             }
-            
+
             // 注意：不处理 chat 事件的内容，因为 agent 事件的 assistant 流已经处理了增量内容
             // 同时处理 chat 事件的内容会导致重复（chat 发送累积内容，agent 发送增量内容）
         }
@@ -368,6 +431,21 @@ public class OpenClawWebSocketClient {
             String toolName = data.path("name").asText();
             String toolCallId = data.path("toolCallId").asText();
 
+            // 如果是 update 或 result 阶段但没有收到 start 事件，先补发 start
+            if (!"start".equals(phase) && !startedToolCalls.contains(toolCallId)) {
+                log.warn("[OpenClaw WS] Received tool {} without start event for {}, synthesizing start", phase, toolCallId);
+                // 解析参数（如果有的话）
+                JsonNode argsNode = data.path("args");
+                Map<String, Object> args = new HashMap<>();
+                if (argsNode.isObject()) {
+                    argsNode.fields().forEachRemaining(entry -> {
+                        args.put(entry.getKey(), entry.getValue());
+                    });
+                }
+                handler.onToolStart(toolName, toolCallId, args);
+                startedToolCalls.add(toolCallId);
+            }
+
             switch (phase) {
                 case "start":
                     // 解析参数
@@ -380,6 +458,7 @@ public class OpenClawWebSocketClient {
                     }
                     log.info("[OpenClaw WS] Tool start: {} ({})", toolName, toolCallId);
                     handler.onToolStart(toolName, toolCallId, args);
+                    startedToolCalls.add(toolCallId);
                     break;
 
                 case "update":
@@ -392,6 +471,7 @@ public class OpenClawWebSocketClient {
                     boolean isError = data.path("isError").asBoolean(false);
                     log.info("[OpenClaw WS] Tool result: {} (error={})", toolName, isError);
                     handler.onToolResult(toolCallId, result, isError);
+                    startedToolCalls.remove(toolCallId); // 清理
                     break;
 
                 default:

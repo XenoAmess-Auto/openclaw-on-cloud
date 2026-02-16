@@ -483,55 +483,76 @@ public class OpenClawPluginService {
 
         String processedMessage = convertUploadsPath(message);
 
-        // 构建消息
-        StringBuilder messageBuilder = new StringBuilder();
-        messageBuilder.append(userName).append(": ").append(processedMessage != null ? processedMessage : "");
-
         log.info("[sendMessageStream] Processing {} attachments", attachments != null ? attachments.size() : 0);
 
-        // 收集图片 URL
-        List<String> imageUrls = new ArrayList<>();
+        // 构建多模态内容块列表
+        List<Map<String, Object>> contentBlocks = new ArrayList<>();
+
+        // 添加文本内容块
+        if (processedMessage != null && !processedMessage.isEmpty()) {
+            Map<String, Object> textBlock = new HashMap<>();
+            textBlock.put("type", "text");
+            textBlock.put("text", userName + ": " + processedMessage);
+            contentBlocks.add(textBlock);
+        }
+
+        // 处理图片附件
+        int imageCount = 0;
         if (attachments != null && !attachments.isEmpty()) {
             for (ChatWebSocketHandler.Attachment att : attachments) {
-                log.info("[sendMessageStream] Attachment: type={}, mimeType={}, url={}",
+                log.info("[sendMessageStream] Processing attachment: type={}, mimeType={}, url={}",
                         att.getType(), att.getMimeType(), att.getUrl());
 
                 if ("image".equalsIgnoreCase(att.getType())) {
-                    String imageUrl = att.getUrl();
-                    if (imageUrl != null && !imageUrl.isEmpty()) {
-                        // 将相对路径转换为完整 URL
-                        if (imageUrl.startsWith("/uploads/")) {
-                            imageUrl = "http://localhost:8081" + imageUrl;
+                    String imageDataUrl = null;
+                    String url = att.getUrl();
+
+                    if (url != null && !url.isEmpty()) {
+                        if (url.startsWith("/uploads/")) {
+                            // 读取文件并转为 base64 data URL
+                            imageDataUrl = readFileToDataUrl(url, att.getMimeType());
+                        } else if (url.contains("/uploads/")) {
+                            // 完整路径包含 /uploads/，提取文件名并读取
+                            imageDataUrl = readFileToDataUrlFromFullPath(url, att.getMimeType());
+                        } else if (url.startsWith("data:")) {
+                            // 已经是 data URL，直接使用
+                            imageDataUrl = url;
                         }
-                        imageUrls.add(imageUrl);
-                        log.info("[sendMessageStream] Added image URL: {}", imageUrl);
+                    }
+
+                    if (imageDataUrl != null) {
+                        Map<String, Object> imageBlock = new HashMap<>();
+                        imageBlock.put("type", "image_url");
+                        Map<String, String> imageUrl = new HashMap<>();
+                        imageUrl.put("url", imageDataUrl);
+                        imageBlock.put("image_url", imageUrl);
+                        contentBlocks.add(imageBlock);
+                        imageCount++;
+                        log.info("[sendMessageStream] Added image block, data URL length: {}", imageDataUrl.length());
+                    } else {
+                        log.warn("[sendMessageStream] Failed to process image: {}", url);
                     }
                 }
             }
         }
 
-        // 如果有图片，在消息末尾添加图片 URL
-        if (!imageUrls.isEmpty()) {
-            messageBuilder.append("\n\n[图片附件]:\n");
-            for (int i = 0; i < imageUrls.size(); i++) {
-                messageBuilder.append("图片 ").append(i + 1).append(": ").append(imageUrls.get(i)).append("\n");
-            }
-            messageBuilder.append("\n请使用 web_fetch 工具获取图片内容并分析。");
+        // 如果没有内容块（纯空消息），添加一个默认文本
+        if (contentBlocks.isEmpty()) {
+            Map<String, Object> textBlock = new HashMap<>();
+            textBlock.put("type", "text");
+            textBlock.put("text", userName + ": [图片]");
+            contentBlocks.add(textBlock);
         }
 
-        String finalMessage = messageBuilder.toString();
-
         // 构建系统提示词 - 最小化以减少消息大小
-        String systemPrompt = "You are OpenClaw. When using tools, format: **Tools used:** - tool_name. **Tool details:** - tool_name: ```output```";;
+        String systemPrompt = "You are OpenClaw. When using tools, format: **Tools used:** - tool_name. **Tool details:** - tool_name: ```output```";
 
-        log.info("Sending WebSocket request to OpenClaw: sessionId={}, messageLength={}, imageCount={}",
-                sessionId, finalMessage.length(), imageUrls.size());
+        log.info("Sending WebSocket request to OpenClaw: sessionId={}, textBlocks={}, imageBlocks={}",
+                sessionId, contentBlocks.size() - imageCount, imageCount);
 
         // 使用 WebSocket 客户端发送消息
         return Flux.create(sink -> {
-            List<Map<String, Object>> contentBlocks = new ArrayList<>();
-
-            webSocketClient.sendMessage(sessionId, finalMessage, contentBlocks,
+            webSocketClient.sendMessage(sessionId, null, contentBlocks,
                     new OpenClawWebSocketClient.ResponseHandler() {
                         private final StringBuilder fullContent = new StringBuilder();
 
