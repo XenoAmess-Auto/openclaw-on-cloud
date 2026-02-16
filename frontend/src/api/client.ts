@@ -1,7 +1,9 @@
 import axios, { type AxiosInstance } from 'axios'
 
 // 生产环境直接访问后端，开发环境使用代理
-const baseURL = (import.meta as any).env?.DEV ? '/api' : 'http://localhost:8081/api'
+// window.location.port === '3000' 表示生产环境使用 serve 静态服务器
+const isDev = window.location.port === '5173' || window.location.port === ''
+const baseURL = isDev ? '/api' : 'http://localhost:8081/api'
 
 const apiClient: AxiosInstance = axios.create({
   baseURL,
