@@ -3,6 +3,8 @@ package com.ooc.openclaw;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.websocket.ContainerProvider;
+import jakarta.websocket.WebSocketContainer;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -99,7 +101,12 @@ public class OpenClawWebSocketClient {
      */
     private WebSocketSession createNewSession(String sessionId) {
         try {
-            StandardWebSocketClient client = new StandardWebSocketClient();
+            // 配置 WebSocket 容器以支持大消息 (16MB 缓冲区)
+            WebSocketContainer container = ContainerProvider.getWebSocketContainer();
+            container.setDefaultMaxBinaryMessageBufferSize(16 * 1024 * 1024);
+            container.setDefaultMaxTextMessageBufferSize(16 * 1024 * 1024);
+
+            StandardWebSocketClient client = new StandardWebSocketClient(container);
 
             WebSocketHandler handler = new OpenClawGatewayHandler(sessionId);
 
@@ -114,7 +121,7 @@ public class OpenClawWebSocketClient {
                 wsUrl = wsUrl.replace("https://", "wss://");
             }
 
-            // 配置 WebSocket 客户端以支持大消息
+            // 配置任务执行器
             client.setTaskExecutor(new org.springframework.core.task.SimpleAsyncTaskExecutor("openclaw-ws-"));
 
             log.info("[OpenClaw WS] Connecting to {}...", wsUrl);
@@ -227,7 +234,10 @@ public class OpenClawWebSocketClient {
         @Override
         protected void handleTextMessage(WebSocketSession session, TextMessage message) {
             try {
-                JsonNode msg = objectMapper.readTree(message.getPayload());
+                String payload = message.getPayload();
+                log.debug("[OpenClaw WS] Raw message: {}", payload.substring(0, Math.min(200, payload.length())));
+                
+                JsonNode msg = objectMapper.readTree(payload);
                 String type = msg.path("type").asText("unknown");
 
                 switch (type) {
@@ -275,6 +285,9 @@ public class OpenClawWebSocketClient {
                 case "agent":
                     handleAgentEvent(payload);
                     break;
+                case "chat":
+                    handleChatEvent(payload);
+                    break;
                 case "agent.run.started":
                     log.debug("[OpenClaw WS] Agent run started: {}", payload.path("runId").asText());
                     break;
@@ -295,6 +308,65 @@ public class OpenClawWebSocketClient {
                     break;
                 default:
                     log.debug("[OpenClaw WS] Event: {}", event);
+            }
+        }
+
+        private void handleChatEvent(JsonNode payload) {
+            ResponseHandler handler = responseHandlers.get(sessionId);
+            if (handler == null) {
+                return;
+            }
+
+            // 调试：打印完整的 payload 结构
+            log.debug("[OpenClaw WS] Chat event payload: {}", payload);
+
+            // chat 事件内容可能在不同位置，尝试多种路径
+            String content = null;
+            
+            // 1. 尝试直接的 content 字段
+            if (payload.has("content")) {
+                content = payload.path("content").asText(null);
+            }
+            
+            // 2. 尝试 message.content[0].text 结构
+            if (content == null || content.isEmpty()) {
+                JsonNode messageNode = payload.path("message");
+                if (messageNode.isObject() && messageNode.has("content")) {
+                    JsonNode contentArray = messageNode.path("content");
+                    if (contentArray.isArray() && contentArray.size() > 0) {
+                        JsonNode firstContent = contentArray.get(0);
+                        if (firstContent.has("text")) {
+                            content = firstContent.path("text").asText(null);
+                        }
+                    }
+                }
+            }
+            
+            // 3. 尝试直接的 text 字段
+            if (content == null || content.isEmpty()) {
+                if (payload.has("text")) {
+                    content = payload.path("text").asText(null);
+                }
+            }
+            
+            // 4. 尝试 delta 字段
+            if (content == null || content.isEmpty()) {
+                if (payload.has("delta")) {
+                    content = payload.path("delta").asText(null);
+                }
+            }
+
+            if (content != null && !content.isEmpty()) {
+                log.debug("[OpenClaw WS] Chat content received: {} chars", content.length());
+                handler.onTextChunk(content);
+            }
+
+            // 检查是否是完成状态 (state: "final" 表示完成)
+            String state = payload.path("state").asText("");
+            boolean isComplete = payload.path("complete").asBoolean(false) || "final".equals(state);
+            if (isComplete) {
+                log.debug("[OpenClaw WS] Chat completed, calling onComplete()");
+                handler.onComplete();
             }
         }
 
