@@ -90,63 +90,17 @@
                 <span class="system-text">{{ msg.content }}</span>
               </div>
               
-              <!-- 工具调用消息 -->
+              <!-- 工具调用消息 - 工具调用信息保持在原文位置渲染 -->
               <div v-else-if="msg.isToolCall || msg.toolCalls?.length" class="tool-call-message">
-                <div class="tool-call-header">
-                  <span class="tool-icon">🔧</span>
-                  <span class="tool-title">工具调用</span>
-                </div>
-                <div class="tool-call-list">
-                  <div 
-                    v-for="tool in (msg.toolCalls || [])" 
-                    :key="tool.id" 
-                    :class="['tool-item', tool.status || 'completed']"
-                  >
-                    <div class="tool-name">
-                      <span class="tool-icon-small">{{ getToolIcon(tool.name) }}</span>
-                      <code>{{ tool.name }}</code>
-                      <span v-if="tool.status === 'running'" class="tool-status running">
-                        <span class="tool-spinner"></span>
-                        运行中...
-                      </span>
-                      <span v-else-if="tool.status === 'completed'" class="tool-status completed">✓ 完成</span>
-                      <span v-else class="tool-status completed">✓ 完成</span>
-                    </div>
-                    <div v-if="tool.description" class="tool-description">{{ formatToolDescription(tool.description) }}</div>
-                    <div v-if="tool.result" class="tool-result">
-                      <pre>{{ tool.result }}</pre>
-                    </div>
-                  </div>
-                </div>
-                <!-- 显示完整的回复内容 -->
                 <div class="message-content tool-call-content" v-html="renderContent(msg)"></div>
               </div>
               
-              <!-- OpenClaw 消息（可能包含工具调用） -->
+              <!-- OpenClaw 消息（可能包含工具调用）- 工具调用保持在原文位置 -->
               <div 
                 v-else-if="msg.fromOpenClaw" 
                 class="tool-call-message openclaw-message"
               >
-                <!-- 如果有工具调用，显示工具块 -->
-                <div v-if="msg.toolCalls?.length" class="tool-call-list">
-                  <div 
-                    v-for="tool in msg.toolCalls" 
-                    :key="tool.id" 
-                    :class="['tool-item', tool.status || 'completed']"
-                  >
-                    <div class="tool-name">
-                      <span class="tool-icon-small">{{ getToolIcon(tool.name) }}</span>
-                      <code>{{ tool.name }}</code>
-                      <span v-if="tool.status === 'running'" class="tool-status running">
-                        <span class="tool-spinner"></span>
-                        运行中...
-                      </span>
-                      <span v-else class="tool-status completed">✓ 完成</span>
-                    </div>
-                    <div v-if="tool.description" class="tool-description">{{ formatToolDescription(tool.description) }}</div>
-                  </div>
-                </div>
-                <!-- 显示回复内容 -->
+                <!-- 直接渲染回复内容，工具调用随 Markdown 渲染 -->
                 <div class="message-content tool-call-content" v-html="renderContent(msg)"></div>
               </div>
               
@@ -982,79 +936,6 @@ function renderContent(msg: Message) {
 
 function getInitials(name: string): string {
   return name.slice(0, 2).toUpperCase()
-}
-
-// 获取工具图标
-function getToolIcon(toolName: string): string {
-  const iconMap: Record<string, string> = {
-    'read': '📄',
-    'write': '✏️',
-    'edit': '🔧',
-    'exec': '⚡',
-    'web_search': '🔍',
-    'weather': '🌤️',
-    'browser': '🌐',
-    'canvas': '🎨',
-    'nodes': '📱',
-    'cron': '⏰',
-    'message': '💬',
-    'gateway': '🔌',
-    'sessions_spawn': '🚀',
-    'memory_search': '🧠',
-    'tts': '🔊',
-    'github': '🐙',
-    'gh': '🐙',
-  }
-  return iconMap[toolName] || '🔧'
-}
-
-// 格式化工具描述（截断过长的参数）
-function formatToolDescription(description: string): string {
-  if (!description) return ''
-  // 如果是 JSON 格式的参数，尝试解析并简化
-  try {
-    const parsed = JSON.parse(description)
-    // 提取关键信息
-    const keys = Object.keys(parsed)
-    if (keys.length === 0) return ''
-    
-    // 优先显示 file_path 或 command
-    if (parsed.file_path) {
-      const path = parsed.file_path as string
-      // 截断过长的路径
-      if (path.length > 60) {
-        return '...' + path.slice(-57)
-      }
-      return path
-    }
-    if (parsed.command) {
-      const cmd = parsed.command as string
-      if (cmd.length > 60) {
-        return cmd.slice(0, 57) + '...'
-      }
-      return cmd
-    }
-    if (parsed.query) {
-      return `搜索: ${parsed.query}`
-    }
-    
-    // 显示第一个非空值
-    for (const key of keys) {
-      const value = parsed[key]
-      if (value && typeof value === 'string') {
-        if (value.length > 60) {
-          return `${key}: ${value.slice(0, 57)}...`
-        }
-        return `${key}: ${value}`
-      }
-    }
-  } catch (e) {
-    // 不是 JSON，直接返回并截断
-    if (description.length > 80) {
-      return description.slice(0, 77) + '...'
-    }
-  }
-  return description
 }
 
 // 格式化正在输入提示
