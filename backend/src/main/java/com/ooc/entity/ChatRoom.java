@@ -176,6 +176,10 @@ public class ChatRoom {
 
             @JsonProperty("timestamp")
             private Instant timestamp;
+
+            @JsonProperty("position")
+            @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+            private Integer position;
         }
     }
 

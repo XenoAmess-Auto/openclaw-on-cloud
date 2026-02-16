@@ -29,6 +29,7 @@ export interface ToolCall {
   status: 'running' | 'completed' | 'error'
   result?: string
   timestamp: string
+  position?: number
 }
 
 export interface Message {

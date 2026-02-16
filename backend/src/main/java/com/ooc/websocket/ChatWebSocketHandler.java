@@ -531,8 +531,11 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
             String toolId = event.messageId() != null ? event.messageId() : UUID.randomUUID().toString();
             String toolName = event.toolName() != null ? event.toolName() : "unknown";
             String toolInput = event.toolInput() != null ? event.toolInput() : "";
+            
+            // 记录工具调用在内容中的位置
+            int position = contentBuilder.get().length();
 
-            log.info("Tool call started for task {}: id={}, name={}", task.getTaskId(), toolId, toolName);
+            log.info("Tool call started for task {}: id={}, name={}, position={}", task.getTaskId(), toolId, toolName, position);
 
             // 创建工具调用记录
             ChatRoom.Message.ToolCall toolCall = ChatRoom.Message.ToolCall.builder()
@@ -541,6 +544,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                     .description(toolInput)
                     .status("running")
                     .timestamp(Instant.now())
+                    .position(position)
                     .build();
 
             // 添加到当前消息的工具调用列表

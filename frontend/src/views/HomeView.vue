@@ -92,34 +92,22 @@
               
               <!-- OpenClaw 消息（包含工具调用） -->
               <template v-else-if="msg.fromOpenClaw">
-                <!-- 工具调用气泡 -->
-                <div v-if="msg.toolCalls?.length || msg.isToolCall" class="message openclaw-message-container">
-                  <div class="message-avatar">
-                    <img v-if="msg.senderAvatar" :src="msg.senderAvatar" :alt="msg.senderName" />
-                    <div v-else class="avatar-placeholder">🤖</div>
-                  </div>
-                  <div class="message-body openclaw-body">
-                    <div class="message-header">
-                      <span class="sender">{{ msg.senderName }}</span>
-                      <span class="time">{{ formatTime(msg.timestamp) }}</span>
+                <!-- 使用段落式渲染 - 按位置顺序显示文本和工具调用 -->
+                <template v-for="(segment, _segIndex) in renderSegments(msg)" :key="segment.type + _segIndex">
+                  <div class="message openclaw-message-container">
+                    <div class="message-avatar">
+                      <img v-if="msg.senderAvatar" :src="msg.senderAvatar" :alt="msg.senderName" />
+                      <div v-else class="avatar-placeholder">🤖</div>
                     </div>
-                    <div class="message-content" v-html="renderToolCalls(msg)"></div>
-                  </div>
-                </div>
-                <!-- 文本内容气泡 -->
-                <div v-if="msg.content?.trim()" class="message openclaw-message-container">
-                  <div class="message-avatar">
-                    <img v-if="msg.senderAvatar" :src="msg.senderAvatar" :alt="msg.senderName" />
-                    <div v-else class="avatar-placeholder">🤖</div>
-                  </div>
-                  <div class="message-body openclaw-body">
-                    <div class="message-header">
-                      <span class="sender">{{ msg.senderName }}</span>
-                      <span class="time">{{ formatTime(msg.timestamp) }}</span>
+                    <div class="message-body openclaw-body">
+                      <div class="message-header">
+                        <span class="sender">{{ msg.senderName }}</span>
+                        <span class="time">{{ formatTime(msg.timestamp) }}</span>
+                      </div>
+                      <div class="message-content" v-html="segment.html"></div>
                     </div>
-                    <div class="message-content" v-html="renderTextContent(msg)"></div>
                   </div>
-                </div>
+                </template>
               </template>
               
               <!-- 纯工具调用消息（不含 fromOpenClaw） -->
@@ -955,83 +943,7 @@ function renderContent(msg: Message) {
   return htmlContent + attachmentsHtml
 }
 
-// 渲染工具调用卡片（只渲染工具调用，不渲染文本内容）
-function renderToolCalls(msg: Message): string {
-  if (!msg.toolCalls?.length && !msg.isToolCall) {
-    return ''
-  }
 
-  let toolCallsHtml = ''
-  
-  // 优先使用 msg.toolCalls 数据
-  if (msg.toolCalls && msg.toolCalls.length > 0) {
-    toolCallsHtml = generateToolCallsHtml(msg.toolCalls)
-  } else {
-    // 回退：从 content 中解析 **Tools used:** 部分
-    const content = msg.content || ''
-    const toolsMatch = content.match(/(\*\*Tools used:\*\*.*?)(?=\n\n|$)/s)
-    if (toolsMatch) {
-      const toolsSection = toolsMatch[1]
-      const toolLines = toolsSection.split('\n').slice(1)
-      const tools: Array<{name: string, desc: string}> = []
-      
-      for (const line of toolLines) {
-        const match = line.match(/^[-*]\s*`?(\w+)`?\s*:?\s*(.*)/)
-        if (match) {
-          tools.push({ name: match[1], desc: match[2] || '' })
-        }
-      }
-      
-      if (tools.length > 0) {
-        toolCallsHtml = generateToolCallsHtmlFromArray(tools)
-      }
-    }
-  }
-
-  return DOMPurify.sanitize(toolCallsHtml, {
-    ALLOWED_TAGS: ['div', 'span', 'code', 'pre'],
-    ALLOWED_ATTR: ['class']
-  })
-}
-
-// 渲染文本内容（不渲染工具卡片）
-function renderTextContent(msg: Message): string {
-  let content = msg.content || ''
-
-  // 处理转义字符
-  content = content.replace(/\\n/g, '\n').replace(/\\t/g, '\t')
-
-  // 从 content 中移除 Tools used 部分
-  const toolsMatch = content.match(/(\*\*Tools used:\*\*.*?)(?=\n\n|$)/s)
-  if (toolsMatch) {
-    content = content.replace(toolsMatch[0], '')
-  }
-
-  // 渲染 Markdown
-  let htmlContent = renderMarkdown(content)
-
-  // XSS 清理
-  htmlContent = DOMPurify.sanitize(htmlContent, {
-    ALLOWED_TAGS: [
-      'p', 'br', 'hr',
-      'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
-      'ul', 'ol', 'li',
-      'strong', 'em', 'code', 'pre', 'blockquote',
-      'a', 'img', 'table', 'thead', 'tbody', 'tr', 'th', 'td',
-      'del', 'ins', 'sup', 'sub',
-      'div', 'span'
-    ],
-    ALLOWED_ATTR: ['href', 'src', 'alt', 'title', 'target', 'class']
-  })
-
-  // 高亮 @提及
-  htmlContent = highlightMentions(htmlContent, msg)
-
-  // 渲染附件图片
-  let attachmentsHtml = renderAttachments(msg)
-
-  return htmlContent + attachmentsHtml
-}
 
 // 生成工具调用卡片 HTML（从 toolCalls 数组）
 function generateToolCallsHtml(toolCalls: Message['toolCalls']): string {
@@ -1163,6 +1075,99 @@ function renderAttachments(msg: Message): string {
       return `<a href="${att.url}" target="_blank" class="message-file">${att.name || '附件'}</a>`
     }).join('') +
     '</div>'
+}
+
+// 按位置顺序渲染段落（工具调用和文本交替显示）
+function renderSegments(msg: Message): Array<{ type: 'text' | 'tools', html: string }> {
+  const segments: Array<{ type: 'text' | 'tools', html: string }> = []
+  
+  if (!msg.content && (!msg.toolCalls || msg.toolCalls.length === 0)) {
+    return segments
+  }
+  
+  // 按位置排序工具调用
+  const sortedToolCalls = [...(msg.toolCalls || [])].sort((a, b) => {
+    const posA = a.position ?? Infinity
+    const posB = b.position ?? Infinity
+    return posA - posB
+  })
+  
+  // 获取纯文本内容（移除 Tools used 部分）
+  let content = msg.content || ''
+  content = content.replace(/\\n/g, '\n').replace(/\\t/g, '\t')
+  const toolsMatch = content.match(/(\*\*Tools used:\*\*.*?)(?=\n\n|$)/s)
+  if (toolsMatch) {
+    content = content.replace(toolsMatch[0], '')
+  }
+  
+  // 如果没有工具调用或没有位置信息，按原来的方式渲染
+  if (sortedToolCalls.length === 0 || sortedToolCalls[0].position === undefined) {
+    // 先渲染工具调用（如果有）
+    if (msg.toolCalls?.length) {
+      segments.push({
+        type: 'tools',
+        html: generateToolCallsHtml(msg.toolCalls)
+      })
+    }
+    // 再渲染文本（如果有）
+    if (content.trim()) {
+      let htmlContent = renderMarkdown(content)
+      htmlContent = DOMPurify.sanitize(htmlContent, {
+        ALLOWED_TAGS: ['p', 'br', 'hr', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'ul', 'ol', 'li', 'strong', 'em', 'code', 'pre', 'blockquote', 'a', 'img', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'del', 'ins', 'sup', 'sub', 'div', 'span'],
+        ALLOWED_ATTR: ['href', 'src', 'alt', 'title', 'target', 'class']
+      })
+      htmlContent = highlightMentions(htmlContent, msg)
+      htmlContent += renderAttachments(msg)
+      segments.push({ type: 'text', html: htmlContent })
+    }
+    return segments
+  }
+  
+  // 按位置分段渲染
+  let lastPosition = 0
+  
+  for (const toolCall of sortedToolCalls) {
+    const position = toolCall.position ?? 0
+    
+    // 渲染此工具调用之前的文本
+    if (position > lastPosition) {
+      const textSegment = content.substring(lastPosition, position)
+      if (textSegment.trim()) {
+        let htmlContent = renderMarkdown(textSegment)
+        htmlContent = DOMPurify.sanitize(htmlContent, {
+          ALLOWED_TAGS: ['p', 'br', 'hr', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'ul', 'ol', 'li', 'strong', 'em', 'code', 'pre', 'blockquote', 'a', 'img', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'del', 'ins', 'sup', 'sub', 'div', 'span'],
+          ALLOWED_ATTR: ['href', 'src', 'alt', 'title', 'target', 'class']
+        })
+        htmlContent = highlightMentions(htmlContent, msg)
+        segments.push({ type: 'text', html: htmlContent })
+      }
+    }
+    
+    // 渲染工具调用
+    segments.push({
+      type: 'tools',
+      html: generateToolCallsHtml([toolCall])
+    })
+    
+    lastPosition = position
+  }
+  
+  // 渲染最后一个工具调用之后的文本
+  if (lastPosition < content.length) {
+    const textSegment = content.substring(lastPosition)
+    if (textSegment.trim()) {
+      let htmlContent = renderMarkdown(textSegment)
+      htmlContent = DOMPurify.sanitize(htmlContent, {
+        ALLOWED_TAGS: ['p', 'br', 'hr', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'ul', 'ol', 'li', 'strong', 'em', 'code', 'pre', 'blockquote', 'a', 'img', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'del', 'ins', 'sup', 'sub', 'div', 'span'],
+        ALLOWED_ATTR: ['href', 'src', 'alt', 'title', 'target', 'class']
+      })
+      htmlContent = highlightMentions(htmlContent, msg)
+      htmlContent += renderAttachments(msg)
+      segments.push({ type: 'text', html: htmlContent })
+    }
+  }
+  
+  return segments
 }
 
 // HTML 转义
