@@ -96,7 +96,12 @@ jobs:
           ls -lh android/app/build/outputs/apk/debug/
           echo ""
           echo "=== APK Details ==="
-          aapt dump badging android/app/build/outputs/apk/debug/app-debug.apk | grep -E "package|version"
+          # 使用 unzip 检查 APK 内容
+          unzip -l android/app/build/outputs/apk/debug/app-debug.apk | head -20
+          echo "..."
+          echo ""
+          echo "APK 大小:"
+          du -h android/app/build/outputs/apk/debug/app-debug.apk
 
       # 重命名 APK，包含版本信息
       - name: Rename APK
