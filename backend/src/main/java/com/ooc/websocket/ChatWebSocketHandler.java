@@ -170,12 +170,13 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                         .map(msg -> {
                             if (msg.getSenderAvatar() == null || msg.getSenderAvatar().isEmpty()) {
                                 try {
-                                    User user = userService.getUserByUsername(msg.getSenderName());
+                                    // 使用 senderId（用户名）查询，而不是 senderName（昵称）
+                                    User user = userService.getUserByUsername(msg.getSenderId());
                                     if (user != null && user.getAvatar() != null) {
                                         return msg.toBuilder().senderAvatar(user.getAvatar()).build();
                                     }
                                 } catch (Exception e) {
-                                    log.debug("Failed to get avatar for user: {}", msg.getSenderName());
+                                    log.debug("Failed to get avatar for user: {}", msg.getSenderId());
                                 }
                             }
                             return msg;

@@ -204,6 +204,8 @@ public class ChatRoomController {
             return ResponseEntity.ok(List.of());
         }
 
+        List<ChatRoom.Message> pagedMessages;
+
         // 基于时间戳的游标分页
         if (before != null && !before.isEmpty()) {
             try {
@@ -211,41 +213,59 @@ public class ChatRoomController {
                 // 找到第一个 timestamp < before 的消息索引
                 int startIndex = -1;
                 for (int i = messages.size() - 1; i >= 0; i--) {
-                    if (messages.get(i).getTimestamp() != null && 
+                    if (messages.get(i).getTimestamp() != null &&
                         messages.get(i).getTimestamp().isBefore(beforeTimestamp)) {
                         startIndex = i;
                         break;
                     }
                 }
-                
+
                 if (startIndex < 0) {
                     return ResponseEntity.ok(List.of());
                 }
-                
+
                 // 从 startIndex 往前取 size 条（更旧的消息）
                 int endIndex = Math.max(0, startIndex - size + 1);
-                List<ChatRoom.Message> pagedMessages = messages.subList(endIndex, startIndex + 1);
-                return ResponseEntity.ok(pagedMessages);
+                pagedMessages = messages.subList(endIndex, startIndex + 1);
             } catch (Exception e) {
                 log.error("Failed to parse before timestamp: {}", before, e);
+                return ResponseEntity.ok(List.of());
             }
+        } else {
+            // 默认分页（简单的内存分页，返回最新的消息）
+            int start = page * size;
+            int end = Math.min(start + size, messages.size());
+
+            if (start >= messages.size()) {
+                return ResponseEntity.ok(List.of());
+            }
+
+            // 返回倒序（最新消息在前）
+            pagedMessages = messages.subList(
+                    Math.max(0, messages.size() - end),
+                    Math.max(0, messages.size() - start)
+            );
         }
 
-        // 默认分页（简单的内存分页，返回最新的消息）
-        int start = page * size;
-        int end = Math.min(start + size, messages.size());
+        // 为消息补充头像信息（旧消息可能没有保存 senderAvatar）
+        List<ChatRoom.Message> enrichedMessages = pagedMessages.stream()
+                .map(msg -> {
+                    if (msg.getSenderAvatar() == null || msg.getSenderAvatar().isEmpty()) {
+                        try {
+                            // 使用 senderId（用户名）查询，而不是 senderName（昵称）
+                            User user = userService.getUserByUsername(msg.getSenderId());
+                            if (user != null && user.getAvatar() != null) {
+                                return msg.toBuilder().senderAvatar(user.getAvatar()).build();
+                            }
+                        } catch (Exception e) {
+                            log.debug("Failed to get avatar for user: {}", msg.getSenderId());
+                        }
+                    }
+                    return msg;
+                })
+                .collect(Collectors.toList());
 
-        if (start >= messages.size()) {
-            return ResponseEntity.ok(List.of());
-        }
-
-        // 返回倒序（最新消息在前）
-        List<ChatRoom.Message> pagedMessages = messages.subList(
-                Math.max(0, messages.size() - end),
-                Math.max(0, messages.size() - start)
-        );
-
-        return ResponseEntity.ok(pagedMessages);
+        return ResponseEntity.ok(enrichedMessages);
     }
 
     @PostMapping("/{roomId}/messages")
