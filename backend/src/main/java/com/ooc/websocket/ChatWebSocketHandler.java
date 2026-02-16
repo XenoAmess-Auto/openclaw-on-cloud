@@ -570,6 +570,52 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
             // 工具参数更新（可选，如果需要实时更新参数）
             log.debug("Tool delta for task {}: {}", task.getTaskId(), event.content());
 
+        } else if ("tool_result".equals(event.type())) {
+            // 工具执行完成 - 更新工具调用状态
+            String toolCallId = event.messageId();
+            String result = event.content();
+            
+            log.info("Tool result received for task {}: toolCallId={}", task.getTaskId(), toolCallId);
+            
+            // 更新消息中的工具调用状态
+            List<ChatRoom.Message.ToolCall> currentToolCalls = new ArrayList<>(streamingMessage.get().getToolCalls());
+            boolean found = false;
+            
+            for (int i = 0; i < currentToolCalls.size(); i++) {
+                ChatRoom.Message.ToolCall tc = currentToolCalls.get(i);
+                if (tc.getId().equals(toolCallId)) {
+                    currentToolCalls.set(i, tc.toBuilder()
+                            .status("completed")
+                            .result(result)
+                            .build());
+                    found = true;
+                    log.info("Updated tool call {} to completed status", tc.getName());
+                    break;
+                }
+            }
+            
+            if (found) {
+                ChatRoom.Message updatedMsg = streamingMessage.get().toBuilder()
+                        .toolCalls(currentToolCalls)
+                        .build();
+                streamingMessage.set(updatedMsg);
+                
+                // 广播工具调用完成事件到前端
+                broadcastToRoom(roomId, WebSocketMessage.builder()
+                        .type("tool_result")
+                        .message(ChatRoom.Message.builder()
+                                .id(messageId)
+                                .senderId("openclaw")
+                                .senderName("OpenClaw")
+                                .toolCalls(currentToolCalls)
+                                .isToolCall(true)
+                                .fromOpenClaw(true)
+                                .build())
+                        .build());
+            } else {
+                log.warn("Tool result received but toolCallId {} not found in message {}", toolCallId, messageId);
+            }
+
         } else if ("done".equals(event.type())) {
             // 流结束，在 onComplete 中处理
             log.info("Stream done event received for task {}", task.getTaskId());

@@ -303,6 +303,22 @@ export const useChatStore = defineStore('chat', () => {
           }
         }
         break
+      case 'tool_result':
+        // 工具调用完成 - 更新工具调用状态
+        {
+          const index = messages.value.findIndex(m => m.id === data.message.id)
+          if (index !== -1) {
+            const updatedMsg = { ...messages.value[index] }
+            // 更新工具调用列表（后端发送完整列表）
+            updatedMsg.toolCalls = data.message.toolCalls || []
+            updatedMsg.isToolCall = true
+            messages.value.splice(index, 1, updatedMsg)
+            console.log('[WebSocket] tool_result - updated tool calls:', updatedMsg.toolCalls?.length)
+          } else {
+            console.warn('[WebSocket] tool_result - message not found:', data.message.id)
+          }
+        }
+        break
       case 'stream_end':
         // 流式消息结束 - 替换为完整消息
         {

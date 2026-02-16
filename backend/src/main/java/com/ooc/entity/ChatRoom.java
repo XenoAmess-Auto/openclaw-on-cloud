@@ -155,7 +155,7 @@ public class ChatRoom {
         }
         
         @Data
-        @Builder
+        @Builder(toBuilder = true)
         @NoArgsConstructor
         @AllArgsConstructor
         public static class ToolCall {
