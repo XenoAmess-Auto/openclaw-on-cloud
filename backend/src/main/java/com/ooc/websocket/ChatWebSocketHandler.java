@@ -418,6 +418,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
         // 广播流式消息开始
         broadcastToRoom(roomId, WebSocketMessage.builder()
                 .type("stream_start")
+                .roomId(roomId)
                 .message(streamingMessage.get())
                 .build());
 
@@ -544,6 +545,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                 // 广播增量更新
                 broadcastToRoom(roomId, WebSocketMessage.builder()
                         .type("stream_delta")
+                        .roomId(roomId)
                         .message(ChatRoom.Message.builder()
                                 .id(messageId)
                                 .content(event.content())
@@ -587,6 +589,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
             // 广播工具调用开始事件
             broadcastToRoom(roomId, WebSocketMessage.builder()
                     .type("tool_start")
+                    .roomId(roomId)
                     .message(ChatRoom.Message.builder()
                             .id(messageId)
                             .senderId("openclaw")
@@ -634,6 +637,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                 // 广播工具调用完成事件到前端
                 broadcastToRoom(roomId, WebSocketMessage.builder()
                         .type("tool_result")
+                        .roomId(roomId)
                         .message(ChatRoom.Message.builder()
                                 .id(messageId)
                                 .senderId("openclaw")
@@ -676,6 +680,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
         // 广播错误完成
         broadcastToRoom(roomId, WebSocketMessage.builder()
                 .type("stream_end")
+                .roomId(roomId)
                 .message(errorMsg)
                 .build());
     }
@@ -748,6 +753,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
         // 广播流结束
         broadcastToRoom(roomId, WebSocketMessage.builder()
                 .type("stream_end")
+                .roomId(roomId)
                 .message(finalMsg)
                 .build());
 

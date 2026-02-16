@@ -261,12 +261,21 @@ export const useChatStore = defineStore('chat', () => {
         }
         break
       case 'stream_start':
-        // 流式消息开始
+        // 流式消息开始 - 只处理当前房间的消息
+        if (data.roomId && data.roomId !== currentRoom.value?.id) {
+          console.log('[WebSocket] stream_start ignored - room mismatch:', data.roomId, '!=', currentRoom.value?.id)
+          break
+        }
         console.log('[WebSocket] stream_start:', data.message)
         messages.value.push(data.message)
         break
       case 'stream_delta':
-        // 流式消息增量 - 追加到最新消息
+        // 流式消息增量 - 只处理当前房间的消息
+        if (data.roomId && data.roomId !== currentRoom.value?.id) {
+          console.log('[WebSocket] stream_delta ignored - room mismatch:', data.roomId, '!=', currentRoom.value?.id)
+          break
+        }
+        // 追加到最新消息
         {
           const index = messages.value.findIndex(m => m.id === data.message.id)
           if (index !== -1) {
@@ -281,7 +290,12 @@ export const useChatStore = defineStore('chat', () => {
         }
         break
       case 'tool_start':
-        // 工具调用开始 - 实时更新工具调用状态
+        // 工具调用开始 - 只处理当前房间的消息
+        if (data.roomId && data.roomId !== currentRoom.value?.id) {
+          console.log('[WebSocket] tool_start ignored - room mismatch:', data.roomId, '!=', currentRoom.value?.id)
+          break
+        }
+        // 实时更新工具调用状态
         {
           const index = messages.value.findIndex(m => m.id === data.message.id)
           if (index !== -1) {
@@ -299,7 +313,12 @@ export const useChatStore = defineStore('chat', () => {
         }
         break
       case 'tool_result':
-        // 工具调用完成 - 更新工具调用状态
+        // 工具调用完成 - 只处理当前房间的消息
+        if (data.roomId && data.roomId !== currentRoom.value?.id) {
+          console.log('[WebSocket] tool_result ignored - room mismatch:', data.roomId, '!=', currentRoom.value?.id)
+          break
+        }
+        // 更新工具调用状态
         {
           const index = messages.value.findIndex(m => m.id === data.message.id)
           if (index !== -1) {
@@ -315,7 +334,12 @@ export const useChatStore = defineStore('chat', () => {
         }
         break
       case 'stream_end':
-        // 流式消息结束 - 替换为完整消息
+        // 流式消息结束 - 只处理当前房间的消息
+        if (data.roomId && data.roomId !== currentRoom.value?.id) {
+          console.log('[WebSocket] stream_end ignored - room mismatch:', data.roomId, '!=', currentRoom.value?.id)
+          break
+        }
+        // 替换为完整消息
         {
           console.log('[WebSocket] stream_end - received message:', {
             id: data.message?.id,
