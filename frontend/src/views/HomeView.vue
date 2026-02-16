@@ -129,7 +129,7 @@
               >
                 <!-- 头像 -->
                 <div class="message-avatar">
-                  <img v-if="msg.senderAvatar" :src="msg.senderAvatar" :alt="msg.senderName" />
+                  <img v-if="getMessageAvatar(msg)" :src="getMessageAvatar(msg)" :alt="msg.senderName" />
                   <div v-else class="avatar-placeholder">{{ getInitials(msg.senderName) }}</div>
                 </div>
                 
@@ -1231,6 +1231,14 @@ function getToolIcon(toolName: string): string {
     'gh': '🐙',
   }
   return iconMap[toolName] || '🔧'
+}
+
+// 获取消息头像 - 如果是当前用户，使用当前用户的最新头像
+function getMessageAvatar(msg: Message): string | undefined {
+  if (msg.senderId === authStore.user?.id) {
+    return authStore.user?.avatar || msg.senderAvatar
+  }
+  return msg.senderAvatar
 }
 
 function getInitials(name: string): string {
