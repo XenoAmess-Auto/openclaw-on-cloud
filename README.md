@@ -1,20 +1,26 @@
 # OpenClaw on Cloud
 
-## Android 应用构建
+## Android 应用下载
 
-使用 Capacitor 生成 Android APK：
+GitHub Actions 自动构建 Android APK，**支持覆盖安装**（无需卸载旧版本）。
+
+**下载 APK：**
+- 访问 [Actions 页面](https://github.com/XenoAmess-Auto/openclaw-on-cloud/actions/workflows/android-build.yml)
+- 点击最新运行记录 → Artifacts → 下载 APK
+
+**覆盖安装说明：**
+- 新 APK 可直接覆盖旧版本，数据和设置保留
+- 每次构建版本号自动递增
+
+## Android 本地构建
+
+如需本地构建：
 
 ```bash
 cd frontend
-
-# 一键构建
-./scripts/build-android.sh
-
-# 或使用 pnpm 脚本
-pnpm mobile:build
+./scripts/build-android.sh  # 一键构建
+# 或: pnpm mobile:build
 ```
-
-APK 输出：`android/app/build/outputs/apk/debug/app-debug.apk`
 
 详见 [frontend/android/README.md](frontend/android/README.md)
 

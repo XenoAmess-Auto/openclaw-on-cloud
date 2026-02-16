@@ -2,14 +2,42 @@
 
 使用 Capacitor 将 OOC 前端打包为 Android 应用。
 
-## 前置要求
+## 获取 APK（推荐）
+
+### GitHub Actions 自动构建
+
+项目已配置 GitHub Actions 自动构建 Android APK，**支持覆盖安装**（无需卸载旧版本）。
+
+**下载方式：**
+
+1. **最新构建（推荐）**
+   - 访问 GitHub 仓库 → Actions 标签页
+   - 点击最新的 "Build Android APK" 工作流运行记录
+   - 在 Artifacts 区域下载 `ooc-android-v1.0.xxx.apk`
+
+2. **Release 版本**
+   - 访问 GitHub 仓库 → Releases 页面
+   - 下载对应版本的 APK
+
+3. **手动触发构建**
+   - 访问 Actions → Build Android APK → Run workflow
+   - 可指定自定义版本号
+
+**覆盖安装说明：**
+- 每次构建的 `versionCode` 自动递增
+- 新 APK 可以直接覆盖安装旧版本，无需卸载
+- 数据（如登录状态、设置）会保留
+
+## 本地构建
+
+如需本地构建，请参考以下方法：
+
+### 前置要求
 
 1. **Node.js** 18+ 和 pnpm
 2. **Android SDK** (用于构建 APK)
    - 如果没有 Android Studio，可以只安装命令行工具
    - 设置环境变量 `ANDROID_HOME` 或在 `android/local.properties` 中指定 SDK 路径
-
-## 快速开始
 
 ### 方法一：一键构建脚本（最简单）
 

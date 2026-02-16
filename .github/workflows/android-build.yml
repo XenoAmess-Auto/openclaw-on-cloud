@@ -1,0 +1,158 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/android-build.yml'
+  workflow_dispatch:  # 允许手动触发
+    inputs:
+      version_code:
+        description: 'Version Code (数字，用于覆盖安装，留空则使用 run number)'
+        required: false
+        default: ''
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./frontend
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 10
+
+      - name: Get pnpm store directory
+        shell: bash
+        run: |
+          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+      - name: Setup pnpm cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Accept Android licenses
+        run: |
+          yes | sdkmanager --licenses || true
+
+      # 设置版本号 - 使用 GitHub run_number 确保每次递增，支持覆盖安装
+      - name: Set Version Code
+        run: |
+          if [ -n "${{ github.event.inputs.version_code }}" ]; then
+            VERSION_CODE=${{ github.event.inputs.version_code }}
+          else
+            VERSION_CODE=${{ github.run_number }}
+          fi
+          echo "VERSION_CODE=$VERSION_CODE" >> $GITHUB_ENV
+          echo "versionCode=$VERSION_CODE" > android/local.properties
+          echo "Version Code: $VERSION_CODE"
+
+      - name: Build Frontend
+        run: pnpm run build
+
+      - name: Sync Capacitor
+        run: npx cap sync android
+
+      # 使用环境变量 VERSION_CODE 构建，确保 versionCode 递增
+      - name: Build Debug APK
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+        env:
+          VERSION_CODE: ${{ env.VERSION_CODE }}
+
+      - name: Verify APK
+        run: |
+          echo "=== APK Info ==="
+          ls -lh android/app/build/outputs/apk/debug/
+          echo ""
+          echo "=== APK Details ==="
+          aapt dump badging android/app/build/outputs/apk/debug/app-debug.apk | grep -E "package|version"
+
+      # 重命名 APK，包含版本信息
+      - name: Rename APK
+        run: |
+          cd android/app/build/outputs/apk/debug/
+          mv app-debug.apk ooc-android-v1.0.${{ env.VERSION_CODE }}.apk
+          echo "=== Final APK ==="
+          ls -lh *.apk
+
+      # 上传构建产物，可以下载
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: ooc-android-v1.0.${{ env.VERSION_CODE }}
+          path: frontend/android/app/build/outputs/apk/debug/*.apk
+          retention-days: 90  # 保留90天
+          compression-level: 0  # APK 已压缩，无需再压缩
+
+      # 输出下载链接信息
+      - name: Output Download Info
+        run: |
+          echo ""
+          echo "========================================"
+          echo "  Android APK 构建完成"
+          echo "========================================"
+          echo "  版本: v1.0.${{ env.VERSION_CODE }}"
+          echo "  版本码: ${{ env.VERSION_CODE }}"
+          echo ""
+          echo "  下载方式:"
+          echo "  1. 访问 Actions 页面"
+          echo "  2. 点击本次运行记录"
+          echo "  3. 在 Artifacts 区域下载"
+          echo "========================================"
+
+      # 创建 Release（仅在打标签时）
+      - name: Create Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: frontend/android/app/build/outputs/apk/debug/*.apk
+          draft: false
+          prerelease: false
+          name: "OOC Android v1.0.${{ env.VERSION_CODE }}"
+          body: |
+            ## OOC Android 应用
+
+            **版本**: v1.0.${{ env.VERSION_CODE }}
+            **构建时间**: ${{ github.event.head_commit.timestamp }}
+            **提交**: ${{ github.sha }}
+
+            ### 安装说明
+            1. 下载 APK 文件
+            2. 在 Android 设备上打开（需要允许未知来源安装）
+            3. 可以直接覆盖安装旧版本，无需卸载
+
+            ### 配置后端地址
+            首次打开应用后，在登录页面点击"⚙️ 服务器地址配置"设置后端服务器地址。
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

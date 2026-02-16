@@ -1,5 +1,23 @@
 apply plugin: 'com.android.application'
 
+// 从环境变量或 local.properties 读取 version code
+def getVersionCode = { ->
+    def code = System.getenv("VERSION_CODE")
+    if (code != null && code.isInteger()) {
+        return code.toInteger()
+    }
+    // 尝试从 local.properties 读取
+    def props = new Properties()
+    def localProps = file("../local.properties")
+    if (localProps.exists()) {
+        localProps.withInputStream { props.load(it) }
+        if (props.containsKey("versionCode")) {
+            return props["versionCode"].toInteger()
+        }
+    }
+    return 1
+}
+
 android {
     namespace = "com.ooc.app"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -7,8 +25,8 @@ android {
         applicationId "com.ooc.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        versionCode getVersionCode()
+        versionName "1.0.${getVersionCode()}"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
