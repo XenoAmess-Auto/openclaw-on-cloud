@@ -853,43 +853,81 @@ function renderContent(msg: Message) {
 
   // 检查是否有工具调用部分，如果有，先提取并转换
   let toolCallsHtml = ''
-  const toolsMatch = content.match(/(\*\*Tools used:\*\*.*?)(?=\n\n|$)/s)
-  if (toolsMatch) {
-    const toolsSection = toolsMatch[1]
-    // 解析工具列表
-    const toolLines = toolsSection.split('\n').slice(1) // 跳过标题行
-    const tools: Array<{name: string, desc: string}> = []
-    
-    for (const line of toolLines) {
-      const match = line.match(/^[-*]\s*`?(\w+)`?\s*:?\s*(.*)/)
-      if (match) {
-        tools.push({ name: match[1], desc: match[2] || '' })
-      }
-    }
-    
-    if (tools.length > 0) {
-      // 生成工具调用卡片 HTML
-      toolCallsHtml = `<div class="tool-call-section">
-        <div class="tool-call-header">
-          <span class="tool-icon">🔧</span>
-          <span class="tool-title">工具调用</span>
-        </div>
-        <div class="tool-call-list">
-          ${tools.map(tool => `
-            <div class="tool-item completed">
-              <div class="tool-name">
-                <span class="tool-icon-small">${getToolIcon(tool.name)}</span>
-                <code>${tool.name}</code>
-                <span class="tool-status completed">✓ 完成</span>
-              </div>
-              ${tool.desc ? `<div class="tool-description">${escapeHtml(tool.desc)}</div>` : ''}
+  
+  // 优先使用 msg.toolCalls 数据（来自实时 tool_start 事件或后端解析）
+  if (msg.toolCalls && msg.toolCalls.length > 0) {
+    // 生成工具调用卡片 HTML
+    toolCallsHtml = `<div class="tool-call-section">
+      <div class="tool-call-header">
+        <span class="tool-icon">🔧</span>
+        <span class="tool-title">工具调用</span>
+      </div>
+      <div class="tool-call-list">
+        ${msg.toolCalls.map(tool => `
+          <div class="tool-item ${tool.status || 'completed'}">
+            <div class="tool-name">
+              <span class="tool-icon-small">${getToolIcon(tool.name)}</span>
+              <code>${tool.name}</code>
+              <span class="tool-status ${tool.status || 'completed'}">
+                ${tool.status === 'running' ? '<span class="tool-spinner"></span> 执行中' : 
+                  tool.status === 'error' ? '✗ 失败' : '✓ 完成'}
+              </span>
             </div>
-          `).join('')}
-        </div>
-      </div>`
-      
-      // 从 content 中移除 Tools used 部分，后面会插入卡片
+            ${tool.description ? `<div class="tool-description">${escapeHtml(tool.description)}</div>` : ''}
+            ${tool.result ? `<div class="tool-result"><pre>${escapeHtml(tool.result)}</pre></div>` : ''}
+          </div>
+        `).join('')}
+      </div>
+    </div>`
+    
+    // 从 content 中移除 Tools used 部分，避免重复显示
+    const toolsMatch = content.match(/(\*\*Tools used:\*\*.*?)(?=\n\n|$)/s)
+    if (toolsMatch) {
       content = content.replace(toolsMatch[0], '\n<!--TOOL_CALLS_PLACEHOLDER-->\n')
+    } else {
+      // 如果没有找到 Tools used 部分，在内容前插入占位符
+      content = '<!--TOOL_CALLS_PLACEHOLDER-->\n\n' + content
+    }
+  } else {
+    // 回退：从内容中解析 **Tools used:** 部分
+    const toolsMatch = content.match(/(\*\*Tools used:\*\*.*?)(?=\n\n|$)/s)
+    if (toolsMatch) {
+      const toolsSection = toolsMatch[1]
+      // 解析工具列表
+      const toolLines = toolsSection.split('\n').slice(1) // 跳过标题行
+      const tools: Array<{name: string, desc: string}> = []
+      
+      for (const line of toolLines) {
+        const match = line.match(/^[-*]\s*`?(\w+)`?\s*:?\s*(.*)/)
+        if (match) {
+          tools.push({ name: match[1], desc: match[2] || '' })
+        }
+      }
+      
+      if (tools.length > 0) {
+        // 生成工具调用卡片 HTML
+        toolCallsHtml = `<div class="tool-call-section">
+          <div class="tool-call-header">
+            <span class="tool-icon">🔧</span>
+            <span class="tool-title">工具调用</span>
+          </div>
+          <div class="tool-call-list">
+            ${tools.map(tool => `
+              <div class="tool-item completed">
+                <div class="tool-name">
+                  <span class="tool-icon-small">${getToolIcon(tool.name)}</span>
+                  <code>${tool.name}</code>
+                  <span class="tool-status completed">✓ 完成</span>
+                </div>
+                ${tool.desc ? `<div class="tool-description">${escapeHtml(tool.desc)}</div>` : ''}
+              </div>
+            `).join('')}
+          </div>
+        </div>`
+        
+        // 从 content 中移除 Tools used 部分，后面会插入卡片
+        content = content.replace(toolsMatch[0], '\n<!--TOOL_CALLS_PLACEHOLDER-->\n')
+      }
     }
   }
 
