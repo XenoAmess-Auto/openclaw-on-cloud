@@ -11,6 +11,47 @@
       <div class="settings-card">
         <h2>用户设置</h2>
 
+        <!-- 后端地址配置 -->
+        <div class="form-section">
+          <h3>后端服务器地址</h3>
+          
+          <div class="form-group">
+            <label>自定义后端地址（可选）</label>
+            <input 
+              v-model="backendUrl"
+              type="text"
+              placeholder="http://localhost:8081"
+            />
+            <p class="help-text">
+              留空则使用默认值：{{ currentBackendUrl }}
+            </p>
+            <p class="help-text">
+              格式：http://host:port 或 https://host:port
+            </p>
+          </div>
+
+          <div v-if="configError" class="error-message">{{ configError }}</div>
+          <div v-if="configSuccess" class="success-message">{{ configSuccess }}</div>
+
+          <div class="form-actions-inline">
+            <button 
+              @click="saveBackendConfig" 
+              class="btn-primary"
+              :disabled="configSaving"
+            >
+              {{ configSaving ? '保存中...' : '保存后端配置' }}
+            </button>
+            <button 
+              v-if="configStore.config.baseUrl"
+              @click="backendUrl = ''; saveBackendConfig()" 
+              class="btn-secondary"
+              :disabled="configSaving"
+            >
+              恢复默认
+            </button>
+          </div>
+        </div>
+
         <!-- 头像上传 -->
         <div class="form-section">
           <div class="avatar-section">
@@ -118,11 +159,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, computed } from 'vue'
 import { useAuthStore } from '@/stores/auth'
+import { useConfigStore } from '@/stores/config'
 import { fileApi } from '@/api/file'
 
 const authStore = useAuthStore()
+const configStore = useConfigStore()
 const fileInput = ref<HTMLInputElement>()
 
 const avatarPreview = ref('')
@@ -139,6 +182,15 @@ const form = reactive({
   newPassword: ''
 })
 
+// 后端地址配置
+const backendUrl = ref('')
+const configSaving = ref(false)
+const configError = ref('')
+const configSuccess = ref('')
+
+// 当前使用的后端地址
+const currentBackendUrl = computed(() => configStore.baseUrl)
+
 onMounted(() => {
   // 初始化表单数据
   if (authStore.user) {
@@ -146,6 +198,8 @@ onMounted(() => {
     form.email = authStore.user.email
     avatarPreview.value = authStore.user.avatar || ''
   }
+  // 初始化后端地址配置
+  backendUrl.value = configStore.config.baseUrl || ''
 })
 
 function triggerFileInput() {
@@ -239,6 +293,47 @@ async function saveProfile() {
     errorMessage.value = error.response?.data?.message || '保存失败，请重试'
   } finally {
     saving.value = false
+  }
+}
+
+// 保存后端地址配置
+async function saveBackendConfig() {
+  configError.value = ''
+  configSuccess.value = ''
+  configSaving.value = true
+
+  try {
+    const url = backendUrl.value.trim()
+    
+    // 如果为空，则重置为默认
+    if (!url) {
+      configStore.resetToDefault()
+      configSuccess.value = '已恢复默认后端地址，刷新页面后生效'
+      configSaving.value = false
+      return
+    }
+
+    // 验证 URL 格式
+    let validatedUrl: string
+    try {
+      const parsed = new URL(url)
+      // 确保协议是 http 或 https
+      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+        throw new Error('协议必须是 http 或 https')
+      }
+      validatedUrl = `${parsed.protocol}//${parsed.host}`
+    } catch (e) {
+      configError.value = '无效的 URL 格式，请使用 http://host:port 或 https://host:port'
+      configSaving.value = false
+      return
+    }
+
+    configStore.saveConfig({ baseUrl: validatedUrl })
+    configSuccess.value = '后端地址已保存，刷新页面后生效'
+  } catch (error: any) {
+    configError.value = error.message || '保存失败，请重试'
+  } finally {
+    configSaving.value = false
   }
 }
 </script>
@@ -456,6 +551,33 @@ async function saveProfile() {
   cursor: not-allowed;
 }
 
+.form-actions-inline {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.btn-secondary {
+  padding: 0.75rem 1.5rem;
+  background: var(--surface-color);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: var(--bg-color);
+  border-color: var(--text-secondary);
+}
+
+.btn-secondary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 @media (max-width: 768px) {
   .container {
     margin: 1rem auto;
@@ -463,6 +585,10 @@ async function saveProfile() {
   
   .settings-card {
     padding: 1.5rem;
+  }
+  
+  .form-actions-inline {
+    flex-direction: column;
   }
 }
 </style>
