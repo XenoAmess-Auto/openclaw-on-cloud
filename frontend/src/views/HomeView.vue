@@ -91,28 +91,36 @@
               </div>
               
               <!-- OpenClaw 消息（包含工具调用） -->
-              <div 
-                v-else-if="msg.fromOpenClaw" 
-                :class="[
-                  'message',
-                  'openclaw-message-container',
-                  { 'has-tool-calls': msg.toolCalls?.length || msg.isToolCall }
-                ]"
-              >
-                <!-- 头像 -->
-                <div class="message-avatar">
-                  <img v-if="msg.senderAvatar" :src="msg.senderAvatar" :alt="msg.senderName" />
-                  <div v-else class="avatar-placeholder">🤖</div>
-                </div>
-                
-                <div class="message-body openclaw-body">
-                  <div class="message-header">
-                    <span class="sender">{{ msg.senderName }}</span>
-                    <span class="time">{{ formatTime(msg.timestamp) }}</span>
+              <template v-else-if="msg.fromOpenClaw">
+                <!-- 工具调用气泡 -->
+                <div v-if="msg.toolCalls?.length || msg.isToolCall" class="message openclaw-message-container">
+                  <div class="message-avatar">
+                    <img v-if="msg.senderAvatar" :src="msg.senderAvatar" :alt="msg.senderName" />
+                    <div v-else class="avatar-placeholder">🤖</div>
                   </div>
-                  <div class="message-content" v-html="renderContent(msg)"></div>
+                  <div class="message-body openclaw-body">
+                    <div class="message-header">
+                      <span class="sender">{{ msg.senderName }}</span>
+                      <span class="time">{{ formatTime(msg.timestamp) }}</span>
+                    </div>
+                    <div class="message-content" v-html="renderToolCalls(msg)"></div>
+                  </div>
                 </div>
-              </div>
+                <!-- 文本内容气泡 -->
+                <div v-if="msg.content?.trim()" class="message openclaw-message-container">
+                  <div class="message-avatar">
+                    <img v-if="msg.senderAvatar" :src="msg.senderAvatar" :alt="msg.senderName" />
+                    <div v-else class="avatar-placeholder">🤖</div>
+                  </div>
+                  <div class="message-body openclaw-body">
+                    <div class="message-header">
+                      <span class="sender">{{ msg.senderName }}</span>
+                      <span class="time">{{ formatTime(msg.timestamp) }}</span>
+                    </div>
+                    <div class="message-content" v-html="renderTextContent(msg)"></div>
+                  </div>
+                </div>
+              </template>
               
               <!-- 纯工具调用消息（不含 fromOpenClaw） -->
               <div v-else-if="msg.isToolCall || msg.toolCalls?.length" class="tool-call-message">
@@ -872,32 +880,7 @@ function renderContent(msg: Message) {
   // 优先使用 msg.toolCalls 数据（来自实时 tool_start 事件或后端解析）
   if (msg.toolCalls && msg.toolCalls.length > 0) {
     // 生成工具调用卡片 HTML - 新卡片样式
-    toolCallsHtml = `<div class="tool-call-section">
-      <div class="tool-call-header">
-        <span class="tool-icon">🔧</span>
-        <span class="tool-title">工具调用</span>
-      </div>
-      <div class="tool-call-list">
-        ${msg.toolCalls.map(tool => `
-          <div class="tool-item ${tool.status || 'completed'}">
-            <div class="tool-item-header">
-              <span class="tool-icon-small">${getToolIcon(tool.name)}</span>
-              <span class="tool-name"><code>${tool.name}</code></span>
-              <span class="tool-status ${tool.status || 'completed'}">
-                ${tool.status === 'running' ? '<span class="tool-spinner"></span> 执行中' : 
-                  tool.status === 'error' ? '✗ 失败' : '✓ 完成'}
-              </span>
-            </div>
-            ${tool.description ? `<div class="tool-item-body">
-              <div class="tool-description">${formatToolDescription(tool.name, tool.description)}</div>
-            </div>` : ''}
-            ${tool.result ? `<div class="tool-item-body">
-              <div class="tool-result"><pre>${escapeHtml(tool.result)}</pre></div>
-            </div>` : ''}
-          </div>
-        `).join('')}
-      </div>
-    </div>`
+    toolCallsHtml = generateToolCallsHtml(msg.toolCalls)
     
     // 从 content 中移除 Tools used 部分，避免重复显示
     const toolsMatch = content.match(/(\*\*Tools used:\*\*.*?)(?=\n\n|$)/s)
@@ -925,29 +908,309 @@ function renderContent(msg: Message) {
       
       if (tools.length > 0) {
         // 生成工具调用卡片 HTML - 新卡片样式
-        toolCallsHtml = `<div class="tool-call-section">
-          <div class="tool-call-header">
-            <span class="tool-icon">🔧</span>
-            <span class="tool-title">工具调用</span>
-          </div>
-          <div class="tool-call-list">
-            ${tools.map(tool => `
-              <div class="tool-item completed">
-                <div class="tool-item-header">
-                  <span class="tool-icon-small">${getToolIcon(tool.name)}</span>
-                  <span class="tool-name"><code>${tool.name}</code></span>
-                  <span class="tool-status completed">✓ 完成</span>
-                </div>
-                ${tool.desc ? `<div class="tool-item-body"><div class="tool-description">${escapeHtml(tool.desc)}</div></div>` : ''}
-              </div>
-            `).join('')}
-          </div>
-        </div>`
+        toolCallsHtml = generateToolCallsHtmlFromArray(tools)
         
         // 从 content 中移除 Tools used 部分，后面会插入卡片
         content = content.replace(toolsMatch[0], '\n<!--TOOL_CALLS_PLACEHOLDER-->\n')
       }
     }
+  }
+
+  // Step 1: 渲染 Markdown（不进行 @提及替换，DOMPurify 会清理特殊标记）
+  let htmlContent = renderMarkdown(content)
+
+  // XSS 清理
+  htmlContent = DOMPurify.sanitize(htmlContent, {
+    ALLOWED_TAGS: [
+      'p', 'br', 'hr',
+      'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+      'ul', 'ol', 'li',
+      'strong', 'em', 'code', 'pre', 'blockquote',
+      'a', 'img', 'table', 'thead', 'tbody', 'tr', 'th', 'td',
+      'del', 'ins', 'sup', 'sub',
+      // 工具卡片相关标签
+      'div', 'span'
+    ],
+    ALLOWED_ATTR: ['href', 'src', 'alt', 'title', 'target', 'class']
+  })
+
+  // 插入工具调用卡片（替换占位符）
+  if (toolCallsHtml) {
+    // 尝试替换占位符，如果不存在则直接插入到开头
+    if (htmlContent.includes('TOOL_CALLS_PLACEHOLDER')) {
+      htmlContent = htmlContent.replace(/&lt;!--TOOL_CALLS_PLACEHOLDER--&gt;/g, toolCallsHtml)
+      htmlContent = htmlContent.replace(/<!--TOOL_CALLS_PLACEHOLDER-->/g, toolCallsHtml)
+    } else {
+      // 占位符被清理了，直接插入到开头
+      htmlContent = toolCallsHtml + '\n' + htmlContent
+    }
+  }
+
+  // Step 2: 在 HTML 中查找并高亮 @提及（在 sanitization 之后进行）
+  htmlContent = highlightMentions(htmlContent, msg)
+
+  // Step 4: 渲染附件图片
+  let attachmentsHtml = renderAttachments(msg)
+
+  return htmlContent + attachmentsHtml
+}
+
+// 渲染工具调用卡片（只渲染工具调用，不渲染文本内容）
+function renderToolCalls(msg: Message): string {
+  if (!msg.toolCalls?.length && !msg.isToolCall) {
+    return ''
+  }
+
+  let toolCallsHtml = ''
+  
+  // 优先使用 msg.toolCalls 数据
+  if (msg.toolCalls && msg.toolCalls.length > 0) {
+    toolCallsHtml = generateToolCallsHtml(msg.toolCalls)
+  } else {
+    // 回退：从 content 中解析 **Tools used:** 部分
+    const content = msg.content || ''
+    const toolsMatch = content.match(/(\*\*Tools used:\*\*.*?)(?=\n\n|$)/s)
+    if (toolsMatch) {
+      const toolsSection = toolsMatch[1]
+      const toolLines = toolsSection.split('\n').slice(1)
+      const tools: Array<{name: string, desc: string}> = []
+      
+      for (const line of toolLines) {
+        const match = line.match(/^[-*]\s*`?(\w+)`?\s*:?\s*(.*)/)
+        if (match) {
+          tools.push({ name: match[1], desc: match[2] || '' })
+        }
+      }
+      
+      if (tools.length > 0) {
+        toolCallsHtml = generateToolCallsHtmlFromArray(tools)
+      }
+    }
+  }
+
+  return DOMPurify.sanitize(toolCallsHtml, {
+    ALLOWED_TAGS: ['div', 'span', 'code', 'pre'],
+    ALLOWED_ATTR: ['class']
+  })
+}
+
+// 渲染文本内容（不渲染工具卡片）
+function renderTextContent(msg: Message): string {
+  let content = msg.content || ''
+
+  // 处理转义字符
+  content = content.replace(/\\n/g, '\n').replace(/\\t/g, '\t')
+
+  // 从 content 中移除 Tools used 部分
+  const toolsMatch = content.match(/(\*\*Tools used:\*\*.*?)(?=\n\n|$)/s)
+  if (toolsMatch) {
+    content = content.replace(toolsMatch[0], '')
+  }
+
+  // 渲染 Markdown
+  let htmlContent = renderMarkdown(content)
+
+  // XSS 清理
+  htmlContent = DOMPurify.sanitize(htmlContent, {
+    ALLOWED_TAGS: [
+      'p', 'br', 'hr',
+      'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+      'ul', 'ol', 'li',
+      'strong', 'em', 'code', 'pre', 'blockquote',
+      'a', 'img', 'table', 'thead', 'tbody', 'tr', 'th', 'td',
+      'del', 'ins', 'sup', 'sub',
+      'div', 'span'
+    ],
+    ALLOWED_ATTR: ['href', 'src', 'alt', 'title', 'target', 'class']
+  })
+
+  // 高亮 @提及
+  htmlContent = highlightMentions(htmlContent, msg)
+
+  // 渲染附件图片
+  let attachmentsHtml = renderAttachments(msg)
+
+  return htmlContent + attachmentsHtml
+}
+
+// 生成工具调用卡片 HTML（从 toolCalls 数组）
+function generateToolCallsHtml(toolCalls: Message['toolCalls']): string {
+  if (!toolCalls || toolCalls.length === 0) return ''
+  
+  return `<div class="tool-call-section">
+    <div class="tool-call-header">
+      <span class="tool-icon">🔧</span>
+      <span class="tool-title">工具调用</span>
+    </div>
+    <div class="tool-call-list">
+      ${toolCalls.map(tool => `
+        <div class="tool-item ${tool.status || 'completed'}">
+          <div class="tool-item-header">
+            <span class="tool-icon-small">${getToolIcon(tool.name)}</span>
+            <span class="tool-name"><code>${tool.name}</code></span>
+            <span class="tool-status ${tool.status || 'completed'}">
+              ${tool.status === 'running' ? '<span class="tool-spinner"></span> 执行中' : 
+                tool.status === 'error' ? '✗ 失败' : '✓ 完成'}
+            </span>
+          </div>
+          ${tool.description ? `<div class="tool-item-body">
+            <div class="tool-description">${formatToolDescription(tool.name, tool.description)}</div>
+          </div>` : ''}
+          ${tool.result ? `<div class="tool-item-body">
+            <div class="tool-result"><pre>${escapeHtml(tool.result)}</pre></div>
+          </div>` : ''}
+        </div>
+      `).join('')}
+    </div>
+  </div>`
+}
+
+// 生成工具调用卡片 HTML（从解析的工具数组）
+function generateToolCallsHtmlFromArray(tools: Array<{name: string, desc: string}>): string {
+  if (!tools || tools.length === 0) return ''
+  
+  return `<div class="tool-call-section">
+    <div class="tool-call-header">
+      <span class="tool-icon">🔧</span>
+      <span class="tool-title">工具调用</span>
+    </div>
+    <div class="tool-call-list">
+      ${tools.map(tool => `
+        <div class="tool-item completed">
+          <div class="tool-item-header">
+            <span class="tool-icon-small">${getToolIcon(tool.name)}</span>
+            <span class="tool-name"><code>${tool.name}</code></span>
+            <span class="tool-status completed">✓ 完成</span>
+          </div>
+          ${tool.desc ? `<div class="tool-item-body"><div class="tool-description">${escapeHtml(tool.desc)}</div></div>` : ''}
+        </div>
+      `).join('')}
+    </div>
+  </div>`
+}
+
+// 渲染 Markdown
+function renderMarkdown(content: string): string {
+  try {
+    // 使用 marked.marked 进行同步解析（marked v17+）
+    const parsed = (marked as any).marked?.(content) || marked.parse(content, { async: false })
+    const htmlContent = String(parsed)
+
+    // 安全检查：如果解析结果看起来像 Promise 或没有 HTML 标签，使用 fallback
+    if (htmlContent === '[object Promise]' || !htmlContent.includes('<')) {
+      throw new Error('Invalid parsed content')
+    }
+    return htmlContent
+  } catch (e) {
+    // 解析失败时的 fallback
+    return content
+      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*(.+?)\*/g, '<em>$1</em>')
+      .replace(/`(.+?)`/g, '<code>$1</code>')
+      .replace(/~~(.+?)~~/g, '<del>$1</del>')
+      .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+      .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+      .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+      .replace(/^- (.+)$/gm, '<li>$1</li>')
+      .replace(/\n/g, '<br>')
+  }
+}
+
+// 高亮 @提及
+function highlightMentions(htmlContent: string, msg: Message): string {
+  // 使用正则匹配文本节点中的 @提及
+  htmlContent = htmlContent.replace(/(@所有人|@everyone|@all)/gi, '<span class="mention mention-all">$1</span>')
+  htmlContent = htmlContent.replace(/(@在线|@here)/gi, '<span class="mention mention-here">$1</span>')
+  htmlContent = htmlContent.replace(/(@openclaw)/gi, '<span class="mention">$1</span>')
+  
+  // 处理其他用户提及
+  if (msg.mentions) {
+    msg.mentions.forEach(mention => {
+      const regex = new RegExp(`@${mention.userName}`, 'g')
+      htmlContent = htmlContent.replace(regex, `<span class="mention">@${mention.userName}</span>`)
+    })
+  }
+  
+  return htmlContent
+}
+
+// 渲染附件图片
+function renderAttachments(msg: Message): string {
+  if (!msg.attachments || msg.attachments.length === 0) {
+    return ''
+  }
+  
+  return '<div class="message-attachments">' +
+    msg.attachments.map(att => {
+      // 更可靠的图片检测：检查 type、contentType 或 url
+      const typeStr = (att.type || '').toUpperCase()
+      const contentTypeStr = (att.contentType || '').toLowerCase()
+      const urlStr = (att.url || '').toLowerCase()
+
+      // 多种方式检测图片
+      const isImage = typeStr === 'IMAGE' ||
+                     contentTypeStr.startsWith('image/') ||
+                     urlStr.startsWith('data:image/') ||
+                     urlStr.endsWith('.png') ||
+                     urlStr.endsWith('.jpg') ||
+                     urlStr.endsWith('.jpeg') ||
+                     urlStr.endsWith('.gif') ||
+                     urlStr.endsWith('.webp')
+
+      if (isImage) {
+        return `<img src="${att.url}" alt="${att.name || '图片'}" class="message-image" loading="lazy" />`
+      }
+      return `<a href="${att.url}" target="_blank" class="message-file">${att.name || '附件'}</a>`
+    }).join('') +
+    '</div>'
+}
+
+// 渲染工具调用卡片（单独气泡）
+function renderToolCalls(msg: Message): string {
+  if (!msg.toolCalls || msg.toolCalls.length === 0) return ''
+  
+  const toolCallsHtml = `<div class="tool-call-section">
+    <div class="tool-call-header">
+      <span class="tool-icon">🔧</span>
+      <span class="tool-title">工具调用</span>
+    </div>
+    <div class="tool-call-list">
+      ${msg.toolCalls.map(tool => `
+        <div class="tool-item ${tool.status || 'completed'}">
+          <div class="tool-item-header">
+            <span class="tool-icon-small">${getToolIcon(tool.name)}</span>
+            <span class="tool-name"><code>${tool.name}</code></span>
+            <span class="tool-status ${tool.status || 'completed'}">
+              ${tool.status === 'running' ? '<span class="tool-spinner"></span> 执行中' : 
+                tool.status === 'error' ? '✗ 失败' : '✓ 完成'}
+            </span>
+          </div>
+          ${tool.description ? `<div class="tool-item-body">
+            <div class="tool-description">${formatToolDescription(tool.name, tool.description)}</div>
+          </div>` : ''}
+          ${tool.result ? `<div class="tool-item-body">
+            <div class="tool-result"><pre>${escapeHtml(tool.result)}</pre></div>
+          </div>` : ''}
+        </div>
+      `).join('')}
+    </div>
+  </div>`
+  
+  return toolCallsHtml
+}
+
+// 渲染文本内容（不包含工具卡片）
+function renderTextContent(msg: Message): string {
+  // 防御性处理：确保 content 不为 null/undefined
+  let content = msg.content || ''
+
+  // 处理转义字符：将字符串 \n \t 转为真正的换行和制表符
+  content = content.replace(/\\n/g, '\n').replace(/\\t/g, '\t')
+
+  // 从 content 中移除 Tools used 部分，避免重复显示
+  const toolsMatch = content.match(/(\*\*Tools used:\*\*.*?)(?=\n\n|$)/s)
+  if (toolsMatch) {
+    content = content.replace(toolsMatch[0], '')
   }
 
   // Step 1: 渲染 Markdown（不进行 @提及替换，DOMPurify 会清理特殊标记）
@@ -984,26 +1247,12 @@ function renderContent(msg: Message) {
       'strong', 'em', 'code', 'pre', 'blockquote',
       'a', 'img', 'table', 'thead', 'tbody', 'tr', 'th', 'td',
       'del', 'ins', 'sup', 'sub',
-      // 工具卡片相关标签
       'div', 'span'
     ],
     ALLOWED_ATTR: ['href', 'src', 'alt', 'title', 'target', 'class']
   })
 
-  // 插入工具调用卡片（替换占位符）
-  if (toolCallsHtml) {
-    // 尝试替换占位符，如果不存在则直接插入到开头
-    if (htmlContent.includes('TOOL_CALLS_PLACEHOLDER')) {
-      htmlContent = htmlContent.replace(/&lt;!--TOOL_CALLS_PLACEHOLDER--&gt;/g, toolCallsHtml)
-      htmlContent = htmlContent.replace(/<!--TOOL_CALLS_PLACEHOLDER-->/g, toolCallsHtml)
-    } else {
-      // 占位符被清理了，直接插入到开头
-      htmlContent = toolCallsHtml + '\n' + htmlContent
-    }
-  }
-
   // Step 2: 在 HTML 中查找并高亮 @提及（在 sanitization 之后进行）
-  // 使用正则匹配文本节点中的 @提及
   htmlContent = htmlContent.replace(/(@所有人|@everyone|@all)/gi, '<span class="mention mention-all">$1</span>')
   htmlContent = htmlContent.replace(/(@在线|@here)/gi, '<span class="mention mention-here">$1</span>')
   htmlContent = htmlContent.replace(/(@openclaw)/gi, '<span class="mention">$1</span>')
@@ -1021,12 +1270,10 @@ function renderContent(msg: Message) {
   if (msg.attachments && msg.attachments.length > 0) {
     attachmentsHtml = '<div class="message-attachments">' +
       msg.attachments.map(att => {
-        // 更可靠的图片检测：检查 type、contentType 或 url
         const typeStr = (att.type || '').toUpperCase()
         const contentTypeStr = (att.contentType || '').toLowerCase()
         const urlStr = (att.url || '').toLowerCase()
 
-        // 多种方式检测图片
         const isImage = typeStr === 'IMAGE' ||
                        contentTypeStr.startsWith('image/') ||
                        urlStr.startsWith('data:image/') ||
