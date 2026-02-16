@@ -45,6 +45,12 @@ export function initApiClient(): AxiosInstance {
   return apiClientInstance
 }
 
+// 重新初始化 API 客户端（配置变更后调用）
+export function reinitApiClient(): AxiosInstance {
+  apiClientInstance = createApiClient()
+  return apiClientInstance
+}
+
 // 为了兼容现有代码，导出一个代理对象
 // 实际请求时会动态获取 baseURL
 const apiClientProxy: AxiosInstance = new Proxy({} as AxiosInstance, {

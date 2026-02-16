@@ -162,6 +162,7 @@
 import { ref, reactive, onMounted, computed } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { fileApi } from '@/api/file'
+import { reinitApiClient } from '@/api/client'
 import {
   loadConfig,
   saveConfig as saveConfigUtil,
@@ -313,7 +314,8 @@ async function saveBackendConfig() {
     // 如果为空，则重置为默认
     if (!url) {
       resetConfigUtil()
-      configSuccess.value = '已恢复默认后端地址，刷新页面后生效'
+      reinitApiClient() // 立即生效
+      configSuccess.value = '已恢复默认后端地址并生效'
       configSaving.value = false
       return
     }
@@ -334,7 +336,8 @@ async function saveBackendConfig() {
     }
 
     saveConfigUtil({ baseUrl: validatedUrl })
-    configSuccess.value = '后端地址已保存，刷新页面后生效'
+    reinitApiClient() // 立即生效
+    configSuccess.value = '后端地址已保存并生效'
   } catch (error: any) {
     configError.value = error.message || '保存失败，请重试'
   } finally {
