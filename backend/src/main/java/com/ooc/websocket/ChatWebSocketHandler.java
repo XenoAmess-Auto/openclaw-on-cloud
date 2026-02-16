@@ -129,21 +129,24 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
         String userId = payload.getUserId();
         String userName = payload.getUserName();
 
-        // Get user's nickname from database
+        // Get user's nickname and avatar from database
         String nickname = userName;
+        String avatar = null;
         try {
             User user = userService.getUserByUsername(userName);
             if (user.getNickname() != null && !user.getNickname().isEmpty()) {
                 nickname = user.getNickname();
             }
+            avatar = user.getAvatar();
         } catch (Exception e) {
-            log.warn("Failed to get user nickname for {}", userName);
+            log.warn("Failed to get user info for {}", userName);
         }
 
         WebSocketUserInfo userInfo = WebSocketUserInfo.builder()
                 .userId(userId)
                 .userName(nickname)
                 .roomId(roomId)
+                .avatar(avatar)
                 .build();
 
         userInfoMap.put(session, userInfo);
@@ -259,6 +262,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                 .id(UUID.randomUUID().toString())
                 .senderId(userInfo.getUserId())
                 .senderName(userInfo.getUserName())
+                .senderAvatar(userInfo.getAvatar())
                 .content(content != null ? content : "")
                 .timestamp(Instant.now())
                 .openclawMentioned(mentionedOpenClaw)
@@ -1306,6 +1310,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
         private String userId;
         private String userName;
         private String roomId;
+        private String avatar;
     }
 
     @lombok.Data
