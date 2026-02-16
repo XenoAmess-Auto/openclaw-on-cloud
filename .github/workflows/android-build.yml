@@ -63,6 +63,13 @@ jobs:
         run: |
           yes | sdkmanager --licenses || true
 
+      # 恢复本地 debug.keystore（确保签名一致，支持覆盖安装）
+      - name: Restore debug.keystore
+        run: |
+          mkdir -p ~/.android
+          echo "${{ secrets.DEBUG_KEYSTORE_BASE64 }}" | base64 -d > ~/.android/debug.keystore
+          ls -la ~/.android/debug.keystore
+
       # 设置版本号 - 使用 GitHub run_number 确保每次递增，支持覆盖安装
       - name: Set Version Code
         run: |
