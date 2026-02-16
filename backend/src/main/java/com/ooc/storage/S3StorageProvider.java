@@ -15,9 +15,12 @@ import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.S3Configuration;
+import software.amazon.awssdk.services.s3.model.CreateBucketRequest;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
+import software.amazon.awssdk.services.s3.model.HeadBucketRequest;
 import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
+import software.amazon.awssdk.services.s3.model.NoSuchBucketException;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
 import java.io.IOException;
@@ -67,6 +70,9 @@ public class S3StorageProvider implements StorageProvider {
             s3Client = builder.build();
             log.info("[S3Storage] S3 client initialized. Endpoint: {}, Bucket: {}",
                     s3Config.getEndpoint(), s3Config.getBucket());
+
+            // 检查并创建 bucket（如果不存在）
+            ensureBucketExists(s3Config.getBucket());
 
         } catch (Exception e) {
             log.error("[S3Storage] Failed to initialize S3 client", e);
@@ -192,6 +198,36 @@ public class S3StorageProvider implements StorageProvider {
     @Override
     public String getStorageType() {
         return "s3";
+    }
+
+    /**
+     * 检查 bucket 是否存在，不存在则自动创建
+     */
+    private void ensureBucketExists(String bucketName) {
+        try {
+            // 尝试访问 bucket
+            HeadBucketRequest headBucketRequest = HeadBucketRequest.builder()
+                    .bucket(bucketName)
+                    .build();
+            s3Client.headBucket(headBucketRequest);
+            log.info("[S3Storage] Bucket '{}' exists", bucketName);
+        } catch (NoSuchBucketException e) {
+            // Bucket 不存在，创建它
+            log.warn("[S3Storage] Bucket '{}' does not exist, creating...", bucketName);
+            try {
+                CreateBucketRequest createBucketRequest = CreateBucketRequest.builder()
+                        .bucket(bucketName)
+                        .build();
+                s3Client.createBucket(createBucketRequest);
+                log.info("[S3Storage] Bucket '{}' created successfully", bucketName);
+            } catch (Exception createException) {
+                log.error("[S3Storage] Failed to create bucket '{}': {}", bucketName, createException.getMessage());
+                throw new RuntimeException("无法创建 S3 bucket: " + bucketName, createException);
+            }
+        } catch (Exception e) {
+            log.error("[S3Storage] Error checking bucket existence '{}': {}", bucketName, e.getMessage());
+            throw new RuntimeException("检查 S3 bucket 状态时出错: " + bucketName, e);
+        }
     }
 
     private FileType determineFileType(String contentType) {
