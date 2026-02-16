@@ -513,7 +513,7 @@ public class OpenClawPluginService {
      * 使用 WebSocket 协议连接到 OpenClaw Gateway，接收原生工具事件
      */
     private Flux<StreamEvent> sendMessageStreamInternal(String sessionId, String message,
-            List<ChatWebSocketHandler.Attachment> attachments, String userId, String userName) {
+            List<ChatWebSocketHandler.Attachment> attachments, String userId, String userName, String roomName) {
 
         String processedMessage = convertUploadsPath(message);
 
@@ -522,11 +522,13 @@ public class OpenClawPluginService {
         // 构建多模态内容块列表
         List<Map<String, Object>> contentBlocks = new ArrayList<>();
 
-        // 添加文本内容块
+        // 添加文本内容块，格式: [群名群] 用户xxx说: 内容
         if (processedMessage != null && !processedMessage.isEmpty()) {
             Map<String, Object> textBlock = new HashMap<>();
             textBlock.put("type", "text");
-            textBlock.put("text", userName + ": " + processedMessage);
+            String formattedMessage = String.format("[%s群] 用户%s说: %s",
+                    roomName != null ? roomName : "未知", userName, processedMessage);
+            textBlock.put("text", formattedMessage);
             contentBlocks.add(textBlock);
         }
 
@@ -704,7 +706,7 @@ public class OpenClawPluginService {
      * 发送消息到 OpenClaw 并获取流式回复（使用 ChatRoom.Message.Attachment）
      */
     public Flux<StreamEvent> sendMessageStreamWithRoomAttachments(String sessionId, String message,
-            List<ChatRoom.Message.Attachment> attachments, String userId, String userName) {
+            List<ChatRoom.Message.Attachment> attachments, String userId, String userName, String roomName) {
         // 转换为 ChatWebSocketHandler.Attachment
         List<ChatWebSocketHandler.Attachment> convertedAttachments = new ArrayList<>();
         if (attachments != null && !attachments.isEmpty()) {
@@ -717,14 +719,14 @@ public class OpenClawPluginService {
                 convertedAttachments.add(converted);
             }
         }
-        return sendMessageStreamInternal(sessionId, message, convertedAttachments, userId, userName);
+        return sendMessageStreamInternal(sessionId, message, convertedAttachments, userId, userName, roomName);
     }
 
     /**
      * 发送消息到 OpenClaw 并获取流式回复
      */
     public Flux<StreamEvent> sendMessageStream(String sessionId, String message,
-            List<ChatWebSocketHandler.Attachment> attachments, String userId, String userName) {
-        return sendMessageStreamInternal(sessionId, message, attachments, userId, userName);
+            List<ChatWebSocketHandler.Attachment> attachments, String userId, String userName, String roomName) {
+        return sendMessageStreamInternal(sessionId, message, attachments, userId, userName, roomName);
     }
 }

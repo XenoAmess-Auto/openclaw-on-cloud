@@ -2,6 +2,7 @@ package com.ooc.controller;
 
 import com.ooc.service.FileStorageService;
 import com.ooc.service.FileStorageService.FileInfo;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.io.InputStreamResource;
@@ -22,12 +23,14 @@ public class FileController {
     private final FileStorageService fileStorageService;
 
     @PostMapping("/upload")
-    public ResponseEntity<FileInfo> uploadFile(@RequestParam("file") MultipartFile file) {
+    public ResponseEntity<FileInfo> uploadFile(@RequestParam("file") MultipartFile file, HttpServletRequest request) {
         log.info("Uploading file: {}, size: {}", file.getOriginalFilename(), file.getSize());
         FileInfo fileInfo = fileStorageService.store(file);
 
-        // 将 URL 替换为经过 8081 端口包装的接口地址
-        String wrapperUrl = "/api/files/" + fileInfo.getFilename();
+        // 构建完整 URL（包含后端地址）
+        String baseUrl = request.getScheme() + "://" + request.getServerName() + ":" + request.getServerPort();
+        String wrapperUrl = baseUrl + "/api/files/" + fileInfo.getFilename();
+
         FileInfo result = FileInfo.builder()
                 .filename(fileInfo.getFilename())
                 .originalName(fileInfo.getOriginalName())

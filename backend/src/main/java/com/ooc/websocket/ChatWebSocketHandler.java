@@ -461,7 +461,8 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                                     task.getContent(),
                                     task.getAttachments(),
                                     task.getUserInfo().getUserId(),
-                                    task.getUserInfo().getUserName());
+                                    task.getUserInfo().getUserName(),
+                                    room.getName());
                         })
                         .subscribe(
                                 event -> handleStreamEvent(roomId, streamingMessageId, contentBuilder, streamingMessage, event, task),
@@ -486,7 +487,8 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                                 task.getContent(),
                                 task.getAttachments(),
                                 task.getUserInfo().getUserId(),
-                                task.getUserInfo().getUserName())
+                                task.getUserInfo().getUserName(),
+                                room.getName())
                         .subscribe(
                                 event -> handleStreamEvent(roomId, streamingMessageId, contentBuilder, streamingMessage, event, task),
                                 error -> {
