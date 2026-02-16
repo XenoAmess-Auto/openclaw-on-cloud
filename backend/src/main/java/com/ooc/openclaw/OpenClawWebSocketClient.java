@@ -406,8 +406,18 @@ public class OpenClawWebSocketClient {
                 case "assistant":
                     // OpenClaw 发送的是 delta（增量）和 text（累积），不是 content
                     String delta = data.path("delta").asText(null);
+                    String text = data.path("text").asText(null);
+                    
+                    log.debug("[OpenClaw WS] Assistant event: delta={}, text={}", 
+                            delta != null ? delta.length() : 0,
+                            text != null ? text.length() : 0);
+                    
                     if (delta != null && !delta.isEmpty()) {
                         handler.onTextChunk(delta);
+                    } else if (text != null && !text.isEmpty()) {
+                        // 如果没有 delta 但有 text，发送 text（可能是累积文本）
+                        log.info("[OpenClaw WS] Using text field instead of delta: {} chars", text.length());
+                        handler.onTextChunk(text);
                     }
                     break;
 
