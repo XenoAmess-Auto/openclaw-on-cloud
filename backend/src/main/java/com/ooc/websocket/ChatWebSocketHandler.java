@@ -395,7 +395,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
 
         task.setStatus(OpenClawTask.TaskStatus.PROCESSING);
 
-        // 创建流式消息
+        // 创建流式消息 - senderAvatar 为 null，让前端显示默认机器人头像
         String streamingMessageId = UUID.randomUUID().toString();
         AtomicReference<StringBuilder> contentBuilder = new AtomicReference<>(new StringBuilder());
         AtomicReference<ChatRoom.Message> streamingMessage = new AtomicReference<>(
@@ -659,7 +659,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
      * 处理流式错误
      */
     private void handleStreamError(String roomId, String messageId, String partialContent, String error, OpenClawTask task) {
-        // 更新消息为错误状态
+        // 更新消息为错误状态 - senderAvatar 为 null，让前端显示默认机器人头像
         ChatRoom.Message errorMsg = ChatRoom.Message.builder()
                 .id(messageId)
                 .senderId("openclaw")
@@ -716,7 +716,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                     tc.getResult() != null ? tc.getResult().length() : 0));
         }
 
-        // 创建最终消息
+        // 创建最终消息 - senderAvatar 为 null，让前端显示默认机器人头像
         ChatRoom.Message finalMsg = ChatRoom.Message.builder()
                 .id(messageId)
                 .senderId("openclaw")
@@ -1072,6 +1072,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                 ? "🤖 OpenClaw 任务已加入队列，正在准备处理..."
                 : String.format("🤖 OpenClaw 任务已加入队列，当前排第 %d 位...", position + 1);
 
+        // senderAvatar 为 null，让前端显示默认机器人头像
         ChatRoom.Message message = ChatRoom.Message.builder()
                 .id(UUID.randomUUID().toString())
                 .senderId("openclaw")
@@ -1093,6 +1094,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
      * 发送任务失败消息
      */
     private void sendTaskFailedMessage(String roomId, OpenClawTask task, String error) {
+        // senderAvatar 为 null，让前端显示默认机器人头像
         ChatRoom.Message message = ChatRoom.Message.builder()
                 .id(UUID.randomUUID().toString())
                 .senderId("openclaw")
