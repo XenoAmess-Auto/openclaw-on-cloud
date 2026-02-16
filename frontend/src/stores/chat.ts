@@ -125,13 +125,12 @@ export const useChatStore = defineStore('chat', () => {
     
     // 构建 WebSocket URL：优先使用当前页面的 host，但处理端口问题
     // 开发环境：Vite 代理 /ws 到后端，使用相同 host:port
-    // 生产环境：通常使用标准端口（80/443），需要指向 API 服务器
+    // 生产环境：直接连接后端 8081 端口
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const host = window.location.host
+    // 生产环境直接连接后端，开发环境使用当前 host（通过 Vite 代理）
+    const host = (import.meta as any).env?.DEV ? window.location.host : 'localhost:8081'
     
     // 构建 WebSocket URL
-    // 开发环境：ws://localhost:3000/ws/chat（通过 Vite 代理）
-    // 生产环境：直接使用 /ws 路径，让浏览器根据当前 host 连接
     const wsUrl = `${protocol}//${host}/ws/chat`
     const socket = new WebSocket(wsUrl)
     
