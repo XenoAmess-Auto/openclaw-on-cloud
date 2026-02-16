@@ -1,6 +1,7 @@
 package com.ooc.service;
 
 import com.ooc.dto.RegisterRequest;
+import com.ooc.dto.UpdateUserRequest;
 import com.ooc.entity.User;
 import com.ooc.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -55,6 +56,43 @@ public class UserService {
     public User updateUserAvatar(String userId, String avatarUrl) {
         User user = getUserById(userId);
         user.setAvatar(avatarUrl);
+        return userRepository.save(user);
+    }
+
+    public User updateUser(String username, UpdateUserRequest request) {
+        User user = getUserByUsername(username);
+        
+        // 更新昵称
+        if (request.getNickname() != null) {
+            String nickname = request.getNickname().trim();
+            if (nickname.isEmpty()) {
+                nickname = user.getUsername();
+            }
+            user.setNickname(nickname);
+        }
+        
+        // 更新邮箱
+        if (request.getEmail() != null && !request.getEmail().equals(user.getEmail())) {
+            if (userRepository.existsByEmail(request.getEmail())) {
+                throw new RuntimeException("Email already exists");
+            }
+            user.setEmail(request.getEmail());
+        }
+        
+        // 更新头像
+        if (request.getAvatar() != null) {
+            user.setAvatar(request.getAvatar());
+        }
+        
+        // 修改密码
+        if (request.getNewPassword() != null && !request.getNewPassword().isEmpty()) {
+            if (request.getCurrentPassword() == null || 
+                !passwordEncoder.matches(request.getCurrentPassword(), user.getPassword())) {
+                throw new RuntimeException("Current password is incorrect");
+            }
+            user.setPassword(passwordEncoder.encode(request.getNewPassword()));
+        }
+        
         return userRepository.save(user);
     }
 }

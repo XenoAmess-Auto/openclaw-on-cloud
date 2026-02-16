@@ -1,13 +1,13 @@
 package com.ooc.controller;
 
+import com.ooc.dto.UpdateUserRequest;
 import com.ooc.entity.User;
 import com.ooc.service.UserService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
 
@@ -25,6 +25,37 @@ public class UserController {
             "id", user.getId(),
             "username", user.getUsername(),
             "email", user.getEmail()
+        ));
+    }
+
+    @GetMapping("/me")
+    public ResponseEntity<Map<String, Object>> getCurrentUser(Authentication authentication) {
+        String username = authentication.getName();
+        User user = userService.getUserByUsername(username);
+        return ResponseEntity.ok(Map.of(
+            "id", user.getId(),
+            "username", user.getUsername(),
+            "nickname", user.getNickname() != null ? user.getNickname() : user.getUsername(),
+            "email", user.getEmail(),
+            "avatar", user.getAvatar() != null ? user.getAvatar() : "",
+            "roles", user.getRoles(),
+            "enabled", user.isEnabled()
+        ));
+    }
+
+    @PutMapping("/me")
+    public ResponseEntity<Map<String, Object>> updateCurrentUser(
+            @Valid @RequestBody UpdateUserRequest request,
+            Authentication authentication) {
+        String username = authentication.getName();
+        User updatedUser = userService.updateUser(username, request);
+        return ResponseEntity.ok(Map.of(
+            "id", updatedUser.getId(),
+            "username", updatedUser.getUsername(),
+            "nickname", updatedUser.getNickname() != null ? updatedUser.getNickname() : updatedUser.getUsername(),
+            "email", updatedUser.getEmail(),
+            "avatar", updatedUser.getAvatar() != null ? updatedUser.getAvatar() : "",
+            "roles", updatedUser.getRoles()
         ));
     }
 }

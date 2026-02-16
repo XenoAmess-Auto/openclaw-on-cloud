@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { User, AuthResponse } from '@/types'
 import { authApi } from '@/api/auth'
+import { userApi, type UpdateUserRequest } from '@/api/user'
 
 export const useAuthStore = defineStore('auth', () => {
   const user = ref<User | null>(null)
@@ -67,6 +68,48 @@ export const useAuthStore = defineStore('auth', () => {
     clearAuth()
   }
 
+  // 刷新当前用户信息
+  async function refreshUserInfo() {
+    try {
+      const response = await userApi.getCurrentUser()
+      const data = response.data
+      if (user.value) {
+        user.value = {
+          ...user.value,
+          nickname: data.nickname || data.username,
+          email: data.email,
+          avatar: data.avatar
+        }
+        localStorage.setItem('user', JSON.stringify(user.value))
+      }
+      return user.value
+    } catch (error) {
+      console.error('Failed to refresh user info:', error)
+      throw error
+    }
+  }
+
+  // 更新用户信息
+  async function updateUserInfo(data: UpdateUserRequest) {
+    try {
+      const response = await userApi.updateCurrentUser(data)
+      const updatedData = response.data
+      if (user.value) {
+        user.value = {
+          ...user.value,
+          nickname: updatedData.nickname || updatedData.username,
+          email: updatedData.email,
+          avatar: updatedData.avatar
+        }
+        localStorage.setItem('user', JSON.stringify(user.value))
+      }
+      return user.value
+    } catch (error) {
+      console.error('Failed to update user info:', error)
+      throw error
+    }
+  }
+
   return {
     user,
     token,
@@ -76,6 +119,8 @@ export const useAuthStore = defineStore('auth', () => {
     register,
     logout,
     setAuth,
-    clearAuth
+    clearAuth,
+    refreshUserInfo,
+    updateUserInfo
   }
 })
