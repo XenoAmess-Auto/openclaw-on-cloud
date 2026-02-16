@@ -159,15 +159,32 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
             try {
                 List<ChatRoom.Message> allMessages = room.getMessages();
                 List<ChatRoom.Message> recentMessages = allMessages;
-                
+
                 // 只取最近10条消息
                 if (allMessages != null && allMessages.size() > 10) {
                     recentMessages = allMessages.subList(allMessages.size() - 10, allMessages.size());
                 }
-                
+
+                // 为历史消息补充头像信息（旧消息可能没有保存 senderAvatar）
+                List<ChatRoom.Message> enrichedMessages = recentMessages.stream()
+                        .map(msg -> {
+                            if (msg.getSenderAvatar() == null || msg.getSenderAvatar().isEmpty()) {
+                                try {
+                                    User user = userService.getUserByUsername(msg.getSenderName());
+                                    if (user != null && user.getAvatar() != null) {
+                                        return msg.toBuilder().senderAvatar(user.getAvatar()).build();
+                                    }
+                                } catch (Exception e) {
+                                    log.debug("Failed to get avatar for user: {}", msg.getSenderName());
+                                }
+                            }
+                            return msg;
+                        })
+                        .toList();
+
                 WebSocketMessage historyMsg = WebSocketMessage.builder()
                         .type("history")
-                        .messages(recentMessages)
+                        .messages(enrichedMessages)
                         .hasMore(allMessages != null && allMessages.size() > 10)
                         .build();
                 session.sendMessage(new TextMessage(objectMapper.writeValueAsString(historyMsg)));
