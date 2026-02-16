@@ -851,6 +851,48 @@ function renderContent(msg: Message) {
   // 处理转义字符：将字符串 \n \t 转为真正的换行和制表符
   content = content.replace(/\\n/g, '\n').replace(/\\t/g, '\t')
 
+  // 检查是否有工具调用部分，如果有，先提取并转换
+  let toolCallsHtml = ''
+  const toolsMatch = content.match(/(\*\*Tools used:\*\*.*?)(?=\n\n|$)/s)
+  if (toolsMatch) {
+    const toolsSection = toolsMatch[1]
+    // 解析工具列表
+    const toolLines = toolsSection.split('\n').slice(1) // 跳过标题行
+    const tools: Array<{name: string, desc: string}> = []
+    
+    for (const line of toolLines) {
+      const match = line.match(/^[-*]\s*`?(\w+)`?\s*:?\s*(.*)/)
+      if (match) {
+        tools.push({ name: match[1], desc: match[2] || '' })
+      }
+    }
+    
+    if (tools.length > 0) {
+      // 生成工具调用卡片 HTML
+      toolCallsHtml = `<div class="tool-call-section">
+        <div class="tool-call-header">
+          <span class="tool-icon">🔧</span>
+          <span class="tool-title">工具调用</span>
+        </div>
+        <div class="tool-call-list">
+          ${tools.map(tool => `
+            <div class="tool-item completed">
+              <div class="tool-name">
+                <span class="tool-icon-small">${getToolIcon(tool.name)}</span>
+                <code>${tool.name}</code>
+                <span class="tool-status completed">✓ 完成</span>
+              </div>
+              ${tool.desc ? `<div class="tool-description">${escapeHtml(tool.desc)}</div>` : ''}
+            </div>
+          `).join('')}
+        </div>
+      </div>`
+      
+      // 从 content 中移除 Tools used 部分，后面会插入卡片
+      content = content.replace(toolsMatch[0], '\n<!--TOOL_CALLS_PLACEHOLDER-->\n')
+    }
+  }
+
   // Step 1: 渲染 Markdown（不进行 @提及替换，DOMPurify 会清理特殊标记）
   let htmlContent: string
   try {
@@ -888,6 +930,9 @@ function renderContent(msg: Message) {
     ],
     ALLOWED_ATTR: ['href', 'src', 'alt', 'title', 'target', 'class']
   })
+
+  // 插入工具调用卡片（替换占位符）
+  htmlContent = htmlContent.replace('<!--TOOL_CALLS_PLACEHOLDER-->', toolCallsHtml)
 
   // Step 2: 在 HTML 中查找并高亮 @提及（在 sanitization 之后进行）
   // 使用正则匹配文本节点中的 @提及
@@ -932,6 +977,37 @@ function renderContent(msg: Message) {
   }
 
   return htmlContent + attachmentsHtml
+}
+
+// HTML 转义
+function escapeHtml(text: string): string {
+  const div = document.createElement('div')
+  div.textContent = text
+  return div.innerHTML
+}
+
+// 获取工具图标
+function getToolIcon(toolName: string): string {
+  const iconMap: Record<string, string> = {
+    'read': '📄',
+    'write': '✏️',
+    'edit': '🔧',
+    'exec': '⚡',
+    'web_search': '🔍',
+    'weather': '🌤️',
+    'browser': '🌐',
+    'canvas': '🎨',
+    'nodes': '📱',
+    'cron': '⏰',
+    'message': '💬',
+    'gateway': '🔌',
+    'sessions_spawn': '🚀',
+    'memory_search': '🧠',
+    'tts': '🔊',
+    'github': '🐙',
+    'gh': '🐙',
+  }
+  return iconMap[toolName] || '🔧'
 }
 
 function getInitials(name: string): string {
