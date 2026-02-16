@@ -351,7 +351,7 @@ public class ChatRoomController {
             // 创建流式消息占位
             String responseMessageId = UUID.randomUUID().toString();
             StringBuilder responseBuilder = new StringBuilder();
-            
+
             ChatRoom.Message streamingMsg = ChatRoom.Message.builder()
                     .id(responseMessageId)
                     .senderId("openclaw")
@@ -364,7 +364,14 @@ public class ChatRoomController {
                     .toolCalls(new ArrayList<>())
                     .build();
             chatRoomService.addMessage(roomId, streamingMsg);
-            
+
+            // 广播 stream_start 事件，通知前端显示流式消息
+            webSocketHandler.broadcastToRoom(roomId, ChatWebSocketHandler.WebSocketMessage.builder()
+                    .type("stream_start")
+                    .message(streamingMsg)
+                    .build());
+            log.info("Broadcasted stream_start for message: {} in room: {}", responseMessageId, roomId);
+
             // 发送流式请求并收集响应
             final String finalSessionId = openClawSessionId;
             java.util.concurrent.CountDownLatch latch = new java.util.concurrent.CountDownLatch(1);
