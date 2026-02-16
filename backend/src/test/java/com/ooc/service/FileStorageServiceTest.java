@@ -1,11 +1,12 @@
 package com.ooc.service;
 
 import com.ooc.config.FileProperties;
+import com.ooc.storage.LocalStorageProvider;
+import com.ooc.storage.StorageProvider;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
@@ -28,8 +29,8 @@ class FileStorageServiceTest {
     @Mock
     private FileProperties fileProperties;
 
-    @InjectMocks
     private FileStorageService fileStorageService;
+    private StorageProvider storageProvider;
 
     @TempDir
     Path tempDir;
@@ -38,14 +39,17 @@ class FileStorageServiceTest {
     void setUp() throws IOException {
         when(fileProperties.getUploadDir()).thenReturn(tempDir.toString());
         when(fileProperties.getAllowedTypes()).thenReturn(new String[]{
-                "image/jpeg", "image/png", "image/gif", "image/webp", 
+                "image/jpeg", "image/png", "image/gif", "image/webp",
                 "application/pdf", "text/plain"
         });
         when(fileProperties.getMaxSize()).thenReturn(10L);
         when(fileProperties.getUrlPrefix()).thenReturn("/uploads");
-        
-        // Trigger @PostConstruct
-        fileStorageService.init();
+
+        // 创建真实的 LocalStorageProvider 用于测试
+        storageProvider = new LocalStorageProvider(fileProperties);
+
+        // 创建 FileStorageService
+        fileStorageService = new FileStorageService(fileProperties, storageProvider);
     }
 
     @Test
@@ -71,7 +75,7 @@ class FileStorageServiceTest {
         assertThat(result.getUrl()).startsWith("/uploads/");
         assertThat(result.getUrl()).endsWith(".png");
         assertThat(result.getLocalPath()).isNotNull();
-        
+
         // Verify file was created
         Path storedFile = Path.of(result.getLocalPath());
         assertThat(Files.exists(storedFile)).isTrue();
@@ -193,10 +197,10 @@ class FileStorageServiceTest {
                 "application/gzip",
                 "content".getBytes()
         );
-        
+
         // Override allowed types to include gzip for this test
         when(fileProperties.getAllowedTypes()).thenReturn(new String[]{
-                "image/jpeg", "image/png", "image/gif", "image/webp", 
+                "image/jpeg", "image/png", "image/gif", "image/webp",
                 "application/pdf", "text/plain", "application/gzip"
         });
 
@@ -217,5 +221,10 @@ class FileStorageServiceTest {
                 FileStorageService.FileType.TEXT,
                 FileStorageService.FileType.FILE
         );
+    }
+
+    @Test
+    void getStorageType_ShouldReturnLocal() {
+        assertThat(fileStorageService.getStorageType()).isEqualTo("local");
     }
 }

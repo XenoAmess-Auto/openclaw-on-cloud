@@ -1,5 +1,6 @@
 package com.ooc.config;
 
+import com.ooc.storage.S3Config;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
@@ -8,12 +9,22 @@ import org.springframework.stereotype.Component;
 @Component
 @ConfigurationProperties(prefix = "file")
 public class FileProperties {
-    // 上传目录
+
+    /**
+     * 存储类型: local 或 s3
+     */
+    private String storageType = "local";
+
+    /**
+     * 本地存储配置
+     */
     private String uploadDir = "./uploads";
-    // 允许的文件类型
     private String[] allowedTypes = {"image/jpeg", "image/png", "image/gif", "image/webp", "application/pdf", "text/plain"};
-    // 最大文件大小 (MB)
     private long maxSize = 10;
-    // 访问URL前缀
     private String urlPrefix = "/uploads";
+
+    /**
+     * S3 存储配置
+     */
+    private S3Config s3;
 }

@@ -2,7 +2,9 @@ package com.ooc.openclaw;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.ooc.config.FileProperties;
 import com.ooc.entity.ChatRoom;
+import com.ooc.storage.StorageProvider;
 import com.ooc.websocket.ChatWebSocketHandler;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -23,6 +25,7 @@ import java.awt.Image;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
 import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -42,7 +45,8 @@ public class OpenClawPluginService {
     private final WebClient.Builder webClientBuilder;
     private final ObjectMapper objectMapper;
     private final OpenClawWebSocketClient webSocketClient;
-    private final com.ooc.config.FileProperties fileProperties;
+    private final FileProperties fileProperties;
+    private final StorageProvider storageProvider;
 
     // 内存中的会话状态管理
     private final Map<String, OpenClawSessionState> sessionStates = new ConcurrentHashMap<>();
@@ -78,57 +82,69 @@ public class OpenClawPluginService {
     }
 
     /**
-     * 读取 /uploads/ 路径的文件并转为 data URL
+     * 读取上传的文件并转为 data URL
+     * 支持本地存储和 S3 存储
      */
     private String readFileToDataUrl(String url, String mimeType) {
         try {
-            // 提取文件名
+            // 提取文件名（key）
             String filename = url.substring(url.lastIndexOf("/") + 1);
-            
-            // 使用配置的 uploadDir 作为基础路径
-            String uploadDir = fileProperties.getUploadDir();
-            java.nio.file.Path filePath = java.nio.file.Paths.get(uploadDir, filename);
-            
-            // 如果找不到，尝试从 URL 中提取完整路径
-            if (!java.nio.file.Files.exists(filePath)) {
-                // 尝试直接使用 url 作为相对路径
-                filePath = java.nio.file.Paths.get(url.substring(1)); // 去掉开头的 /
-                if (!filePath.isAbsolute()) {
-                    filePath = java.nio.file.Paths.get(System.getProperty("user.dir")).resolve(filePath);
+
+            byte[] fileBytes;
+
+            // 检查存储类型
+            if ("s3".equalsIgnoreCase(storageProvider.getStorageType())) {
+                // S3 存储：使用 StorageProvider 读取文件
+                log.info("[S3] Reading file from S3: {}", filename);
+                try (InputStream inputStream = storageProvider.getInputStream(filename)) {
+                    fileBytes = inputStream.readAllBytes();
                 }
+            } else {
+                // 本地存储：使用配置的 uploadDir 作为基础路径
+                String uploadDir = fileProperties.getUploadDir();
+                java.nio.file.Path filePath = java.nio.file.Paths.get(uploadDir, filename);
+
+                // 如果找不到，尝试从 URL 中提取完整路径
+                if (!java.nio.file.Files.exists(filePath)) {
+                    // 尝试直接使用 url 作为相对路径
+                    filePath = java.nio.file.Paths.get(url.substring(1)); // 去掉开头的 /
+                    if (!filePath.isAbsolute()) {
+                        filePath = java.nio.file.Paths.get(System.getProperty("user.dir")).resolve(filePath);
+                    }
+                }
+
+                // 向后兼容：尝试在工作目录下查找
+                if (!java.nio.file.Files.exists(filePath)) {
+                    String oocBasePath = System.getProperty("user.dir");
+                    filePath = java.nio.file.Paths.get(oocBasePath, "uploads", filename);
+                }
+
+                // 再尝试父目录
+                if (!java.nio.file.Files.exists(filePath)) {
+                    String oocBasePath = System.getProperty("user.dir");
+                    filePath = java.nio.file.Paths.get(oocBasePath, "..", "uploads", filename).normalize();
+                }
+
+                if (!java.nio.file.Files.exists(filePath)) {
+                    log.warn("File not found: {} (tried uploadDir: {})", filename, fileProperties.getUploadDir());
+                    return null;
+                }
+
+                log.info("Reading file from: {}", filePath);
+                fileBytes = java.nio.file.Files.readAllBytes(filePath);
             }
-            
-            // 向后兼容：尝试在工作目录下查找
-            if (!java.nio.file.Files.exists(filePath)) {
-                String oocBasePath = System.getProperty("user.dir");
-                filePath = java.nio.file.Paths.get(oocBasePath, "uploads", filename);
-            }
-            
-            // 再尝试父目录
-            if (!java.nio.file.Files.exists(filePath)) {
-                String oocBasePath = System.getProperty("user.dir");
-                filePath = java.nio.file.Paths.get(oocBasePath, "..", "uploads", filename).normalize();
-            }
-            
-            if (!java.nio.file.Files.exists(filePath)) {
-                log.warn("File not found: {} (tried uploadDir: {})", filename, fileProperties.getUploadDir());
-                return null;
-            }
-            
-            log.info("Reading file from: {}", filePath);
-            byte[] fileBytes = java.nio.file.Files.readAllBytes(filePath);
-            
+
             // 压缩图片以减少请求体大小
             byte[] compressedBytes = compressImageIfNeeded(fileBytes, mimeType);
             if (compressedBytes != null) {
                 fileBytes = compressedBytes;
-                log.info("Compressed image from {} to {} bytes ({}% reduction)", 
-                    java.nio.file.Files.size(filePath), fileBytes.length,
-                    Math.round((1.0 - (double)fileBytes.length / java.nio.file.Files.size(filePath)) * 100));
+                log.info("Compressed image to {} bytes ({}% reduction)",
+                    fileBytes.length,
+                    Math.round((1.0 - (double)fileBytes.length / fileBytes.length) * 100));
             }
-            
+
             String base64 = java.util.Base64.getEncoder().encodeToString(fileBytes);
-            
+
             // 使用提供的 mimeType，如果没有则根据文件扩展名推断
             String contentType = mimeType;
             if (contentType == null || contentType.isEmpty()) {
@@ -141,7 +157,7 @@ public class OpenClawPluginService {
                     contentType = "image/webp";
                 }
             }
-            
+
             return "data:" + contentType + ";base64," + base64;
         } catch (Exception e) {
             log.error("Failed to read file to data URL: {}", url, e);

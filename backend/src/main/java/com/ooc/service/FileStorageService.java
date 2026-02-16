@@ -1,17 +1,13 @@
 package com.ooc.service;
 
 import com.ooc.config.FileProperties;
+import com.ooc.storage.StorageProvider;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
-import jakarta.annotation.PostConstruct;
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.nio.file.StandardCopyOption;
+import java.io.InputStream;
 import java.util.Arrays;
 import java.util.UUID;
 
@@ -21,19 +17,7 @@ import java.util.UUID;
 public class FileStorageService {
 
     private final FileProperties fileProperties;
-
-    @PostConstruct
-    public void init() {
-        try {
-            Path uploadPath = Paths.get(fileProperties.getUploadDir());
-            if (!Files.exists(uploadPath)) {
-                Files.createDirectories(uploadPath);
-                log.info("Created upload directory: {}", uploadPath.toAbsolutePath());
-            }
-        } catch (IOException e) {
-            log.error("Could not create upload directory", e);
-        }
-    }
+    private final StorageProvider storageProvider;
 
     public FileInfo store(MultipartFile file) {
         // 验证文件类型
@@ -48,47 +32,48 @@ public class FileStorageService {
             throw new RuntimeException("文件大小超过限制: " + fileProperties.getMaxSize() + "MB");
         }
 
-        try {
-            // 生成唯一文件名
-            String originalFilename = file.getOriginalFilename();
-            String extension = "";
-            if (originalFilename != null && originalFilename.contains(".")) {
-                extension = originalFilename.substring(originalFilename.lastIndexOf("."));
-            }
-            String filename = UUID.randomUUID() + extension;
-
-            // 保存文件
-            Path targetLocation = Paths.get(fileProperties.getUploadDir()).resolve(filename);
-            Files.copy(file.getInputStream(), targetLocation, StandardCopyOption.REPLACE_EXISTING);
-
-            // 获取绝对路径供 OpenClaw 读取
-            Path absolutePath = targetLocation.toAbsolutePath().normalize();
-
-            // 确定文件类型
-            FileType type = determineFileType(contentType);
-
-            return FileInfo.builder()
-                    .filename(filename)
-                    .originalName(originalFilename)
-                    .url(fileProperties.getUrlPrefix() + "/" + filename)
-                    .localPath(absolutePath.toString())
-                    .type(type)
-                    .contentType(contentType)
-                    .size(file.getSize())
-                    .build();
-
-        } catch (IOException e) {
-            log.error("Failed to store file", e);
-            throw new RuntimeException("文件存储失败", e);
+        // 生成唯一文件名
+        String originalFilename = file.getOriginalFilename();
+        String extension = "";
+        if (originalFilename != null && originalFilename.contains(".")) {
+            extension = originalFilename.substring(originalFilename.lastIndexOf("."));
         }
+        String key = UUID.randomUUID() + extension;
+
+        // 使用存储提供者保存文件
+        FileInfo fileInfo = storageProvider.store(file, key);
+
+        log.info("[FileStorage] File stored via {}: {}, original: {}, size: {}",
+                storageProvider.getStorageType(), key, originalFilename, file.getSize());
+
+        return fileInfo;
     }
 
-    private FileType determineFileType(String contentType) {
-        if (contentType == null) return FileType.FILE;
-        if (contentType.startsWith("image/")) return FileType.IMAGE;
-        if (contentType.equals("application/pdf")) return FileType.PDF;
-        if (contentType.equals("text/plain")) return FileType.TEXT;
-        return FileType.FILE;
+    public InputStream getInputStream(String key) {
+        return storageProvider.getInputStream(key);
+    }
+
+    public String getLocalPath(String key) {
+        if (storageProvider.getLocalPath(key) != null) {
+            return storageProvider.getLocalPath(key).toString();
+        }
+        return null;
+    }
+
+    public boolean delete(String key) {
+        return storageProvider.delete(key);
+    }
+
+    public boolean exists(String key) {
+        return storageProvider.exists(key);
+    }
+
+    public String getUrl(String key) {
+        return storageProvider.getUrl(key);
+    }
+
+    public String getStorageType() {
+        return storageProvider.getStorageType();
     }
 
     public enum FileType {
