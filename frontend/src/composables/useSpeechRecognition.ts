@@ -71,7 +71,8 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}) 
 
       // 由于 env.localModelPath = '/models'，pipeline 应该使用空字符串或模型名称
       // transformers.js 会拼接: env.localModelPath + modelPath
-      const modelPath = ''  // 使用空字符串，让 transformers 使用 env.localModelPath 作为完整路径
+      // 使用 'Xenova/whisper-tiny.en' 让 transformers.js 正确识别 whisper 模型类型
+      const modelPath = 'Xenova/whisper-tiny.en'  // 使用子目录路径
 
       if (useLocalModel.value) {
         console.log('[useSpeechRecognition] 使用本地模型:', env.localModelPath)
@@ -99,9 +100,11 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}) 
       console.log('[useSpeechRecognition] 开始加载模型...')
       transcriber = await pipeline(
         'automatic-speech-recognition',
-        modelPath,  // 空字符串，使用 env.localModelPath
+        modelPath,
         {
           quantized: true,
+          // 明确指定模型类型为 whisper，避免使用 CTC 架构
+          model_type: 'whisper',
           progress_callback: (progress: number) => {
             loadingProgress.value = Math.round(progress * 100)
             console.log(`[useSpeechRecognition] 模型加载进度: ${Math.round(progress * 100)}%`)
