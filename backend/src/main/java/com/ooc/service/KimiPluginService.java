@@ -8,6 +8,7 @@ import com.ooc.entity.User;
 import com.ooc.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
@@ -31,6 +32,16 @@ public class KimiPluginService {
     private final UserRepository userRepository;
     private final WebClient.Builder webClientBuilder;
     private final ObjectMapper objectMapper;
+
+    // 从配置文件注入配置（优先级高于数据库配置）
+    @Value("${kimi.api-key:}")
+    private String configApiKey;
+
+    @Value("${kimi.model:kimi-k2.5}")
+    private String configModel;
+
+    @Value("${kimi.gateway-url:https://api.moonshot.cn}")
+    private String configGatewayUrl;
 
     // Kimi API 默认配置
     private static final String KIMI_API_BASE_URL = "https://api.moonshot.cn";
@@ -77,9 +88,15 @@ public class KimiPluginService {
     }
 
     /**
-     * 获取 API Key
+     * 获取 API Key（优先使用配置文件）
      */
     private String getApiKey() {
+        // 优先使用配置文件中的 API Key
+        if (configApiKey != null && !configApiKey.isBlank()) {
+            log.debug("Using Kimi API Key from configuration");
+            return configApiKey;
+        }
+        // 回退到数据库配置
         return getBotConfig()
                 .map(BotUserConfig::getApiKey)
                 .filter(key -> key != null && !key.isBlank())
@@ -87,13 +104,28 @@ public class KimiPluginService {
     }
 
     /**
-     * 获取 Gateway URL（用于自定义端点）
+     * 获取 Gateway URL（用于自定义端点，优先使用配置文件）
      */
     private String getGatewayUrl() {
+        // 优先使用配置文件中的 Gateway URL
+        if (configGatewayUrl != null && !configGatewayUrl.isBlank()) {
+            return configGatewayUrl;
+        }
+        // 回退到数据库配置
         return getBotConfig()
                 .map(BotUserConfig::getGatewayUrl)
                 .filter(url -> url != null && !url.isBlank())
                 .orElse(KIMI_API_BASE_URL);
+    }
+
+    /**
+     * 获取模型名称（优先使用配置文件）
+     */
+    private String getModel() {
+        if (configModel != null && !configModel.isBlank()) {
+            return configModel;
+        }
+        return KIMI_MODEL;
     }
 
     /**
@@ -220,7 +252,7 @@ public class KimiPluginService {
 
         // 构建请求
         Map<String, Object> request = new HashMap<>();
-        request.put("model", KIMI_MODEL);
+        request.put("model", getModel());
         request.put("messages", state.getMessageHistory());
         request.put("stream", true);
         request.put("temperature", 0.7);
@@ -312,7 +344,7 @@ public class KimiPluginService {
 
         // 构建请求
         Map<String, Object> request = new HashMap<>();
-        request.put("model", KIMI_MODEL);
+        request.put("model", getModel());
         request.put("messages", state.getMessageHistory());
         request.put("stream", false);
         request.put("temperature", 0.7);

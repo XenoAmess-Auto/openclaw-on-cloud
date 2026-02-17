@@ -138,19 +138,20 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
         }
 
         String userId = user.getId();
-        String nickname = user.getNickname() != null && !user.getNickname().isEmpty() 
+        String nickname = user.getNickname() != null && !user.getNickname().isEmpty()
                 ? user.getNickname() : userName;
-        String avatar = null;
-        
-        // 先尝试从缓存获取头像，如果没有则从用户对象获取
-        avatar = avatarCacheService.getAvatarFromCache(userId);
-        if (avatar == null && user.getAvatar() != null) {
-            avatar = user.getAvatar();
-            // 将头像存入缓存
+
+        // 始终从数据库获取最新头像，避免缓存中的旧值（包括null）导致头像无法更新
+        String avatar = user.getAvatar();
+        if (avatar != null && !avatar.isEmpty()) {
+            // 将最新头像存入缓存（覆盖可能存在的旧值）
             avatarCacheService.putAvatarInCache(userId, avatar);
+        } else {
+            // 如果数据库中没有头像，从缓存尝试获取（可能之前有上传过）
+            avatar = avatarCacheService.getAvatarFromCache(userId);
         }
-        log.info("User {} joined, userId: {}, avatar: {}, fromCache: {}", 
-                userName, userId, avatar != null ? "(present)" : "(null)", 
+        log.info("User {} joined, userId: {}, avatar: {}, fromCache: {}",
+                userName, userId, avatar != null ? "(present)" : "(null)",
                 avatarCacheService.isAvatarCached(userId));
 
         WebSocketUserInfo userInfo = WebSocketUserInfo.builder()

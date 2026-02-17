@@ -29,6 +29,11 @@ openclaw:
   auto-summarize: true
   summarize-threshold: 30
 
+kimi:
+  api-key: ${KIMI_API_KEY:}
+  model: ${KIMI_MODEL:kimi-k2.5}
+  gateway-url: ${KIMI_GATEWAY_URL:}
+
 # 文件存储配置
 # 支持两种存储类型: local (本地文件系统) 或 s3 (S3 兼容存储)
 file:
