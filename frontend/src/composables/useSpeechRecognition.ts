@@ -70,16 +70,17 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}) 
 
       // 创建 SpeechRecognition 实例
       const SpeechRecognitionConstructor = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
-      recognition = new SpeechRecognitionConstructor()
+      const recognizer = new SpeechRecognitionConstructor()
+      recognition = recognizer
       
-      recognition.lang = 'zh-CN'
-      recognition.continuous = false
-      recognition.interimResults = true
-      recognition.maxAlternatives = 1
+      recognizer.lang = 'zh-CN'
+      recognizer.continuous = false
+      recognizer.interimResults = true
+      recognizer.maxAlternatives = 1
 
       let finalTranscript = ''
 
-      recognition.onstart = () => {
+      recognizer.onstart = () => {
         console.log('[useSpeechRecognition] 录音开始')
         isRecording.value = true
         isModelLoading.value = false
@@ -90,7 +91,7 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}) 
         }, 1000)
       }
 
-      recognition.onresult = (event: any) => {
+      recognizer.onresult = (event: any) => {
         let interimTranscript = ''
         
         for (let i = event.resultIndex; i < event.results.length; i++) {
@@ -106,7 +107,7 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}) 
         console.log('[useSpeechRecognition] 识别结果:', transcript.value)
       }
 
-      recognition.onerror = (event: any) => {
+      recognizer.onerror = (event: any) => {
         console.error('[useSpeechRecognition] 识别错误:', event.error)
         
         if (event.error === 'no-speech') {
@@ -123,7 +124,7 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}) 
         options.onError?.(new Error(event.error))
       }
 
-      recognition.onend = () => {
+      recognizer.onend = () => {
         console.log('[useSpeechRecognition] 录音结束')
         
         // 如果有最终结果，触发回调
@@ -135,7 +136,7 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}) 
         cleanup()
       }
 
-      recognition.start()
+      recognizer.start()
       return true
     } catch (err) {
       error.value = '启动录音失败: ' + (err as Error).message
