@@ -1,5 +1,5 @@
 import { ref, onUnmounted } from 'vue'
-import { AutoProcessor, AutoModelForSeq2SeqLM, env } from '@xenova/transformers'
+import { AutoProcessor, WhisperForConditionalGeneration, env } from '@xenova/transformers'
 
 // 配置 transformers 环境
 env.allowLocalModels = true
@@ -91,9 +91,9 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}) 
       })
       console.log('[useSpeechRecognition] Processor 加载完成')
 
-      // 加载 Seq2Seq 模型（Whisper 使用 encoder-decoder 架构）
-      console.log('[useSpeechRecognition] 加载 Model...')
-      model = await AutoModelForSeq2SeqLM.from_pretrained('', {
+      // 加载 Whisper 专用模型（Seq2Seq 架构）
+      console.log('[useSpeechRecognition] 加载 Whisper Model...')
+      model = await WhisperForConditionalGeneration.from_pretrained('', {
         quantized: true,
         local_files_only: true,
         progress_callback: (progress: number) => {
