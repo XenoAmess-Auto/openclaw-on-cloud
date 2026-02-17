@@ -109,6 +109,15 @@
                     </div>
                   </div>
                 </template>
+                <!-- OpenClaw 回复完成标记 -->
+                <div class="message openclaw-over-message">
+                  <div class="message-avatar">
+                    <div class="avatar-placeholder">🤖</div>
+                  </div>
+                  <div class="message-body openclaw-over-body">
+                    <div class="message-content over-content">over</div>
+                  </div>
+                </div>
               </template>
               
               <!-- 纯工具调用消息（不含 fromOpenClaw） -->
@@ -2181,6 +2190,33 @@ function isSameDay(d1: Date, d2: Date): boolean {
 
 .openclaw-message-container.has-tool-calls .openclaw-body {
   padding: 0.75rem 1rem;
+}
+
+/* OpenClaw over 消息样式 */
+.openclaw-over-message {
+  display: flex;
+  gap: 0.75rem;
+  max-width: 80%;
+  min-width: 0;
+  align-self: flex-start;
+  margin-top: 0.25rem;
+}
+
+.openclaw-over-message .openclaw-over-body {
+  background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
+  border: 1px solid #6ee7b7;
+  border-radius: 12px;
+  padding: 0.5rem 1rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.openclaw-over-message .over-content {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #059669;
+  text-align: center;
+  letter-spacing: 0.1em;
 }
 
 /* 时间分隔线 */
