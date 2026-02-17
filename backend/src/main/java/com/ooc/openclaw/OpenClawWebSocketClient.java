@@ -54,7 +54,7 @@ public class OpenClawWebSocketClient {
     // 连接配置
     private static final int CONNECT_TIMEOUT_MS = 10000;
     private static final int MAX_RECONNECT_ATTEMPTS = 3;
-    private static final int REQUEST_TIMEOUT_MS = 120000; // 2分钟请求超时
+    private static final int REQUEST_TIMEOUT_MS = 1800000; // 30分钟请求超时
 
     /**
      * 响应处理器接口
