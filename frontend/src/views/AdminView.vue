@@ -157,6 +157,7 @@
             <label>机器人类型</label>
             <select v-model="newBot.botType">
               <option value="openclaw">OpenClaw</option>
+              <option value="claude-code">Claude Code</option>
               <option value="custom">自定义</option>
             </select>
           </div>

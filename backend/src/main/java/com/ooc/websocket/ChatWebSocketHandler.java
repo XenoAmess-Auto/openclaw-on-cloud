@@ -8,6 +8,8 @@ import com.ooc.openclaw.OpenClawPluginService;
 import com.ooc.openclaw.OpenClawSessionState;
 import com.ooc.service.AvatarCacheService;
 import com.ooc.service.ChatRoomService;
+import com.ooc.service.ClaudeCodePluginService;
+import com.ooc.service.KimiPluginService;
 import com.ooc.service.MentionService;
 import com.ooc.service.OocSessionService;
 import com.ooc.service.UserService;
@@ -30,11 +32,14 @@ import java.util.concurrent.atomic.AtomicReference;
 
 @Slf4j
 @Component
+@RequiredArgsConstructor
 public class ChatWebSocketHandler extends TextWebSocketHandler {
 
     private final ChatRoomService chatRoomService;
     private final OocSessionService oocSessionService;
     private final OpenClawPluginService openClawPluginService;
+    private final KimiPluginService kimiPluginService;
+    private final ClaudeCodePluginService claudeCodePluginService;
     private final UserService userService;
     private final AvatarCacheService avatarCacheService;
     private final ObjectMapper objectMapper;
@@ -42,20 +47,6 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
     @Lazy
     @org.springframework.beans.factory.annotation.Autowired
     private MentionService mentionService;
-
-    public ChatWebSocketHandler(ChatRoomService chatRoomService,
-                                OocSessionService oocSessionService,
-                                OpenClawPluginService openClawPluginService,
-                                UserService userService,
-                                AvatarCacheService avatarCacheService,
-                                ObjectMapper objectMapper) {
-        this.chatRoomService = chatRoomService;
-        this.oocSessionService = oocSessionService;
-        this.openClawPluginService = openClawPluginService;
-        this.userService = userService;
-        this.avatarCacheService = avatarCacheService;
-        this.objectMapper = objectMapper;
-    }
 
     // roomId -> Set<WebSocketSession>
     private final Map<String, Set<WebSocketSession>> roomSessions = new ConcurrentHashMap<>();
@@ -274,9 +265,19 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
         boolean hasAttachments = attachments != null && !attachments.isEmpty();
 
         // 检查是否@OpenClaw（使用配置的机器人用户名）
-        String botUsername = openClawPluginService.getBotUsername();
-        boolean mentionedOpenClaw = content != null && 
-                content.toLowerCase().contains("@" + botUsername.toLowerCase());
+        String openclawUsername = openClawPluginService.getBotUsername();
+        boolean mentionedOpenClaw = content != null &&
+                content.toLowerCase().contains("@" + openclawUsername.toLowerCase());
+
+        // 检查是否@Kimi（使用配置的机器人用户名）
+        String kimiUsername = kimiPluginService.getBotUsername();
+        boolean mentionedKimi = content != null &&
+                content.toLowerCase().contains("@" + kimiUsername.toLowerCase());
+
+        // 检查是否@Claude（使用配置的机器人用户名）
+        String claudeUsername = claudeCodePluginService.getBotUsername();
+        boolean mentionedClaude = content != null &&
+                content.toLowerCase().contains("@" + claudeUsername.toLowerCase());
 
         // 解析@提及
         MentionService.MentionParseResult mentionResult = mentionService.parseMentions(content != null ? content : "", roomId);
@@ -284,11 +285,11 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
         // 获取房间成员数
         int memberCount = roomSessions.getOrDefault(roomId, Collections.emptySet()).size();
 
-        log.info("Message received: room={}, sender={}, content={}, attachments={}, memberCount={}, mentionedOpenClaw={}, mentions={}",
+        log.info("Message received: room={}, sender={}, content={}, attachments={}, memberCount={}, mentionedOpenClaw={}, mentionedKimi={}, mentionedClaude={}, mentions={}",
                 roomId, userInfo.getUserName(),
                 content != null ? content.substring(0, Math.min(50, content.length())) : "",
                 hasAttachments ? attachments.size() : 0,
-                memberCount, mentionedOpenClaw, mentionResult.getMentions().size());
+                memberCount, mentionedOpenClaw, mentionedKimi, mentionedClaude, mentionResult.getMentions().size());
 
         // 打印附件详情
         if (hasAttachments) {
@@ -380,6 +381,24 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
         if (shouldTriggerOpenClaw) {
             triggerOpenClaw(roomId, content, attachments, userInfo);
         }
+
+        // 决定是否触发 Kimi
+        boolean shouldTriggerKimi = shouldTriggerKimi(memberCount, mentionedKimi);
+        log.info("Kimi trigger decision: shouldTrigger={}, memberCount={}, mentionedKimi={}",
+                shouldTriggerKimi, memberCount, mentionedKimi);
+
+        if (shouldTriggerKimi) {
+            triggerKimi(roomId, content, attachments, userInfo);
+        }
+
+        // 决定是否触发 Claude Code
+        boolean shouldTriggerClaude = shouldTriggerClaude(memberCount, mentionedClaude);
+        log.info("Claude trigger decision: shouldTrigger={}, memberCount={}, mentionedClaude={}",
+                shouldTriggerClaude, memberCount, mentionedClaude);
+
+        if (shouldTriggerClaude) {
+            triggerClaude(roomId, content, attachments, userInfo);
+        }
     }
 
     private boolean shouldTriggerOpenClaw(int memberCount, boolean mentionedOpenClaw) {
@@ -389,6 +408,748 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
         }
         // 检查机器人是否启用
         return openClawPluginService.isBotEnabled();
+    }
+
+    private boolean shouldTriggerKimi(int memberCount, boolean mentionedKimi) {
+        // 只有 @Kimi 时才触发回复
+        if (!mentionedKimi) {
+            return false;
+        }
+        // 检查机器人是否启用
+        return kimiPluginService.isBotEnabled();
+    }
+
+    private boolean shouldTriggerClaude(int memberCount, boolean mentionedClaude) {
+        // 只有 @Claude 时才触发回复
+        if (!mentionedClaude) {
+            return false;
+        }
+        // 检查机器人是否启用
+        return claudeCodePluginService.isBotEnabled();
+    }
+
+    private void triggerKimi(String roomId, String content, List<Attachment> attachments, WebSocketUserInfo userInfo) {
+        log.info("Adding Kimi task to queue for room: {}, content: {}, attachments: {}",
+                roomId,
+                content != null ? content.substring(0, Math.min(50, content.length())) : "",
+                attachments != null ? attachments.size() : 0);
+
+        // 创建任务
+        OpenClawTask task = OpenClawTask.builder()
+                .taskId(UUID.randomUUID().toString())
+                .roomId(roomId)
+                .content(content)
+                .attachments(attachments)
+                .userInfo(userInfo)
+                .createdAt(Instant.now())
+                .status(OpenClawTask.TaskStatus.PENDING)
+                .build();
+
+        // 获取或创建该房间的任务队列
+        ConcurrentLinkedQueue<OpenClawTask> queue = roomTaskQueues.computeIfAbsent(roomId, k -> new ConcurrentLinkedQueue<>());
+        AtomicBoolean isProcessing = roomProcessingFlags.computeIfAbsent(roomId, k -> new AtomicBoolean(false));
+
+        // 将任务加入队列
+        queue.offer(task);
+
+        int queueSize = queue.size();
+        log.info("Kimi task {} added to room {} queue. Queue size: {}", task.getTaskId(), roomId, queueSize);
+
+        // 发送排队状态消息
+        sendKimiQueueStatusMessage(roomId, task, queueSize - 1); // -1 因为当前任务已经加入队列
+
+        // 尝试启动队列处理（如果当前没有任务在执行）
+        tryProcessNextKimiTask(roomId);
+    }
+
+    /**
+     * 尝试处理队列中的下一个 Kimi 任务
+     */
+    private void tryProcessNextKimiTask(String roomId) {
+        ConcurrentLinkedQueue<OpenClawTask> queue = roomTaskQueues.get(roomId);
+        AtomicBoolean isProcessing = roomProcessingFlags.get(roomId);
+
+        if (queue == null || isProcessing == null) {
+            return;
+        }
+
+        // 使用 CAS 操作确保只有一个线程能开始处理
+        if (!isProcessing.compareAndSet(false, true)) {
+            log.debug("Room {} is already processing a task, skipping", roomId);
+            return;
+        }
+
+        OpenClawTask task = queue.poll();
+        if (task == null) {
+            // 队列为空，重置处理标志
+            isProcessing.set(false);
+            log.debug("Room {} queue is empty, resetting processing flag", roomId);
+            return;
+        }
+
+        // 执行 Kimi 任务
+        executeKimiTask(task);
+    }
+
+    /**
+     * 执行 Kimi 任务（流式版本）
+     */
+    private void executeKimiTask(OpenClawTask task) {
+        String roomId = task.getRoomId();
+        String taskId = task.getTaskId();
+        log.info("Executing Kimi task {} for room {} (streaming)", taskId, roomId);
+
+        task.setStatus(OpenClawTask.TaskStatus.PROCESSING);
+
+        // 获取机器人配置
+        String botUsername = kimiPluginService.getBotUsername();
+        String botAvatarUrl = kimiPluginService.getBotAvatarUrl();
+
+        // 创建流式消息 - 使用配置的机器人用户名和头像
+        String streamingMessageId = UUID.randomUUID().toString();
+        AtomicReference<StringBuilder> contentBuilder = new AtomicReference<>(new StringBuilder());
+        AtomicReference<ChatRoom.Message> streamingMessage = new AtomicReference<>(
+            ChatRoom.Message.builder()
+                .id(streamingMessageId)
+                .senderId(kimiPluginService.getBotUsername())
+                .senderName(kimiPluginService.getBotUsername())
+                .senderAvatar(botAvatarUrl)
+                .content("")
+                .timestamp(Instant.now())
+                .openclawMentioned(false)
+                .fromOpenClaw(true)
+                .isStreaming(true)
+                .toolCalls(new ArrayList<>())
+                .build()
+        );
+
+        // 保存初始消息到聊天室
+        chatRoomService.addMessage(roomId, streamingMessage.get());
+
+        // 广播流式消息开始
+        broadcastToRoom(roomId, WebSocketMessage.builder()
+                .type("stream_start")
+                .roomId(roomId)
+                .message(streamingMessage.get())
+                .build());
+
+        chatRoomService.getChatRoom(roomId).ifPresentOrElse(room -> {
+            String kimiSessionId = room.getOpenClawSessions().stream()
+                    .filter(ChatRoom.OpenClawSession::isActive)
+                    .findFirst()
+                    .map(ChatRoom.OpenClawSession::getSessionId)
+                    .orElse(null);
+
+            // 检查会话是否存活
+            if (kimiSessionId != null && !kimiPluginService.isSessionAlive(kimiSessionId)) {
+                log.info("Kimi session {} is not alive, will create new", kimiSessionId);
+                kimiSessionId = null;
+            }
+
+            final String finalSessionId = kimiSessionId;
+
+            if (finalSessionId == null) {
+                // 创建新会话并发送流式消息
+                log.info("Creating new Kimi session for room: {}", roomId);
+                oocSessionService.getOrCreateSession(roomId, room.getName())
+                        .flatMap(oocSession -> {
+                            if (oocSession.getMessages().size() > 30) {
+                                return oocSessionService.summarizeAndCompact(oocSession)
+                                        .thenReturn(oocSession);
+                            }
+                            return reactor.core.publisher.Mono.just(oocSession);
+                        })
+                        .flatMap(oocSession -> {
+                            List<Map<String, Object>> context = convertToContext(oocSession);
+                            log.info("Creating Kimi session with {} context messages", context.size());
+                            return kimiPluginService.createSession("ooc-" + roomId, context);
+                        })
+                        .flatMapMany(newSession -> {
+                            chatRoomService.updateOpenClawSession(roomId, newSession.sessionId());
+                            log.info("Kimi session created: {}", newSession.sessionId());
+                            return kimiPluginService.sendMessageStream(
+                                    newSession.sessionId(),
+                                    task.getContent(),
+                                    task.getAttachments(),
+                                    task.getUserInfo().getUserId(),
+                                    task.getUserInfo().getUserName(),
+                                    room.getName());
+                        })
+                        .subscribe(
+                                event -> handleKimiStreamEvent(roomId, streamingMessageId, contentBuilder, streamingMessage, event, task),
+                                error -> {
+                                    log.error("Kimi streaming error in task {}", taskId, error);
+                                    task.setStatus(OpenClawTask.TaskStatus.FAILED);
+                                    handleKimiStreamError(roomId, streamingMessageId, contentBuilder.get().toString(), error.getMessage(), task);
+                                    onKimiTaskComplete(roomId);
+                                },
+                                () -> {
+                                    log.info("Kimi streaming completed for task {}", taskId);
+                                    task.setStatus(OpenClawTask.TaskStatus.COMPLETED);
+                                    finalizeKimiStreamMessage(roomId, streamingMessageId, contentBuilder.get().toString(), task);
+                                    onKimiTaskComplete(roomId);
+                                }
+                        );
+            } else {
+                // 使用现有会话发送流式消息
+                log.info("Using existing Kimi session: {}", finalSessionId);
+                kimiPluginService.sendMessageStream(
+                                finalSessionId,
+                                task.getContent(),
+                                task.getAttachments(),
+                                task.getUserInfo().getUserId(),
+                                task.getUserInfo().getUserName(),
+                                room.getName())
+                        .subscribe(
+                                event -> handleKimiStreamEvent(roomId, streamingMessageId, contentBuilder, streamingMessage, event, task),
+                                error -> {
+                                    log.error("Kimi streaming error in task {}", taskId, error);
+                                    task.setStatus(OpenClawTask.TaskStatus.FAILED);
+                                    handleKimiStreamError(roomId, streamingMessageId, contentBuilder.get().toString(), error.getMessage(), task);
+                                    onKimiTaskComplete(roomId);
+                                },
+                                () -> {
+                                    log.info("Kimi streaming completed for task {}", taskId);
+                                    task.setStatus(OpenClawTask.TaskStatus.COMPLETED);
+                                    finalizeKimiStreamMessage(roomId, streamingMessageId, contentBuilder.get().toString(), task);
+                                    onKimiTaskComplete(roomId);
+                                }
+                        );
+            }
+        }, () -> {
+            log.error("Chat room not found: {}", roomId);
+            task.setStatus(OpenClawTask.TaskStatus.FAILED);
+            onKimiTaskComplete(roomId);
+        });
+    }
+
+    /**
+     * 处理 Kimi 流式事件
+     */
+    private void handleKimiStreamEvent(String roomId, String messageId,
+            AtomicReference<StringBuilder> contentBuilder,
+            AtomicReference<ChatRoom.Message> streamingMessage,
+            KimiPluginService.StreamEvent event,
+            OpenClawTask task) {
+
+        log.debug("Kimi stream event for task {}: type={}, contentLength={}",
+                task.getTaskId(),
+                event.type(),
+                event.content() != null ? event.content().length() : 0);
+
+        if ("message".equals(event.type())) {
+            if (event.content() != null && !event.content().isEmpty()) {
+                // 追加内容
+                contentBuilder.get().append(event.content());
+                String currentContent = contentBuilder.get().toString();
+
+                log.debug("Appending Kimi content for task {}: newChars={}, totalChars={}",
+                        task.getTaskId(),
+                        event.content().length(), currentContent.length());
+
+                // 更新消息内容
+                ChatRoom.Message updatedMsg = streamingMessage.get().toBuilder()
+                        .content(currentContent)
+                        .build();
+                streamingMessage.set(updatedMsg);
+
+                // 广播增量更新
+                broadcastToRoom(roomId, WebSocketMessage.builder()
+                        .type("stream_delta")
+                        .roomId(roomId)
+                        .message(ChatRoom.Message.builder()
+                                .id(messageId)
+                                .content(event.content())
+                                .delta(true)
+                                .build())
+                        .build());
+            }
+        } else if ("done".equals(event.type())) {
+            log.info("Kimi stream done event received for task {}", task.getTaskId());
+        } else if ("error".equals(event.type())) {
+            log.error("Kimi stream error for task {}: {}", task.getTaskId(), event.content());
+        }
+    }
+
+    /**
+     * 处理 Kimi 流式错误
+     */
+    private void handleKimiStreamError(String roomId, String messageId, String partialContent, String error, OpenClawTask task) {
+        ChatRoom.Message errorMsg = ChatRoom.Message.builder()
+                .id(messageId)
+                .senderId(kimiPluginService.getBotUsername())
+                .senderName(kimiPluginService.getBotUsername())
+                .content(partialContent + "\n\n[错误: " + error + "]")
+                .timestamp(Instant.now())
+                .openclawMentioned(false)
+                .fromOpenClaw(true)
+                .isStreaming(false)
+                .build();
+
+        chatRoomService.updateMessage(roomId, errorMsg);
+
+        broadcastToRoom(roomId, WebSocketMessage.builder()
+                .type("stream_end")
+                .roomId(roomId)
+                .message(errorMsg)
+                .build());
+    }
+
+    /**
+     * 完成 Kimi 流式消息
+     */
+    private void finalizeKimiStreamMessage(String roomId, String messageId, String finalContent, OpenClawTask task) {
+        log.info("Finalizing Kimi stream message for task {}: contentLength={}, isNull={}, isEmpty={}",
+                task.getTaskId(),
+                finalContent != null ? finalContent.length() : -1,
+                finalContent == null,
+                finalContent != null ? finalContent.isEmpty() : "N/A");
+
+        if (finalContent == null || finalContent.isEmpty()) {
+            log.warn("Kimi stream message finalized with empty content for task {}, setting placeholder text", task.getTaskId());
+            finalContent = "*(Kimi 无回复)*";
+        }
+
+        ChatRoom.Message finalMsg = ChatRoom.Message.builder()
+                .id(messageId)
+                .senderId(kimiPluginService.getBotUsername())
+                .senderName(kimiPluginService.getBotUsername())
+                .content(finalContent)
+                .timestamp(Instant.now())
+                .openclawMentioned(false)
+                .fromOpenClaw(true)
+                .isStreaming(false)
+                .build();
+
+        oocSessionService.addMessage(roomId, OocSession.SessionMessage.builder()
+                .id(UUID.randomUUID().toString())
+                .senderId(kimiPluginService.getBotUsername())
+                .senderName(kimiPluginService.getBotUsername())
+                .content(finalContent)
+                .timestamp(Instant.now())
+                .fromOpenClaw(true)
+                .build());
+
+        chatRoomService.updateMessage(roomId, finalMsg);
+
+        broadcastToRoom(roomId, WebSocketMessage.builder()
+                .type("stream_end")
+                .roomId(roomId)
+                .message(finalMsg)
+                .build());
+
+        log.info("Kimi stream message finalized for task {}, content length: {}",
+                task.getTaskId(), finalContent.length());
+    }
+
+    /**
+     * Kimi 任务完成后的回调
+     */
+    private void onKimiTaskComplete(String roomId) {
+        log.info("Kimi task completed for room {}, checking queue for next task", roomId);
+        AtomicBoolean isProcessing = roomProcessingFlags.get(roomId);
+        if (isProcessing != null) {
+            isProcessing.set(false);
+        }
+        tryProcessNextKimiTask(roomId);
+    }
+
+    /**
+     * 发送 Kimi 排队状态消息
+     */
+    private void sendKimiQueueStatusMessage(String roomId, OpenClawTask task, int position) {
+        String statusText = position == 0
+                ? "🤖 Kimi 任务已加入队列，正在准备处理..."
+                : String.format("🤖 Kimi 任务已加入队列，当前排第 %d 位...", position + 1);
+
+        ChatRoom.Message message = ChatRoom.Message.builder()
+                .id(UUID.randomUUID().toString())
+                .senderId(kimiPluginService.getBotUsername())
+                .senderName(kimiPluginService.getBotUsername())
+                .content(statusText)
+                .timestamp(Instant.now())
+                .openclawMentioned(false)
+                .fromOpenClaw(true)
+                .build();
+
+        chatRoomService.addMessage(roomId, message);
+        broadcastToRoom(roomId, WebSocketMessage.builder()
+                .type("message")
+                .message(message)
+                .build());
+    }
+
+    // ========== Claude Code 任务处理 ==========
+
+    private void triggerClaude(String roomId, String content, List<Attachment> attachments, WebSocketUserInfo userInfo) {
+        log.info("Adding Claude task to queue for room: {}, content: {}, attachments: {}",
+                roomId,
+                content != null ? content.substring(0, Math.min(50, content.length())) : "",
+                attachments != null ? attachments.size() : 0);
+
+        // 创建任务
+        OpenClawTask task = OpenClawTask.builder()
+                .taskId(UUID.randomUUID().toString())
+                .roomId(roomId)
+                .content(content)
+                .attachments(attachments)
+                .userInfo(userInfo)
+                .createdAt(Instant.now())
+                .status(OpenClawTask.TaskStatus.PENDING)
+                .build();
+
+        // 获取或创建该房间的任务队列
+        ConcurrentLinkedQueue<OpenClawTask> queue = roomTaskQueues.computeIfAbsent(roomId, k -> new ConcurrentLinkedQueue<>());
+        AtomicBoolean isProcessing = roomProcessingFlags.computeIfAbsent(roomId, k -> new AtomicBoolean(false));
+
+        // 将任务加入队列
+        queue.offer(task);
+
+        int queueSize = queue.size();
+        log.info("Claude task {} added to room {} queue. Queue size: {}", task.getTaskId(), roomId, queueSize);
+
+        // 发送排队状态消息
+        sendClaudeQueueStatusMessage(roomId, task, queueSize - 1); // -1 因为当前任务已经加入队列
+
+        // 尝试启动队列处理（如果当前没有任务在执行）
+        tryProcessNextClaudeTask(roomId);
+    }
+
+    /**
+     * 尝试处理队列中的下一个 Claude 任务
+     */
+    private void tryProcessNextClaudeTask(String roomId) {
+        ConcurrentLinkedQueue<OpenClawTask> queue = roomTaskQueues.get(roomId);
+        AtomicBoolean isProcessing = roomProcessingFlags.get(roomId);
+
+        if (queue == null || isProcessing == null) {
+            return;
+        }
+
+        // 使用 CAS 操作确保只有一个线程能开始处理
+        if (!isProcessing.compareAndSet(false, true)) {
+            log.debug("Room {} is already processing a task, skipping", roomId);
+            return;
+        }
+
+        OpenClawTask task = queue.poll();
+        if (task == null) {
+            // 队列为空，重置处理标志
+            isProcessing.set(false);
+            log.debug("Room {} queue is empty, resetting processing flag", roomId);
+            return;
+        }
+
+        // 执行 Claude 任务
+        executeClaudeTask(task);
+    }
+
+    /**
+     * 执行 Claude 任务（流式版本）
+     */
+    private void executeClaudeTask(OpenClawTask task) {
+        String roomId = task.getRoomId();
+        String taskId = task.getTaskId();
+
+        log.info("Executing Claude task {} for room {} (streaming)", taskId, roomId);
+
+        task.setStatus(OpenClawTask.TaskStatus.PROCESSING);
+
+        // 获取机器人信息
+        String botUsername = claudeCodePluginService.getBotUsername();
+        String botAvatarUrl = claudeCodePluginService.getBotAvatarUrl();
+
+        // 创建流式消息占位符
+        String streamingMessageId = UUID.randomUUID().toString();
+        ChatRoom.Message streamingMessage = ChatRoom.Message.builder()
+                .id(streamingMessageId)
+                .senderId(claudeCodePluginService.getBotUsername())
+                .senderName(claudeCodePluginService.getBotUsername())
+                .senderAvatar(botAvatarUrl)
+                .content("") // 初始为空
+                .timestamp(Instant.now())
+                .openclawMentioned(false)
+                .fromOpenClaw(true)
+                .isStreaming(true) // 标记为流式消息
+                .build();
+
+        // 保存到数据库并广播
+        chatRoomService.addMessage(roomId, streamingMessage);
+        broadcastToRoom(roomId, WebSocketMessage.builder()
+                .type("stream_start")
+                .roomId(roomId)
+                .message(streamingMessage)
+                .build());
+
+        // 使用 AtomicReference 来累积内容
+        AtomicReference<StringBuilder> contentBuilder = new AtomicReference<>(new StringBuilder());
+
+        try {
+            // 获取或创建会话
+            Optional<ChatRoom> roomOpt = chatRoomService.getChatRoom(roomId);
+            if (roomOpt.isEmpty()) {
+                throw new RuntimeException("Room not found: " + roomId);
+            }
+
+            ChatRoom room = roomOpt.get();
+
+            // 检查现有会话
+            String claudeSessionId = room.getOpenClawSessions().stream()
+                    .filter(ChatRoom.OpenClawSession::isActive)
+                    .findFirst()
+                    .map(ChatRoom.OpenClawSession::getSessionId)
+                    .orElse(null);
+
+            if (claudeSessionId != null && !claudeCodePluginService.isSessionAlive(claudeSessionId)) {
+                log.info("Claude session {} is not alive, will create new", claudeSessionId);
+                claudeSessionId = null;
+            }
+
+            final String finalSessionId = claudeSessionId;
+
+            // 获取房间名称
+            String roomName = chatRoomService.getChatRoom(roomId)
+                    .map(ChatRoom::getName)
+                    .orElse("聊天室");
+
+            if (finalSessionId == null) {
+                // 创建新会话
+                log.info("Creating new Claude session for room: {}", roomId);
+
+                // 使用 oocSessionService 获取或创建会话并构建上下文
+                oocSessionService.getOrCreateSession("ooc-" + roomId, roomId)
+                        .flatMap(oocSession -> {
+                            if (oocSession.getMessages().size() > 30) {
+                                return oocSessionService.summarizeAndCompact(oocSession)
+                                        .thenReturn(oocSession);
+                            }
+                            return reactor.core.publisher.Mono.just(oocSession);
+                        })
+                        .flatMap(oocSession -> {
+                            List<Map<String, Object>> context = convertToContext(oocSession);
+                            log.info("Creating Claude session with {} context messages", context.size());
+                            return claudeCodePluginService.createSession("ooc-" + roomId, context);
+                        })
+                        .flatMapMany(newSession -> {
+                            chatRoomService.updateOpenClawSession(roomId, newSession.sessionId());
+                            log.info("Claude session created: {}", newSession.sessionId());
+                            return claudeCodePluginService.sendMessageStream(
+                                    newSession.sessionId(),
+                                    task.getContent(),
+                                    task.getAttachments(),
+                                    task.getUserInfo().getUserId(),
+                                    task.getUserInfo().getUserName(),
+                                    roomName
+                            );
+                        })
+                        .subscribe(
+                                event -> handleClaudeStreamEvent(roomId, streamingMessageId, contentBuilder, streamingMessage, event, task),
+                                error -> {
+                                    log.error("Claude streaming error in task {}", taskId, error);
+                                    task.setStatus(OpenClawTask.TaskStatus.FAILED);
+                                    handleClaudeStreamError(roomId, streamingMessageId, contentBuilder.get().toString(), error.getMessage(), task);
+                                    onClaudeTaskComplete(roomId);
+                                },
+                                () -> {
+                                    log.info("Claude streaming completed for task {}", taskId);
+                                    task.setStatus(OpenClawTask.TaskStatus.COMPLETED);
+                                    finalizeClaudeStreamMessage(roomId, streamingMessageId, contentBuilder.get().toString(), task);
+                                    onClaudeTaskComplete(roomId);
+                                }
+                        );
+            } else {
+                // 使用现有会话
+                log.info("Using existing Claude session: {}", finalSessionId);
+                claudeCodePluginService.sendMessageStream(
+                                finalSessionId,
+                                task.getContent(),
+                                task.getAttachments(),
+                                task.getUserInfo().getUserId(),
+                                task.getUserInfo().getUserName(),
+                                roomName
+                        )
+                        .subscribe(
+                                event -> handleClaudeStreamEvent(roomId, streamingMessageId, contentBuilder, streamingMessage, event, task),
+                                error -> {
+                                    log.error("Claude streaming error in task {}", taskId, error);
+                                    task.setStatus(OpenClawTask.TaskStatus.FAILED);
+                                    handleClaudeStreamError(roomId, streamingMessageId, contentBuilder.get().toString(), error.getMessage(), task);
+                                    onClaudeTaskComplete(roomId);
+                                },
+                                () -> {
+                                    log.info("Claude streaming completed for task {}", taskId);
+                                    task.setStatus(OpenClawTask.TaskStatus.COMPLETED);
+                                    finalizeClaudeStreamMessage(roomId, streamingMessageId, contentBuilder.get().toString(), task);
+                                    onClaudeTaskComplete(roomId);
+                                }
+                        );
+            }
+        } catch (Exception e) {
+            log.error("Error executing Claude task {}", taskId, e);
+            task.setStatus(OpenClawTask.TaskStatus.FAILED);
+            onClaudeTaskComplete(roomId);
+        }
+    }
+
+    /**
+     * 处理 Claude 流式事件
+     */
+    private void handleClaudeStreamEvent(String roomId, String messageId,
+                                          AtomicReference<StringBuilder> contentBuilder,
+                                          ChatRoom.Message streamingMessage,
+                                          ClaudeCodePluginService.StreamEvent event,
+                                          OpenClawTask task) {
+
+        log.debug("Claude stream event for task {}: type={}, contentLength={}",
+                task.getTaskId(), event.type(),
+                event.content() != null ? event.content().length() : 0);
+
+        switch (event.type()) {
+            case "message" -> {
+                if (event.content() != null) {
+                    contentBuilder.get().append(event.content());
+
+                    log.debug("Appending Claude content for task {}: newChars={}, totalChars={}",
+                            task.getTaskId(), event.content().length(), contentBuilder.get().length());
+
+                    // 创建增量更新消息
+                    ChatRoom.Message deltaMessage = ChatRoom.Message.builder()
+                            .id(messageId)
+                            .senderId(claudeCodePluginService.getBotUsername())
+                            .senderName(claudeCodePluginService.getBotUsername())
+                            .senderAvatar(claudeCodePluginService.getBotAvatarUrl())
+                            .content(event.content()) // 只发送增量内容
+                            .timestamp(Instant.now())
+                            .openclawMentioned(false)
+                            .fromOpenClaw(true)
+                            .isStreaming(true)
+                            .delta(true) // 标记为增量更新
+                            .build();
+
+                    // 广播增量更新
+                    broadcastToRoom(roomId, WebSocketMessage.builder()
+                            .type("stream_delta")
+                            .roomId(roomId)
+                            .message(deltaMessage)
+                            .build());
+                }
+            }
+            case "done" -> log.info("Claude stream done event received for task {}", task.getTaskId());
+            case "error" -> log.error("Claude stream error for task {}: {}", task.getTaskId(), event.content());
+        }
+    }
+
+    /**
+     * 处理 Claude 流式错误
+     */
+    private void handleClaudeStreamError(String roomId, String messageId, String partialContent, String error, OpenClawTask task) {
+        ChatRoom.Message errorMsg = ChatRoom.Message.builder()
+                .id(messageId)
+                .senderId(claudeCodePluginService.getBotUsername())
+                .senderName(claudeCodePluginService.getBotUsername())
+                .senderAvatar(claudeCodePluginService.getBotAvatarUrl())
+                .content(partialContent + "\n\n*(Claude 回复出错: " + error + " )*")
+                .timestamp(Instant.now())
+                .openclawMentioned(false)
+                .fromOpenClaw(true)
+                .isStreaming(false)
+                .build();
+
+        chatRoomService.updateMessage(roomId, errorMsg);
+
+        broadcastToRoom(roomId, WebSocketMessage.builder()
+                .type("stream_end")
+                .roomId(roomId)
+                .message(errorMsg)
+                .build());
+    }
+
+    /**
+     * 完成 Claude 流式消息
+     */
+    private void finalizeClaudeStreamMessage(String roomId, String messageId, String finalContent, OpenClawTask task) {
+        log.info("Finalizing Claude stream message for task {}: contentLength={}, isNull={}, isEmpty={}",
+                task.getTaskId(),
+                finalContent != null ? finalContent.length() : 0,
+                finalContent == null,
+                finalContent != null && finalContent.isEmpty());
+
+        // 如果内容为空，设置一个占位符
+        if (finalContent == null || finalContent.isEmpty()) {
+            log.warn("Claude stream message finalized with empty content for task {}, setting placeholder text", task.getTaskId());
+            finalContent = "*(Claude 无回复)*";
+        }
+
+        ChatRoom.Message finalMsg = ChatRoom.Message.builder()
+                .id(messageId)
+                .senderId(claudeCodePluginService.getBotUsername())
+                .senderName(claudeCodePluginService.getBotUsername())
+                .senderAvatar(claudeCodePluginService.getBotAvatarUrl())
+                .content(finalContent)
+                .timestamp(Instant.now())
+                .openclawMentioned(false)
+                .fromOpenClaw(true)
+                .isStreaming(false)
+                .build();
+
+        ChatRoom.Message saveMsg = ChatRoom.Message.builder()
+                .id(messageId)
+                .senderId(claudeCodePluginService.getBotUsername())
+                .senderName(claudeCodePluginService.getBotUsername())
+                .senderAvatar(claudeCodePluginService.getBotAvatarUrl())
+                .content(finalContent)
+                .timestamp(Instant.now())
+                .fromOpenClaw(true)
+                .toolCalls(null)
+                .build();
+
+        chatRoomService.updateMessage(roomId, saveMsg);
+
+        broadcastToRoom(roomId, WebSocketMessage.builder()
+                .type("stream_end")
+                .roomId(roomId)
+                .message(finalMsg)
+                .build());
+
+        log.info("Claude stream message finalized for task {}, content length: {}",
+                task.getTaskId(), finalContent.length());
+    }
+
+    /**
+     * Claude 任务完成后的回调
+     */
+    private void onClaudeTaskComplete(String roomId) {
+        log.info("Claude task completed for room {}, checking queue for next task", roomId);
+        AtomicBoolean isProcessing = roomProcessingFlags.get(roomId);
+        if (isProcessing != null) {
+            isProcessing.set(false);
+        }
+        tryProcessNextClaudeTask(roomId);
+    }
+
+    /**
+     * 发送 Claude 排队状态消息
+     */
+    private void sendClaudeQueueStatusMessage(String roomId, OpenClawTask task, int position) {
+        String statusText = position == 0
+                ? "🤖 Claude 任务已加入队列，正在准备处理..."
+                : String.format("🤖 Claude 任务已加入队列，当前排第 %d 位...", position + 1);
+
+        ChatRoom.Message message = ChatRoom.Message.builder()
+                .id(UUID.randomUUID().toString())
+                .senderId(claudeCodePluginService.getBotUsername())
+                .senderName(claudeCodePluginService.getBotUsername())
+                .content(statusText)
+                .timestamp(Instant.now())
+                .openclawMentioned(false)
+                .fromOpenClaw(true)
+                .build();
+
+        chatRoomService.addMessage(roomId, message);
+        broadcastToRoom(roomId, WebSocketMessage.builder()
+                .type("message")
+                .message(message)
+                .build());
     }
 
     private void triggerOpenClaw(String roomId, String content, List<Attachment> attachments, WebSocketUserInfo userInfo) {

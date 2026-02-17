@@ -473,6 +473,103 @@ public class AdminController {
         return ResponseEntity.ok().build();
     }
 
+    // ==================== Kimi 机器人管理 API ====================
+
+    /**
+     * 获取启用的 Kimi 机器人配置
+     */
+    @GetMapping("/bots/kimi")
+    public ResponseEntity<BotUserDto> getKimiBot() {
+        Optional<User> bot = userRepository.findAll().stream()
+                .filter(User::isBot)
+                .filter(User::isEnabled)
+                .filter(u -> "kimi".equals(u.getBotType()))
+                .findFirst();
+
+        return ResponseEntity.ok(bot.map(this::toBotDto)
+                .orElse(getDefaultKimiBotDto()));
+    }
+
+    /**
+     * 创建或更新 Kimi 机器人
+     */
+    @PostMapping("/bots/kimi")
+    public ResponseEntity<BotUserDto> saveKimiBot(@RequestBody BotUserRequest request) {
+        Optional<User> existing = userRepository.findAll().stream()
+                .filter(User::isBot)
+                .filter(u -> "kimi".equals(u.getBotType()))
+                .findFirst();
+
+        User bot;
+        if (existing.isPresent()) {
+            bot = existing.get();
+            bot.setUsername(request.username());
+            bot.setAvatar(request.avatarUrl());
+            if (request.password() != null && !request.password().isBlank()) {
+                bot.setPassword(passwordEncoder.encode(request.password()));
+            }
+            bot.setEnabled(request.enabled());
+
+            BotUserConfig config = bot.getBotConfig();
+            if (config == null) {
+                config = new BotUserConfig();
+            }
+            // Kimi 使用 gatewayUrl 存储自定义 API 端点（可选）
+            config.setGatewayUrl(request.gatewayUrl());
+            config.setSystemPrompt(request.systemPrompt());
+            if (request.apiKey() != null && !request.apiKey().isBlank()) {
+                config.setApiKey(request.apiKey());
+            }
+            bot.setBotConfig(config);
+            bot.setUpdatedAt(Instant.now());
+        } else {
+            // 检查用户名是否已存在
+            if (userRepository.existsByUsername(request.username())) {
+                throw new RuntimeException("Username already exists");
+            }
+
+            BotUserConfig config = BotUserConfig.builder()
+                    .gatewayUrl(request.gatewayUrl())
+                    .apiKey(request.apiKey())
+                    .systemPrompt(request.systemPrompt())
+                    .build();
+
+            bot = User.builder()
+                    .username(request.username())
+                    .email(request.username() + "@bot.local")
+                    .password(passwordEncoder.encode(request.password() != null ? request.password() : "botpassword123"))
+                    .avatar(request.avatarUrl())
+                    .enabled(request.enabled())
+                    .roles(Set.of("ROLE_USER"))
+                    .isBot(true)
+                    .botType("kimi")
+                    .botConfig(config)
+                    .createdAt(Instant.now())
+                    .updatedAt(Instant.now())
+                    .build();
+        }
+
+        User saved = userRepository.save(bot);
+        log.info("Kimi bot saved: username={}, gatewayUrl={}", saved.getUsername(),
+                saved.getBotConfig() != null ? saved.getBotConfig().getGatewayUrl() : null);
+        return ResponseEntity.ok(toBotDto(saved));
+    }
+
+    private BotUserDto getDefaultKimiBotDto() {
+        return new BotUserDto(
+                null,
+                "kimi",
+                null,
+                "https://api.moonshot.cn",
+                null,
+                "你是 Kimi，一个由 Moonshot AI 训练的大型语言模型。",
+                true,
+                "kimi",
+                null,
+                null
+        );
+    }
+
     private BotUserDto getDefaultOpenClawBotDto() {
         return new BotUserDto(
                 null,
