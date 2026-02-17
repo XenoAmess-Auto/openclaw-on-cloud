@@ -765,6 +765,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                 .openclawMentioned(false)
                 .fromOpenClaw(true)
                 .isStreaming(false)
+                .replyToMessageId(task.getSourceMessageId())
                 .build();
 
         oocSessionService.addMessage(roomId, OocSession.SessionMessage.builder()
@@ -1149,6 +1150,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                 .openclawMentioned(false)
                 .fromOpenClaw(true)
                 .isStreaming(false)
+                .replyToMessageId(task.getSourceMessageId())
                 .build();
 
         ChatRoom.Message saveMsg = ChatRoom.Message.builder()
@@ -1680,6 +1682,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                 .isStreaming(false)
                 .isToolCall(!toolCalls.isEmpty())
                 .toolCalls(toolCalls)
+                .replyToMessageId(task.getSourceMessageId())
                 .build();
 
         // 保存到 OOC 会话

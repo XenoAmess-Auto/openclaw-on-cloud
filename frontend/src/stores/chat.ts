@@ -367,6 +367,11 @@ export const useChatStore = defineStore('chat', () => {
               data.message.isToolCall = true
               console.log('[WebSocket] stream_end - preserved existing toolCalls:', existingMsg.toolCalls.length)
             }
+            // 保留 replyToMessageId（如果后端没有发送）
+            if (!data.message.replyToMessageId && existingMsg.replyToMessageId) {
+              data.message.replyToMessageId = existingMsg.replyToMessageId
+              console.log('[WebSocket] stream_end - preserved existing replyToMessageId:', existingMsg.replyToMessageId)
+            }
             // 使用 splice 确保响应式更新
             messages.value.splice(index, 1, data.message)
             console.log('[WebSocket] stream_end - message replaced at index:', index)
