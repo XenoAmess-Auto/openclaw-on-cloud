@@ -1037,16 +1037,39 @@ function highlightMentions(htmlContent: string, msg: Message): string {
   htmlContent = htmlContent.replace(/(@所有人|@everyone|@all)/gi, '<span class="mention mention-all">$1</span>')
   htmlContent = htmlContent.replace(/(@在线|@here)/gi, '<span class="mention mention-here">$1</span>')
   htmlContent = htmlContent.replace(/(@openclaw)/gi, '<span class="mention">$1</span>')
-  
-  // 处理其他用户提及
+
+  // 处理其他用户提及（来自后端解析的 mentions 数组）
   if (msg.mentions) {
     msg.mentions.forEach(mention => {
       const regex = new RegExp(`@${mention.userName}`, 'g')
       htmlContent = htmlContent.replace(regex, `<span class="mention">@${mention.userName}</span>`)
     })
   }
-  
+
+  // 对房间中所有成员和机器人的 @提及添加特效
+  // 这样可以覆盖手动输入的 @提及（即使后端没有正确解析到 mentions 数组）
+  roomMembers.value.forEach(member => {
+    const displayName = member.nickname || member.username
+    if (displayName && displayName !== 'openclaw') {
+      // 使用否定前瞻确保不会重复包裹已经处理过的提及
+      const regex = new RegExp(`(?<!<span class="mention">)@${escapeRegExp(displayName)}`, 'g')
+      htmlContent = htmlContent.replace(regex, `<span class="mention">@${displayName}</span>`)
+    }
+  })
+
+  // 也对当前用户（如果不在 roomMembers 中）添加特效
+  const currentUserName = authStore.user?.nickname || authStore.user?.username
+  if (currentUserName && currentUserName !== 'openclaw') {
+    const regex = new RegExp(`(?<!<span class="mention">)@${escapeRegExp(currentUserName)}`, 'g')
+    htmlContent = htmlContent.replace(regex, `<span class="mention">@${currentUserName}</span>`)
+  }
+
   return htmlContent
+}
+
+// 转义正则特殊字符
+function escapeRegExp(string: string): string {
+  return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
 // 渲染附件图片
