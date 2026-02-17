@@ -272,6 +272,33 @@ public class ChatRoomController {
         return ResponseEntity.ok(enrichedMessages);
     }
 
+    @GetMapping("/{roomId}/queue")
+    public ResponseEntity<Map<String, Object>> getTaskQueue(@PathVariable String roomId) {
+        List<ChatWebSocketHandler.OpenClawTask> tasks = webSocketHandler.getRoomTaskQueue(roomId);
+        boolean isProcessing = webSocketHandler.isRoomProcessing(roomId);
+
+        List<Map<String, Object>> taskList = tasks.stream()
+                .map(task -> {
+                    Map<String, Object> taskMap = new HashMap<>();
+                    taskMap.put("taskId", task.getTaskId());
+                    taskMap.put("status", task.getStatus().name());
+                    taskMap.put("createdAt", task.getCreatedAt());
+                    taskMap.put("senderName", task.getUserInfo() != null ? task.getUserInfo().getUserName() : "Unknown");
+                    taskMap.put("content", task.getContent() != null ?
+                            task.getContent().substring(0, Math.min(50, task.getContent().length())) + "..." : "");
+                    return taskMap;
+                })
+                .collect(Collectors.toList());
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("roomId", roomId);
+        result.put("isProcessing", isProcessing);
+        result.put("queueSize", tasks.size());
+        result.put("tasks", taskList);
+
+        return ResponseEntity.ok(result);
+    }
+
     @PostMapping("/{roomId}/messages")
     public ResponseEntity<ChatRoom.Message> sendMessage(
             @PathVariable String roomId,

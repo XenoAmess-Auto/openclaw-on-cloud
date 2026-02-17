@@ -68,7 +68,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
      */
     @lombok.Data
     @lombok.Builder
-    private static class OpenClawTask {
+    public static class OpenClawTask {
         private String taskId;
         private String roomId;
         private String content;
@@ -80,6 +80,25 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
         public enum TaskStatus {
             PENDING, PROCESSING, COMPLETED, FAILED
         }
+    }
+
+    /**
+     * 获取指定房间的任务队列状态
+     */
+    public java.util.List<OpenClawTask> getRoomTaskQueue(String roomId) {
+        ConcurrentLinkedQueue<OpenClawTask> queue = roomTaskQueues.get(roomId);
+        if (queue == null) {
+            return java.util.List.of();
+        }
+        return new java.util.ArrayList<>(queue);
+    }
+
+    /**
+     * 获取指定房间是否正在处理任务
+     */
+    public boolean isRoomProcessing(String roomId) {
+        AtomicBoolean flag = roomProcessingFlags.get(roomId);
+        return flag != null && flag.get();
     }
 
     @Override

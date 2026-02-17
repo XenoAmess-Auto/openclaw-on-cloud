@@ -12,6 +12,19 @@ export interface GetMessagesParams {
   before?: string
 }
 
+export interface TaskQueueInfo {
+  roomId: string
+  isProcessing: boolean
+  queueSize: number
+  tasks: {
+    taskId: string
+    status: string
+    createdAt: string
+    senderName: string
+    content: string
+  }[]
+}
+
 export const chatRoomApi = {
   getMyRooms: () => 
     apiClient.get<ChatRoom[]>('/chat-rooms'),
@@ -45,5 +58,8 @@ export const chatRoomApi = {
     
     const queryString = searchParams.toString()
     return apiClient.get<Message[]>(`/chat-rooms/${roomId}/messages${queryString ? '?' + queryString : ''}`)
-  }
+  },
+
+  getTaskQueue: (roomId: string) =>
+    apiClient.get<TaskQueueInfo>(`/chat-rooms/${roomId}/queue`)
 }

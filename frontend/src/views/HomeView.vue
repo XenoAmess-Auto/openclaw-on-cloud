@@ -61,6 +61,7 @@
               <button v-if="isCreator" class="btn-danger" @click="confirmDismiss">解散</button>
               <button @click="showMembers = true">成员</button>
               <button @click="showSessions = true">会话</button>
+              <button @click="showTaskQueue = true">队列</button>
             </div>
           </div>
           
@@ -341,6 +342,13 @@
       :room-id="currentRoomId"
       @close="showSessions = false"
     />
+    
+    <TaskQueuePanel
+      v-if="showTaskQueue && currentRoomId"
+      :room-id="currentRoomId"
+      :visible="showTaskQueue"
+      @close="showTaskQueue = false"
+    />
   </div>
 </template>
 
@@ -353,6 +361,7 @@ import { chatRoomApi } from '@/api/chatRoom'
 import SessionManager from '@/components/SessionManager.vue'
 import MemberManager from '@/components/MemberManager.vue'
 import VoiceInput from '@/components/VoiceInput.vue'
+import TaskQueuePanel from '@/components/TaskQueuePanel.vue'
 import { fileApi } from '@/api/file'
 import { getBaseUrl } from '@/utils/config'
 import { marked } from 'marked'
@@ -377,6 +386,7 @@ const messageContainer = ref<HTMLDivElement>()
 const inputRef = ref<HTMLTextAreaElement>()
 const showMembers = ref(false)
 const showSessions = ref(false)
+const showTaskQueue = ref(false)
 const showDismissDialog = ref(false)
 
 // @提及相关状态
