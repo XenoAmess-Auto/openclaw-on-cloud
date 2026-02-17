@@ -58,10 +58,16 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
     private final Map<String, Set<WebSocketSession>> userSessions = new ConcurrentHashMap<>();
 
     // ========== 队列系统 ==========
-    // roomId -> 任务队列
-    private final Map<String, ConcurrentLinkedQueue<OpenClawTask>> roomTaskQueues = new ConcurrentHashMap<>();
-    // roomId -> 是否正在执行任务
-    private final Map<String, AtomicBoolean> roomProcessingFlags = new ConcurrentHashMap<>();
+    // 每个机器人独立的队列和处理标志
+    // OpenClaw
+    private final Map<String, ConcurrentLinkedQueue<OpenClawTask>> openclawTaskQueues = new ConcurrentHashMap<>();
+    private final Map<String, AtomicBoolean> openclawProcessingFlags = new ConcurrentHashMap<>();
+    // Kimi
+    private final Map<String, ConcurrentLinkedQueue<OpenClawTask>> kimiTaskQueues = new ConcurrentHashMap<>();
+    private final Map<String, AtomicBoolean> kimiProcessingFlags = new ConcurrentHashMap<>();
+    // Claude
+    private final Map<String, ConcurrentLinkedQueue<OpenClawTask>> claudeTaskQueues = new ConcurrentHashMap<>();
+    private final Map<String, AtomicBoolean> claudeProcessingFlags = new ConcurrentHashMap<>();
 
     /**
      * OpenClaw 任务
@@ -83,10 +89,10 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
     }
 
     /**
-     * 获取指定房间的任务队列状态
+     * 获取指定房间的 OpenClaw 任务队列状态
      */
     public java.util.List<OpenClawTask> getRoomTaskQueue(String roomId) {
-        ConcurrentLinkedQueue<OpenClawTask> queue = roomTaskQueues.get(roomId);
+        ConcurrentLinkedQueue<OpenClawTask> queue = openclawTaskQueues.get(roomId);
         if (queue == null) {
             return java.util.List.of();
         }
@@ -94,10 +100,10 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
     }
 
     /**
-     * 获取指定房间是否正在处理任务
+     * 获取指定房间是否正在处理 OpenClaw 任务
      */
     public boolean isRoomProcessing(String roomId) {
-        AtomicBoolean flag = roomProcessingFlags.get(roomId);
+        AtomicBoolean flag = openclawProcessingFlags.get(roomId);
         return flag != null && flag.get();
     }
 
@@ -466,8 +472,8 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                 .build();
 
         // 获取或创建该房间的任务队列
-        ConcurrentLinkedQueue<OpenClawTask> queue = roomTaskQueues.computeIfAbsent(roomId, k -> new ConcurrentLinkedQueue<>());
-        AtomicBoolean isProcessing = roomProcessingFlags.computeIfAbsent(roomId, k -> new AtomicBoolean(false));
+        ConcurrentLinkedQueue<OpenClawTask> queue = kimiTaskQueues.computeIfAbsent(roomId, k -> new ConcurrentLinkedQueue<>());
+        AtomicBoolean isProcessing = kimiProcessingFlags.computeIfAbsent(roomId, k -> new AtomicBoolean(false));
 
         // 将任务加入队列
         queue.offer(task);
@@ -486,8 +492,8 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
      * 尝试处理队列中的下一个 Kimi 任务
      */
     private void tryProcessNextKimiTask(String roomId) {
-        ConcurrentLinkedQueue<OpenClawTask> queue = roomTaskQueues.get(roomId);
-        AtomicBoolean isProcessing = roomProcessingFlags.get(roomId);
+        ConcurrentLinkedQueue<OpenClawTask> queue = kimiTaskQueues.get(roomId);
+        AtomicBoolean isProcessing = kimiProcessingFlags.get(roomId);
 
         if (queue == null || isProcessing == null) {
             return;
@@ -767,7 +773,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
      */
     private void onKimiTaskComplete(String roomId) {
         log.info("Kimi task completed for room {}, checking queue for next task", roomId);
-        AtomicBoolean isProcessing = roomProcessingFlags.get(roomId);
+        AtomicBoolean isProcessing = kimiProcessingFlags.get(roomId);
         if (isProcessing != null) {
             isProcessing.set(false);
         }
@@ -819,8 +825,8 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                 .build();
 
         // 获取或创建该房间的任务队列
-        ConcurrentLinkedQueue<OpenClawTask> queue = roomTaskQueues.computeIfAbsent(roomId, k -> new ConcurrentLinkedQueue<>());
-        AtomicBoolean isProcessing = roomProcessingFlags.computeIfAbsent(roomId, k -> new AtomicBoolean(false));
+        ConcurrentLinkedQueue<OpenClawTask> queue = claudeTaskQueues.computeIfAbsent(roomId, k -> new ConcurrentLinkedQueue<>());
+        AtomicBoolean isProcessing = claudeProcessingFlags.computeIfAbsent(roomId, k -> new AtomicBoolean(false));
 
         // 将任务加入队列
         queue.offer(task);
@@ -839,8 +845,8 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
      * 尝试处理队列中的下一个 Claude 任务
      */
     private void tryProcessNextClaudeTask(String roomId) {
-        ConcurrentLinkedQueue<OpenClawTask> queue = roomTaskQueues.get(roomId);
-        AtomicBoolean isProcessing = roomProcessingFlags.get(roomId);
+        ConcurrentLinkedQueue<OpenClawTask> queue = claudeTaskQueues.get(roomId);
+        AtomicBoolean isProcessing = claudeProcessingFlags.get(roomId);
 
         if (queue == null || isProcessing == null) {
             return;
@@ -1140,7 +1146,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
      */
     private void onClaudeTaskComplete(String roomId) {
         log.info("Claude task completed for room {}, checking queue for next task", roomId);
-        AtomicBoolean isProcessing = roomProcessingFlags.get(roomId);
+        AtomicBoolean isProcessing = claudeProcessingFlags.get(roomId);
         if (isProcessing != null) {
             isProcessing.set(false);
         }
@@ -1189,29 +1195,29 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                 .status(OpenClawTask.TaskStatus.PENDING)
                 .build();
 
-        // 获取或创建该房间的任务队列
-        ConcurrentLinkedQueue<OpenClawTask> queue = roomTaskQueues.computeIfAbsent(roomId, k -> new ConcurrentLinkedQueue<>());
-        AtomicBoolean isProcessing = roomProcessingFlags.computeIfAbsent(roomId, k -> new AtomicBoolean(false));
+        // 获取或创建该房间的 OpenClaw 任务队列
+        ConcurrentLinkedQueue<OpenClawTask> queue = openclawTaskQueues.computeIfAbsent(roomId, k -> new ConcurrentLinkedQueue<>());
+        AtomicBoolean isProcessing = openclawProcessingFlags.computeIfAbsent(roomId, k -> new AtomicBoolean(false));
 
         // 将任务加入队列
         queue.offer(task);
 
         int queueSize = queue.size();
-        log.info("Task {} added to room {} queue. Queue size: {}", task.getTaskId(), roomId, queueSize);
+        log.info("OpenClaw task {} added to room {} queue. Queue size: {}", task.getTaskId(), roomId, queueSize);
 
         // 发送排队状态消息
         sendQueueStatusMessage(roomId, task, queueSize - 1); // -1 因为当前任务已经加入队列
 
         // 尝试启动队列处理（如果当前没有任务在执行）
-        tryProcessNextTask(roomId);
+        tryProcessNextOpenClawTask(roomId);
     }
 
     /**
-     * 尝试处理队列中的下一个任务
+     * 尝试处理队列中的下一个 OpenClaw 任务
      */
-    private void tryProcessNextTask(String roomId) {
-        ConcurrentLinkedQueue<OpenClawTask> queue = roomTaskQueues.get(roomId);
-        AtomicBoolean isProcessing = roomProcessingFlags.get(roomId);
+    private void tryProcessNextOpenClawTask(String roomId) {
+        ConcurrentLinkedQueue<OpenClawTask> queue = openclawTaskQueues.get(roomId);
+        AtomicBoolean isProcessing = openclawProcessingFlags.get(roomId);
 
         if (queue == null || isProcessing == null) {
             return;
@@ -1219,7 +1225,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
 
         // 使用 CAS 操作确保只有一个线程能开始处理
         if (!isProcessing.compareAndSet(false, true)) {
-            log.debug("Room {} is already processing a task, skipping", roomId);
+            log.debug("Room {} is already processing an OpenClaw task, skipping", roomId);
             return;
         }
 
@@ -1227,18 +1233,18 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
         if (task == null) {
             // 队列为空，重置处理标志
             isProcessing.set(false);
-            log.debug("Room {} queue is empty, resetting processing flag", roomId);
+            log.debug("Room {} OpenClaw queue is empty, resetting processing flag", roomId);
             return;
         }
 
-        // 执行任务
-        executeTask(task);
+        // 执行 OpenClaw 任务
+        executeOpenClawTask(task);
     }
 
     /**
      * 执行 OpenClaw 任务（流式版本）
      */
-    private void executeTask(OpenClawTask task) {
+    private void executeOpenClawTask(OpenClawTask task) {
         String roomId = task.getRoomId();
         String taskId = task.getTaskId();
         log.info("Executing OpenClaw task {} for room {} (streaming)", taskId, roomId);
@@ -1320,18 +1326,18 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                                     room.getName());
                         })
                         .subscribe(
-                                event -> handleStreamEvent(roomId, streamingMessageId, contentBuilder, streamingMessage, event, task),
+                                event -> handleOpenClawStreamEvent(roomId, streamingMessageId, contentBuilder, streamingMessage, event, task),
                                 error -> {
                                     log.error("OpenClaw streaming error in task {}", taskId, error);
                                     task.setStatus(OpenClawTask.TaskStatus.FAILED);
-                                    handleStreamError(roomId, streamingMessageId, contentBuilder.get().toString(), error.getMessage(), task);
-                                    onTaskComplete(roomId);
+                                    handleOpenClawStreamError(roomId, streamingMessageId, contentBuilder.get().toString(), error.getMessage(), task);
+                                    onOpenClawTaskComplete(roomId);
                                 },
                                 () -> {
                                     log.info("OpenClaw streaming completed for task {}", taskId);
                                     task.setStatus(OpenClawTask.TaskStatus.COMPLETED);
-                                    finalizeStreamMessage(roomId, streamingMessageId, contentBuilder.get().toString(), task, streamingMessage.get().getToolCalls());
-                                    onTaskComplete(roomId);
+                                    finalizeOpenClawStreamMessage(roomId, streamingMessageId, contentBuilder.get().toString(), task, streamingMessage.get().getToolCalls());
+                                    onOpenClawTaskComplete(roomId);
                                 }
                         );
             } else {
@@ -1345,38 +1351,38 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                                 task.getUserInfo().getUserName(),
                                 room.getName())
                         .subscribe(
-                                event -> handleStreamEvent(roomId, streamingMessageId, contentBuilder, streamingMessage, event, task),
+                                event -> handleOpenClawStreamEvent(roomId, streamingMessageId, contentBuilder, streamingMessage, event, task),
                                 error -> {
                                     log.error("OpenClaw streaming error in task {}", taskId, error);
                                     task.setStatus(OpenClawTask.TaskStatus.FAILED);
-                                    handleStreamError(roomId, streamingMessageId, contentBuilder.get().toString(), error.getMessage(), task);
-                                    onTaskComplete(roomId);
+                                    handleOpenClawStreamError(roomId, streamingMessageId, contentBuilder.get().toString(), error.getMessage(), task);
+                                    onOpenClawTaskComplete(roomId);
                                 },
                                 () -> {
                                     log.info("OpenClaw streaming completed for task {}", taskId);
                                     task.setStatus(OpenClawTask.TaskStatus.COMPLETED);
-                                    finalizeStreamMessage(roomId, streamingMessageId, contentBuilder.get().toString(), task, streamingMessage.get().getToolCalls());
-                                    onTaskComplete(roomId);
+                                    finalizeOpenClawStreamMessage(roomId, streamingMessageId, contentBuilder.get().toString(), task, streamingMessage.get().getToolCalls());
+                                    onOpenClawTaskComplete(roomId);
                                 }
                         );
             }
         }, () -> {
             log.error("Chat room not found: {}", roomId);
             task.setStatus(OpenClawTask.TaskStatus.FAILED);
-            onTaskComplete(roomId);
+            onOpenClawTaskComplete(roomId);
         });
     }
 
     /**
-     * 处理流式事件
+     * 处理 OpenClaw 流式事件
      */
-    private void handleStreamEvent(String roomId, String messageId,
+    private void handleOpenClawStreamEvent(String roomId, String messageId,
             AtomicReference<StringBuilder> contentBuilder,
             AtomicReference<ChatRoom.Message> streamingMessage,
             OpenClawPluginService.StreamEvent event,
             OpenClawTask task) {
 
-        log.info("Stream event for task {}: type={}, contentLength={}, toolName={}, totalBuilderLength={}",
+        log.info("OpenClaw stream event for task {}: type={}, contentLength={}, toolName={}, totalBuilderLength={}",
                 task.getTaskId(),
                 event.type(),
                 event.content() != null ? event.content().length() : 0,
@@ -1389,7 +1395,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                 contentBuilder.get().append(event.content());
                 String currentContent = contentBuilder.get().toString();
 
-                log.info("Appending content for task {}: newChars={}, totalChars={}",
+                log.info("Appending OpenClaw content for task {}: newChars={}, totalChars={}",
                         task.getTaskId(),
                         event.content().length(), currentContent.length());
 
@@ -1519,7 +1525,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
     /**
      * 处理流式错误
      */
-    private void handleStreamError(String roomId, String messageId, String partialContent, String error, OpenClawTask task) {
+    private void handleOpenClawStreamError(String roomId, String messageId, String partialContent, String error, OpenClawTask task) {
         // 更新消息为错误状态 - senderAvatar 为 null，让前端显示默认机器人头像
         ChatRoom.Message errorMsg = ChatRoom.Message.builder()
                 .id(messageId)
@@ -1545,7 +1551,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
     /**
      * 完成流式消息
      */
-    private void finalizeStreamMessage(String roomId, String messageId, String finalContent, OpenClawTask task, List<ChatRoom.Message.ToolCall> streamingToolCalls) {
+    private void finalizeOpenClawStreamMessage(String roomId, String messageId, String finalContent, OpenClawTask task, List<ChatRoom.Message.ToolCall> streamingToolCalls) {
         // 详细日志：记录内容状态以便诊断
         log.info("Finalizing stream message for task {}: contentLength={}, isNull={}, isEmpty={}, isBlank={}, toolCalls={}",
                 task.getTaskId(),
@@ -1572,7 +1578,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
         // 从内容中解析 Tool details 并填充到工具调用中
         toolCalls = enrichToolCallsWithDetails(finalContent, toolCalls);
 
-        log.info("finalizeStreamMessage: parsed {} tool calls for task {}", toolCalls.size(), task.getTaskId());
+        log.info("finalizeOpenClawStreamMessage: parsed {} tool calls for task {}", toolCalls.size(), task.getTaskId());
         if (!toolCalls.isEmpty()) {
             toolCalls.forEach(tc -> log.info("  Tool: {} - result length={}", tc.getName(),
                     tc.getResult() != null ? tc.getResult().length() : 0));
@@ -1920,14 +1926,14 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
     /**
      * 任务完成后的回调
      */
-    private void onTaskComplete(String roomId) {
+    private void onOpenClawTaskComplete(String roomId) {
         log.info("Task completed for room {}, checking queue for next task", roomId);
-        AtomicBoolean isProcessing = roomProcessingFlags.get(roomId);
+        AtomicBoolean isProcessing = openclawProcessingFlags.get(roomId);
         if (isProcessing != null) {
             isProcessing.set(false);
         }
         // 尝试处理下一个任务
-        tryProcessNextTask(roomId);
+        tryProcessNextOpenClawTask(roomId);
     }
 
     /**
