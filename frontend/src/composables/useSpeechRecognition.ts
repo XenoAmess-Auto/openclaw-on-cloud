@@ -5,6 +5,38 @@ interface UseSpeechRecognitionOptions {
   onError?: (error: Error) => void
 }
 
+// TypeScript 类型声明
+interface SpeechRecognition extends EventTarget {
+  continuous: boolean
+  interimResults: boolean
+  lang: string
+  start(): void
+  stop(): void
+  onresult: ((event: SpeechRecognitionEvent) => void) | null
+  onerror: ((event: SpeechRecognitionErrorEvent) => void) | null
+  onend: (() => void) | null
+}
+
+interface SpeechRecognitionConstructor {
+  new (): SpeechRecognition
+}
+
+interface SpeechRecognitionEvent extends Event {
+  resultIndex: number
+  results: SpeechRecognitionResultList
+}
+
+interface SpeechRecognitionErrorEvent extends Event {
+  error: string
+}
+
+declare global {
+  interface Window {
+    SpeechRecognition: SpeechRecognitionConstructor
+    webkitSpeechRecognition: SpeechRecognitionConstructor
+  }
+}
+
 export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}) {
   const isRecording = ref(false)
   const isModelLoading = ref(false)
@@ -200,20 +232,3 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}) 
 }
 
 export type UseSpeechRecognitionReturn = ReturnType<typeof useSpeechRecognition>
-
-// TypeScript 类型声明
-declare global {
-  interface Window {
-    SpeechRecognition: typeof SpeechRecognition
-    webkitSpeechRecognition: typeof SpeechRecognition
-  }
-}
-
-interface SpeechRecognitionEvent extends Event {
-  resultIndex: number
-  results: SpeechRecognitionResultList
-}
-
-interface SpeechRecognitionErrorEvent extends Event {
-  error: string
-}
