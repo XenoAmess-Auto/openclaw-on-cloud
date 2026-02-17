@@ -277,6 +277,7 @@ export const useChatStore = defineStore('chat', () => {
           break
         }
         console.log('[WebSocket] stream_start:', data.message)
+        console.log('[WebSocket] stream_start replyToMessageId:', data.message?.replyToMessageId)
         messages.value.push(data.message)
         break
       case 'stream_delta':

@@ -556,10 +556,13 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
             chatRoomService.addMessage(roomId, streamingMessage.get());
 
             // 广播流式消息开始
+            ChatRoom.Message msg = streamingMessage.get();
+            log.info("[Kimi] Broadcasting stream_start with replyToMessageId: {} (task sourceMessageId: {})",
+                    msg.getReplyToMessageId(), task.getSourceMessageId());
             broadcastToRoom(roomId, WebSocketMessage.builder()
                     .type("stream_start")
                     .roomId(roomId)
-                    .message(streamingMessage.get())
+                    .message(msg)
                     .build());
         } catch (Exception e) {
             log.error("Failed to initialize Kimi streaming message for task {}: {}", taskId, e.getMessage(), e);
@@ -921,6 +924,8 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
         try {
             // 保存到数据库并广播
             chatRoomService.addMessage(roomId, streamingMessage);
+            log.info("[Claude] Broadcasting stream_start with replyToMessageId: {} (task sourceMessageId: {})",
+                    streamingMessage.getReplyToMessageId(), task.getSourceMessageId());
             broadcastToRoom(roomId, WebSocketMessage.builder()
                     .type("stream_start")
                     .roomId(roomId)
@@ -1308,10 +1313,13 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
             chatRoomService.addMessage(roomId, streamingMessage.get());
 
             // 广播流式消息开始
+            ChatRoom.Message msg = streamingMessage.get();
+            log.info("[OpenClaw] Broadcasting stream_start with replyToMessageId: {} (task sourceMessageId: {})",
+                    msg.getReplyToMessageId(), task.getSourceMessageId());
             broadcastToRoom(roomId, WebSocketMessage.builder()
                     .type("stream_start")
                     .roomId(roomId)
-                    .message(streamingMessage.get())
+                    .message(msg)
                     .build());
         } catch (Exception e) {
             log.error("Failed to initialize streaming message for task {}: {}", taskId, e.getMessage(), e);
