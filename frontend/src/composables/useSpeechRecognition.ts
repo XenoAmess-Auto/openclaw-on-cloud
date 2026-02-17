@@ -8,7 +8,6 @@ env.useBrowserCache = false
 
 // 尝试本地模型路径，使用分块模型文件
 const LOCAL_MODEL_PATH = '/models'
-const REMOTE_MODEL_PATH = 'Xenova/whisper-base'
 
 // 检测是否有本地模型（检查 encoder 文件）
 async function hasLocalModel(): Promise<boolean> {
