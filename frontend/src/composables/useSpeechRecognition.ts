@@ -103,8 +103,6 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}) 
         modelPath,
         {
           quantized: true,
-          // 明确指定模型类型为 whisper，避免使用 CTC 架构
-          model_type: 'whisper',
           progress_callback: (progress: number) => {
             loadingProgress.value = Math.round(progress * 100)
             console.log(`[useSpeechRecognition] 模型加载进度: ${Math.round(progress * 100)}%`)
