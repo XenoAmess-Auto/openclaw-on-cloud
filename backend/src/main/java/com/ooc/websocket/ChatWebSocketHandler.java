@@ -384,7 +384,11 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
 
     private boolean shouldTriggerOpenClaw(int memberCount, boolean mentionedOpenClaw) {
         // 只有 @OpenClaw 时才触发回复
-        return mentionedOpenClaw;
+        if (!mentionedOpenClaw) {
+            return false;
+        }
+        // 检查机器人是否启用
+        return openClawPluginService.isBotEnabled();
     }
 
     private void triggerOpenClaw(String roomId, String content, List<Attachment> attachments, WebSocketUserInfo userInfo) {

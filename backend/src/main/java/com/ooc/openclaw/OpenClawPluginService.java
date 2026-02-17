@@ -119,6 +119,13 @@ public class OpenClawPluginService {
     }
 
     /**
+     * 检查机器人是否启用
+     */
+    public boolean isBotEnabled() {
+        return getBotUser().isPresent();
+    }
+
+    /**
      * 获取系统提示词
      */
     private String getSystemPrompt() {
