@@ -131,71 +131,36 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
     private void handleJoin(WebSocketSession session, WebSocketMessage payload) {
         String roomId = payload.getRoomId();
         String userName = payload.getUserName();
-        String clientUserId = payload.getUserId(); // 前端传来的 userId
 
-        // Get user's info from database - 强制使用数据库中的 userId 确保一致性
-        String userId;
-        String nickname = userName;
-        String avatar = null;
-        User user = null;
-
-        try {
-            user = userService.getUserByUsername(userName);
-            userId = user.getId();  // 使用数据库中的 ID，而不是前端传来的
-
-            // 验证前端传来的 userId 与数据库是否一致（用于检测不一致情况）
-            if (clientUserId != null && !clientUserId.equals(userId)) {
-                log.warn("User {} userId mismatch: client sent {}, but database has {}. Using database value.",
-                        userName, clientUserId, userId);
+        // 强制从数据库获取用户ID，最多重试3次
+        User user = getUserFromDatabaseWithRetry(userName);
+        
+        if (user == null) {
+            // 无法从数据库获取用户信息，拒绝连接
+            log.error("Failed to get user {} from database after retries, rejecting connection", userName);
+            try {
+                session.close(CloseStatus.POLICY_VIOLATION.withReason("User not found in database"));
+            } catch (IOException e) {
+                log.error("Failed to close session", e);
             }
-
-            if (user.getNickname() != null && !user.getNickname().isEmpty()) {
-                nickname = user.getNickname();
-            }
-            
-            // 先尝试从缓存获取头像，如果没有则从用户对象获取
-            avatar = avatarCacheService.getAvatarFromCache(userId);
-            if (avatar == null && user.getAvatar() != null) {
-                avatar = user.getAvatar();
-                // 将头像存入缓存
-                avatarCacheService.putAvatarInCache(userId, avatar);
-            }
-            log.info("User {} joined, userId: {}, avatar: {}, fromCache: {}", 
-                    userName, userId, avatar != null ? "(present)" : "(null)", 
-                    avatarCacheService.isAvatarCached(userId));
-        } catch (Exception e) {
-            // 数据库查询失败 - 这是一个严重问题，不应该使用 fallback
-            log.error("Failed to get user info for {} from database. Client sent userId: {}", userName, clientUserId, e);
-
-            // 尝试通过前端传来的 userId 查询（可能是旧数据存储的是 userId 而不是 username）
-            if (clientUserId != null && !clientUserId.isEmpty()) {
-                try {
-                    user = userService.getUserById(clientUserId);
-                    userId = user.getId();
-                    if (user.getNickname() != null && !user.getNickname().isEmpty()) {
-                        nickname = user.getNickname();
-                    }
-                    avatar = user.getAvatar();
-                    // 将头像存入缓存
-                    if (avatar != null) {
-                        avatarCacheService.putAvatarInCache(userId, avatar);
-                    }
-                    log.info("User {} found by clientUserId: {}, using database userId: {}",
-                            userName, clientUserId, userId);
-                } catch (Exception e2) {
-                    log.error("Failed to get user by clientUserId {} for {}", clientUserId, userName, e2);
-                    // 如果两种查询都失败，使用前端传来的 userId 作为最后的 fallback，但记录警告
-                    userId = clientUserId;
-                    log.warn("Using client-provided userId {} for {} as fallback - this may cause user identity issues",
-                            userId, userName);
-                }
-            } else {
-                // 没有前端 userId，生成一个临时 ID（这会导致该会话无法正确识别用户）
-                userId = "unknown-" + UUID.randomUUID().toString();
-                log.error("No client userId provided for {} and database lookup failed. Using temporary userId: {}",
-                        userName, userId);
-            }
+            return;
         }
+
+        String userId = user.getId();
+        String nickname = user.getNickname() != null && !user.getNickname().isEmpty() 
+                ? user.getNickname() : userName;
+        String avatar = null;
+        
+        // 先尝试从缓存获取头像，如果没有则从用户对象获取
+        avatar = avatarCacheService.getAvatarFromCache(userId);
+        if (avatar == null && user.getAvatar() != null) {
+            avatar = user.getAvatar();
+            // 将头像存入缓存
+            avatarCacheService.putAvatarInCache(userId, avatar);
+        }
+        log.info("User {} joined, userId: {}, avatar: {}, fromCache: {}", 
+                userName, userId, avatar != null ? "(present)" : "(null)", 
+                avatarCacheService.isAvatarCached(userId));
 
         WebSocketUserInfo userInfo = WebSocketUserInfo.builder()
                 .userId(userId)
@@ -267,6 +232,36 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                 .userId(userId)
                 .userName(nickname)
                 .build());
+    }
+
+    /**
+     * 从数据库获取用户信息，失败时重试
+     * @param userName 用户名
+     * @return User对象，如果所有重试都失败则返回null
+     */
+    private User getUserFromDatabaseWithRetry(String userName) {
+        final int MAX_RETRIES = 3;
+        final long RETRY_DELAY_MS = 100;
+        
+        for (int attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+            try {
+                return userService.getUserByUsername(userName);
+            } catch (Exception e) {
+                if (attempt < MAX_RETRIES) {
+                    log.warn("Failed to get user {} from database (attempt {}/{}), retrying...", 
+                            userName, attempt, MAX_RETRIES);
+                    try {
+                        Thread.sleep(RETRY_DELAY_MS);
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        return null;
+                    }
+                } else {
+                    log.error("Failed to get user {} from database after {} attempts", userName, MAX_RETRIES, e);
+                }
+            }
+        }
+        return null;
     }
 
     private void handleMessage(WebSocketSession session, WebSocketMessage payload) {
