@@ -978,10 +978,6 @@ function generateToolCallsHtml(toolCalls: Message['toolCalls']): string {
           <div class="tool-item-header">
             <span class="tool-icon-small">${getToolIcon(tool.name)}</span>
             <span class="tool-name"><code>${tool.name}</code></span>
-            <span class="tool-status ${tool.status || 'completed'}">
-              ${tool.status === 'running' ? '<span class="tool-spinner"></span> 执行中' :
-                tool.status === 'error' ? '✗ 失败' : '✓ 完成'}
-            </span>
           </div>
           ${tool.description ? `<div class="tool-item-body">
             <div class="tool-description">${formatToolDescription(tool.name, tool.description)}</div>
@@ -1006,7 +1002,6 @@ function generateToolCallsHtmlFromArray(tools: Array<{name: string, desc: string
           <div class="tool-item-header">
             <span class="tool-icon-small">${getToolIcon(tool.name)}</span>
             <span class="tool-name"><code>${tool.name}</code></span>
-            <span class="tool-status completed">✓ 完成</span>
           </div>
           ${tool.desc ? `<div class="tool-item-body"><div class="tool-description">${escapeHtml(tool.desc)}</div></div>` : ''}
         </div>

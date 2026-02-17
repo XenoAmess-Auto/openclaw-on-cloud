@@ -54,9 +54,6 @@
             >
               <div class="tool-name">
                 <code>{{ tool.name }}</code>
-                <span v-if="tool.status === 'running'" class="tool-status running">运行中...</span>
-                <span v-else-if="tool.status === 'completed'" class="tool-status completed">✓ 完成</span>
-                <span v-else-if="tool.status === 'error'" class="tool-status error">✗ 错误</span>
               </div>
               <div v-if="tool.description" class="tool-description">{{ tool.description }}</div>
               <div v-if="tool.result" class="tool-result">
