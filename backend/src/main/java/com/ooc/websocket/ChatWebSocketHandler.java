@@ -6,6 +6,7 @@ import com.ooc.entity.OocSession;
 import com.ooc.entity.User;
 import com.ooc.openclaw.OpenClawPluginService;
 import com.ooc.openclaw.OpenClawSessionState;
+import com.ooc.service.AvatarCacheService;
 import com.ooc.service.ChatRoomService;
 import com.ooc.service.MentionService;
 import com.ooc.service.OocSessionService;
@@ -35,6 +36,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
     private final OocSessionService oocSessionService;
     private final OpenClawPluginService openClawPluginService;
     private final UserService userService;
+    private final AvatarCacheService avatarCacheService;
     private final ObjectMapper objectMapper;
 
     @Lazy
@@ -45,11 +47,13 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                                 OocSessionService oocSessionService,
                                 OpenClawPluginService openClawPluginService,
                                 UserService userService,
+                                AvatarCacheService avatarCacheService,
                                 ObjectMapper objectMapper) {
         this.chatRoomService = chatRoomService;
         this.oocSessionService = oocSessionService;
         this.openClawPluginService = openClawPluginService;
         this.userService = userService;
+        this.avatarCacheService = avatarCacheService;
         this.objectMapper = objectMapper;
     }
 
@@ -148,8 +152,17 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
             if (user.getNickname() != null && !user.getNickname().isEmpty()) {
                 nickname = user.getNickname();
             }
-            avatar = user.getAvatar();
-            log.info("User {} joined, userId: {}, avatar: {}", userName, userId, avatar != null ? avatar : "(null)");
+            
+            // 先尝试从缓存获取头像，如果没有则从用户对象获取
+            avatar = avatarCacheService.getAvatarFromCache(userId);
+            if (avatar == null && user.getAvatar() != null) {
+                avatar = user.getAvatar();
+                // 将头像存入缓存
+                avatarCacheService.putAvatarInCache(userId, avatar);
+            }
+            log.info("User {} joined, userId: {}, avatar: {}, fromCache: {}", 
+                    userName, userId, avatar != null ? "(present)" : "(null)", 
+                    avatarCacheService.isAvatarCached(userId));
         } catch (Exception e) {
             // 数据库查询失败 - 这是一个严重问题，不应该使用 fallback
             log.error("Failed to get user info for {} from database. Client sent userId: {}", userName, clientUserId, e);
@@ -163,6 +176,10 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                         nickname = user.getNickname();
                     }
                     avatar = user.getAvatar();
+                    // 将头像存入缓存
+                    if (avatar != null) {
+                        avatarCacheService.putAvatarInCache(userId, avatar);
+                    }
                     log.info("User {} found by clientUserId: {}, using database userId: {}",
                             userName, clientUserId, userId);
                 } catch (Exception e2) {
@@ -203,22 +220,36 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                 }
 
                 // 为历史消息补充头像信息（旧消息可能没有保存 senderAvatar）
+                // 使用缓存避免重复查询数据库
                 List<ChatRoom.Message> enrichedMessages = recentMessages.stream()
                         .map(msg -> {
                             if (msg.getSenderAvatar() == null || msg.getSenderAvatar().isEmpty()) {
+                                String senderId = msg.getSenderId();
+                                
+                                // 先尝试从缓存获取头像
+                                String cachedAvatar = avatarCacheService.getAvatarFromCache(senderId);
+                                if (cachedAvatar != null) {
+                                    return msg.toBuilder().senderAvatar(cachedAvatar).build();
+                                }
+                                
+                                // 缓存未命中，从数据库查询
                                 try {
-                                    // senderId 是 MongoDB 的 userId，不是 username
-                                    User msgUser = userService.getUserById(msg.getSenderId());
+                                    User msgUser = userService.getUserById(senderId);
                                     if (msgUser != null && msgUser.getAvatar() != null) {
+                                        // 将头像存入缓存
+                                        avatarCacheService.putAvatarInCache(senderId, msgUser.getAvatar());
                                         return msg.toBuilder().senderAvatar(msgUser.getAvatar()).build();
                                     }
                                 } catch (Exception e) {
-                                    log.debug("Failed to get avatar for userId: {}", msg.getSenderId());
+                                    log.debug("Failed to get avatar for userId: {}", senderId);
                                 }
                             }
                             return msg;
                         })
                         .toList();
+
+                log.info("Enriched {} messages with avatars from cache (cache size: {})", 
+                        enrichedMessages.size(), avatarCacheService.getCacheSize());
 
                 WebSocketMessage historyMsg = WebSocketMessage.builder()
                         .type("history")
@@ -1326,6 +1357,13 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
      * 更新用户的头像信息（当用户在设置页面更新头像时调用）
      */
     public void updateUserAvatar(String userId, String newAvatarUrl) {
+        // 更新缓存中的头像
+        if (newAvatarUrl != null && !newAvatarUrl.isEmpty()) {
+            avatarCacheService.putAvatarInCache(userId, newAvatarUrl);
+        } else {
+            avatarCacheService.removeAvatarFromCache(userId);
+        }
+        
         Set<WebSocketSession> sessions = userSessions.get(userId);
         String roomId = null;
         
