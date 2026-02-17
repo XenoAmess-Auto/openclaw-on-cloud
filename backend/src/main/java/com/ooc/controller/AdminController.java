@@ -426,6 +426,8 @@ public class AdminController {
         }
         
         if (request.enabled() != null) {
+            log.info("Updating bot enabled status: botId={}, oldValue={}, newValue={}", 
+                    botId, bot.isEnabled(), request.enabled());
             bot.setEnabled(request.enabled());
         }
         
@@ -450,7 +452,7 @@ public class AdminController {
         bot.setUpdatedAt(Instant.now());
         
         User saved = userRepository.save(bot);
-        log.info("Bot updated: username={}, type={}", saved.getUsername(), saved.getBotType());
+        log.info("Bot updated: username={}, type={}, enabled={}", saved.getUsername(), saved.getBotType(), saved.isEnabled());
         return ResponseEntity.ok(toBotDto(saved));
     }
 

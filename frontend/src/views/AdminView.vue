@@ -538,7 +538,12 @@ async function loadBots() {
   botsLoading.value = true
   try {
     const response = await apiClient.get('/admin/bots')
-    bots.value = response.data
+    console.log('loadBots response:', response.data)
+    bots.value = response.data.map((bot: any) => ({
+      ...bot,
+      enabled: Boolean(bot.enabled)
+    }))
+    console.log('processed bots:', bots.value)
   } catch (err: any) {
     alert('加载机器人列表失败: ' + (err.response?.data?.message || '未知错误'))
   } finally {
@@ -592,14 +597,19 @@ function editBot(bot: BotUser) {
 async function updateBot() {
   if (!editingBot.value) return
   
+  console.log('updateBot - form data:', editBotForm.value)
+  console.log('updateBot - enabled value:', editBotForm.value.enabled, typeof editBotForm.value.enabled)
+  
   try {
     const payload: any = {
       username: editBotForm.value.username,
       avatarUrl: editBotForm.value.avatarUrl,
       gatewayUrl: editBotForm.value.gatewayUrl,
       systemPrompt: editBotForm.value.systemPrompt,
-      enabled: editBotForm.value.enabled
+      enabled: Boolean(editBotForm.value.enabled)
     }
+    
+    console.log('updateBot - sending payload:', payload)
     
     if (editBotForm.value.password) {
       payload.password = editBotForm.value.password
@@ -609,10 +619,13 @@ async function updateBot() {
       payload.apiKey = editBotForm.value.apiKey
     }
     
-    await apiClient.put(`/admin/bots/${editingBot.value.id}`, payload)
+    const response = await apiClient.put(`/admin/bots/${editingBot.value.id}`, payload)
+    console.log('updateBot - response:', response.data)
+    
     showEditBotDialog.value = false
     loadBots()
   } catch (err: any) {
+    console.error('updateBot - error:', err)
     alert('更新失败: ' + (err.response?.data?.message || '未知错误'))
   }
 }
