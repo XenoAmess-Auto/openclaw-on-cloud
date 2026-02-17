@@ -1,48 +1,11 @@
 import { ref, onUnmounted } from 'vue'
-import { pipeline, AutomaticSpeechRecognitionPipeline, env } from '@xenova/transformers'
-
-// 配置 transformers 环境
-env.allowLocalModels = true
-env.allowRemoteModels = false  // 强制使用本地模型，防止请求 Hugging Face
-env.useBrowserCache = false
-// localModelPath 决定基础路径，pipeline 路径相对于此
-env.localModelPath = '/models'
-
-// 调试：拦截 fetch 请求以查看哪些文件被请求
-const fetchLog: { url: string; status: number; ok: boolean }[] = []
-const originalFetch = window.fetch
-window.fetch = async (...args) => {
-  const url = args[0] as string
-  console.log('[fetch]', url)
-  try {
-    const response = await originalFetch(...args)
-    fetchLog.push({ url, status: response.status, ok: response.ok })
-    if (!response.ok && url.includes('/models/')) {
-      console.error('[fetch] 模型文件加载失败:', url, response.status)
-    }
-    return response
-  } catch (err) {
-    fetchLog.push({ url, status: 0, ok: false })
-    console.error('[fetch] 请求失败:', url, err)
-    throw err
-  }
-}
-
-// 检测是否有本地模型（检查 encoder 文件）
-async function hasLocalModel(): Promise<boolean> {
-  try {
-    const response = await fetch('/models/encoder_model_quantized.onnx', { method: 'HEAD' })
-    return response.ok
-  } catch {
-    return false
-  }
-}
 
 interface UseSpeechRecognitionOptions {
   onResult?: (text: string) => void
   onError?: (error: Error) => void
 }
 
+// 使用浏览器原生 Web Speech API
 export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}) {
   const isRecording = ref(false)
   const isModelLoading = ref(false)
@@ -50,234 +13,153 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}) 
   const transcript = ref('')
   const recordingTime = ref(0)
   const error = ref<string | null>(null)
-  const useLocalModel = ref(false)
+  const useLocalModel = ref(true)
 
-  let transcriber: AutomaticSpeechRecognitionPipeline | null = null
-  let mediaRecorder: MediaRecorder | null = null
-  let audioChunks: Blob[] = []
+  let recognition: SpeechRecognition | null = null
   let recordingTimer: number | null = null
-  let audioContext: AudioContext | null = null
 
-  // 懒加载模型
+  // 检查浏览器支持
+  const isSupported = 'webkitSpeechRecognition' in window || 'SpeechRecognition' in window
+
+  // 懒加载/初始化
   async function loadModel(): Promise<boolean> {
-    if (transcriber) return true
-
-    try {
-      isModelLoading.value = true
-      error.value = null
-
-      // 检测本地模型
-      useLocalModel.value = await hasLocalModel()
-
-      // 由于 env.localModelPath = '/models'，pipeline 应该使用空字符串或模型名称
-      // transformers.js 会拼接: env.localModelPath + modelPath
-      // 使用 'Xenova/whisper-tiny.en' 让 transformers.js 正确识别 whisper 模型类型
-      const modelPath = 'Xenova/whisper-tiny.en'  // 使用子目录路径
-
-      if (useLocalModel.value) {
-        console.log('[useSpeechRecognition] 使用本地模型:', env.localModelPath)
-      } else {
-        console.warn('[useSpeechRecognition] 本地模型文件检测失败，但仍尝试使用本地路径:', env.localModelPath)
-        console.warn('[useSpeechRecognition] 如果模型加载失败，请运行: ./download-model.sh')
-      }
-
-      // 预检所有必要的模型文件
-      const requiredFiles = [
-        'config.json',
-        'preprocessor_config.json',
-        'tokenizer.json',
-        'encoder_model_quantized.onnx',
-        'decoder_model_quantized.onnx',
-        'decoder_with_past_model_quantized.onnx'
-      ]
-      
-      console.log('[useSpeechRecognition] 检查模型文件...')
-      for (const file of requiredFiles) {
-        const resp = await fetch(`/models/${file}`, { method: 'HEAD' })
-        console.log(`[useSpeechRecognition] ${file}: ${resp.ok ? '✓' : '✗'} (${resp.status})`)
-      }
-
-      console.log('[useSpeechRecognition] 开始加载模型...')
-      transcriber = await pipeline(
-        'automatic-speech-recognition',
-        modelPath,
-        {
-          quantized: true,
-          progress_callback: (progress: number) => {
-            loadingProgress.value = Math.round(progress * 100)
-            console.log(`[useSpeechRecognition] 模型加载进度: ${Math.round(progress * 100)}%`)
-          }
-        }
-      )
-
-      console.log('[useSpeechRecognition] 模型加载成功')
-      isModelLoading.value = false
-      return true
-    } catch (err) {
-      const errorMsg = (err as Error).message
-      console.error('[useSpeechRecognition] 模型加载失败:', err)
-      console.error('[useSpeechRecognition] Fetch 日志:', fetchLog)
-      
-      // 检查 fetch 日志中是否有失败的请求
-      const failedFetches = fetchLog.filter(f => !f.ok && f.url.includes('/models/'))
-      if (failedFetches.length > 0) {
-        console.error('[useSpeechRecognition] 失败的模型文件请求:', failedFetches)
-      }
-
-      if (errorMsg.includes('Unexpected token') || errorMsg.includes('<!DOCTYPE')) {
-        error.value = '模型加载失败：服务器返回了 HTML 而非模型文件。请确保 public/models/ 目录下有完整的模型文件，或运行 ./download-model.sh 下载。'
-      } else if (errorMsg.includes('fetch') || errorMsg.includes('network') || errorMsg.includes('Failed to fetch')) {
-        error.value = '模型加载失败：无法获取模型文件。请检查网络连接或运行 ./download-model.sh 下载本地模型。'
-      } else if (errorMsg.includes('Cannot find module') || errorMsg.includes('Could not locate')) {
-        error.value = '模型文件缺失：请在项目根目录运行 ./download-model.sh 下载模型文件。'
-      } else {
-        error.value = '模型加载失败: ' + errorMsg
-      }
-
-      isModelLoading.value = false
-      options.onError?.(err as Error)
+    if (!isSupported) {
+      error.value = '您的浏览器不支持语音识别功能，请使用 Chrome 浏览器'
+      options.onError?.(new Error('Speech recognition not supported'))
       return false
     }
+    return true
   }
 
-  // 预加载模型
+  // 预加载模型（Web Speech API 不需要预加载）
   async function preloadModel(): Promise<void> {
-    if (transcriber) return
-    await loadModel()
+    // 无需操作
   }
 
   // 开始录音
   async function startRecording(): Promise<boolean> {
-    const modelReady = await loadModel()
-    if (!modelReady) return false
+    const ready = await loadModel()
+    if (!ready) return false
 
     try {
       error.value = null
+      isModelLoading.value = true
+      loadingProgress.value = 0
 
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          sampleRate: 16000,
-          channelCount: 1,
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true
-        }
-      })
+      // 创建 SpeechRecognition 实例
+      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+      recognition = new SpeechRecognition()
+      
+      recognition.lang = 'zh-CN'
+      recognition.continuous = false
+      recognition.interimResults = true
+      recognition.maxAlternatives = 1
 
-      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
-        ? 'audio/webm;codecs=opus'
-        : MediaRecorder.isTypeSupported('audio/webm')
-          ? 'audio/webm'
-          : 'audio/mp4'
+      let finalTranscript = ''
 
-      mediaRecorder = new MediaRecorder(stream, { mimeType })
-      audioChunks = []
-
-      mediaRecorder.ondataavailable = (e) => {
-        if (e.data.size > 0) {
-          audioChunks.push(e.data)
-        }
+      recognition.onstart = () => {
+        console.log('[useSpeechRecognition] 录音开始')
+        isRecording.value = true
+        isModelLoading.value = false
+        recordingTime.value = 0
+        
+        recordingTimer = window.setInterval(() => {
+          recordingTime.value++
+        }, 1000)
       }
 
-      mediaRecorder.start(100)
-      isRecording.value = true
-      recordingTime.value = 0
+      recognition.onresult = (event: SpeechRecognitionEvent) => {
+        let interimTranscript = ''
+        
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const result = event.results[i]
+          if (result.isFinal) {
+            finalTranscript += result[0].transcript
+          } else {
+            interimTranscript += result[0].transcript
+          }
+        }
+        
+        transcript.value = finalTranscript + interimTranscript
+        console.log('[useSpeechRecognition] 识别结果:', transcript.value)
+      }
 
-      recordingTimer = window.setInterval(() => {
-        recordingTime.value++
-      }, 1000)
+      recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+        console.error('[useSpeechRecognition] 识别错误:', event.error)
+        
+        if (event.error === 'no-speech') {
+          error.value = '没有检测到语音'
+        } else if (event.error === 'audio-capture') {
+          error.value = '无法访问麦克风'
+        } else if (event.error === 'not-allowed') {
+          error.value = '麦克风权限被拒绝'
+        } else {
+          error.value = '语音识别错误: ' + event.error
+        }
+        
+        cleanup()
+        options.onError?.(new Error(event.error))
+      }
 
+      recognition.onend = () => {
+        console.log('[useSpeechRecognition] 录音结束')
+        
+        // 如果有最终结果，触发回调
+        if (finalTranscript) {
+          transcript.value = finalTranscript
+          options.onResult?.(finalTranscript)
+        }
+        
+        cleanup()
+      }
+
+      recognition.start()
       return true
     } catch (err) {
-      error.value = '无法访问麦克风: ' + (err as Error).message
+      error.value = '启动录音失败: ' + (err as Error).message
+      isModelLoading.value = false
       options.onError?.(err as Error)
       return false
     }
   }
 
-  // 停止录音并识别
+  // 停止录音
   async function stopRecording(): Promise<string | null> {
-    if (!mediaRecorder || !isRecording.value) return null
+    if (!recognition || !isRecording.value) return null
 
     return new Promise((resolve) => {
-      mediaRecorder!.onstop = async () => {
-        if (recordingTimer) {
-          clearInterval(recordingTimer)
-          recordingTimer = null
+      if (recognition) {
+        // 设置一个临时回调来获取最终结果
+        const originalOnEnd = recognition.onend
+        recognition.onend = (event) => {
+          if (originalOnEnd) originalOnEnd.call(recognition!, event as any)
+          resolve(transcript.value)
         }
-
-        mediaRecorder!.stream.getTracks().forEach(t => t.stop())
-
-        try {
-          const audioBlob = new Blob(audioChunks, { type: mediaRecorder!.mimeType })
-          const result = await transcribeAudio(audioBlob)
-
-          transcript.value = result
-          isRecording.value = false
-          options.onResult?.(result)
-          resolve(result)
-        } catch (err) {
-          error.value = '识别失败: ' + (err as Error).message
-          isRecording.value = false
-          options.onError?.(err as Error)
-          resolve(null)
-        }
+        
+        recognition.stop()
+      } else {
+        resolve(null)
       }
-
-      mediaRecorder!.stop()
     })
-  }
-
-  // 音频转录
-  async function transcribeAudio(audioBlob: Blob): Promise<string> {
-    if (!transcriber) throw new Error('模型未加载')
-
-    const audioData = await blobToFloat32Array(audioBlob)
-
-    const result = await transcriber(audioData, {
-      language: 'chinese',
-      task: 'transcribe',
-      return_timestamps: false,
-      max_new_tokens: 128,
-      chunk_length_s: 30,
-      stride_length_s: 5
-    })
-
-    const output = Array.isArray(result) ? result[0] : result
-    return (output?.text || '').trim()
-  }
-
-  // 将 Blob 转换为 Float32Array
-  async function blobToFloat32Array(blob: Blob): Promise<Float32Array> {
-    audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({
-      sampleRate: 16000
-    })
-
-    const arrayBuffer = await blob.arrayBuffer()
-    const audioBuffer = await audioContext.decodeAudioData(arrayBuffer)
-    const channelData = audioBuffer.getChannelData(0)
-
-    await audioContext.close()
-    audioContext = null
-
-    return channelData
   }
 
   // 取消录音
   function cancelRecording(): void {
-    if (mediaRecorder && isRecording.value) {
-      mediaRecorder.stop()
-      mediaRecorder.stream.getTracks().forEach(t => t.stop())
+    if (recognition && isRecording.value) {
+      recognition.abort()
     }
+    cleanup()
+  }
 
+  // 清理资源
+  function cleanup(): void {
     if (recordingTimer) {
       clearInterval(recordingTimer)
       recordingTimer = null
     }
-
     isRecording.value = false
-    recordingTime.value = 0
-    audioChunks = []
+    isModelLoading.value = false
+    recognition = null
   }
 
   // 清除识别结果
@@ -295,9 +177,6 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}) 
   // 组件卸载时清理
   onUnmounted(() => {
     cancelRecording()
-    if (audioContext) {
-      audioContext.close()
-    }
   })
 
   return {
