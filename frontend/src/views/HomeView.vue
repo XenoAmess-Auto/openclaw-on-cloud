@@ -206,6 +206,7 @@
                 ref="inputRef"
                 :disabled="isUploading"
               />
+              <VoiceInput @send="handleVoiceSend" />
               <div class="send-section">
                 <button
                   @click="sendMessage"
@@ -351,6 +352,7 @@ import { useChatStore } from '@/stores/chat'
 import { chatRoomApi } from '@/api/chatRoom'
 import SessionManager from '@/components/SessionManager.vue'
 import MemberManager from '@/components/MemberManager.vue'
+import VoiceInput from '@/components/VoiceInput.vue'
 import { fileApi } from '@/api/file'
 import { getBaseUrl } from '@/utils/config'
 import { marked } from 'marked'
@@ -634,6 +636,15 @@ function sendMessage() {
   attachments.value = []
   showMentionList.value = false
   adjustTextareaHeight()
+}
+
+// 处理语音输入发送
+function handleVoiceSend(text: string) {
+  if (!text.trim() || !chatStore.isConnected || !currentRoomId.value) return
+  
+  // 发送语音识别的文本
+  chatStore.sendMessage(text.trim(), [])
+  showMentionList.value = false
 }
 
 // 处理粘贴事件
