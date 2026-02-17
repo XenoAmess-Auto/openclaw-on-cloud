@@ -1546,6 +1546,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                             .toolCalls(List.of(toolCall))
                             .isToolCall(true)
                             .fromOpenClaw(true)
+                            .replyToMessageId(task.getSourceMessageId())
                             .build())
                     .build());
 
@@ -1594,6 +1595,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                                 .toolCalls(currentToolCalls)
                                 .isToolCall(true)
                                 .fromOpenClaw(true)
+                                .replyToMessageId(task.getSourceMessageId())
                                 .build())
                         .build());
             } else {
