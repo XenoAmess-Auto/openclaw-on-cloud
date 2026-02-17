@@ -252,13 +252,13 @@ public class ChatRoomController {
                 .map(msg -> {
                     if (msg.getSenderAvatar() == null || msg.getSenderAvatar().isEmpty()) {
                         try {
-                            // 使用 senderId（用户名）查询，而不是 senderName（昵称）
-                            User user = userService.getUserByUsername(msg.getSenderId());
+                            // senderId 是 MongoDB 的 userId，不是 username
+                            User user = userService.getUserById(msg.getSenderId());
                             if (user != null && user.getAvatar() != null) {
                                 return msg.toBuilder().senderAvatar(user.getAvatar()).build();
                             }
                         } catch (Exception e) {
-                            log.debug("Failed to get avatar for user: {}", msg.getSenderId());
+                            log.debug("Failed to get avatar for userId: {}", msg.getSenderId());
                         }
                     }
                     return msg;

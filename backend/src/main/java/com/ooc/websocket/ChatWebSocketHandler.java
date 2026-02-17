@@ -127,23 +127,57 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
     private void handleJoin(WebSocketSession session, WebSocketMessage payload) {
         String roomId = payload.getRoomId();
         String userName = payload.getUserName();
+        String clientUserId = payload.getUserId(); // 前端传来的 userId
 
         // Get user's info from database - 强制使用数据库中的 userId 确保一致性
-        String userId = null;
+        String userId;
         String nickname = userName;
         String avatar = null;
+        User user = null;
+
         try {
-            User user = userService.getUserByUsername(userName);
+            user = userService.getUserByUsername(userName);
             userId = user.getId();  // 使用数据库中的 ID，而不是前端传来的
+
+            // 验证前端传来的 userId 与数据库是否一致（用于检测不一致情况）
+            if (clientUserId != null && !clientUserId.equals(userId)) {
+                log.warn("User {} userId mismatch: client sent {}, but database has {}. Using database value.",
+                        userName, clientUserId, userId);
+            }
+
             if (user.getNickname() != null && !user.getNickname().isEmpty()) {
                 nickname = user.getNickname();
             }
             avatar = user.getAvatar();
             log.info("User {} joined, userId: {}, avatar: {}", userName, userId, avatar != null ? avatar : "(null)");
         } catch (Exception e) {
-            log.warn("Failed to get user info for {}, using fallback", userName, e);
-            // 如果数据库查询失败，使用前端传来的 userId 作为 fallback
-            userId = payload.getUserId();
+            // 数据库查询失败 - 这是一个严重问题，不应该使用 fallback
+            log.error("Failed to get user info for {} from database. Client sent userId: {}", userName, clientUserId, e);
+
+            // 尝试通过前端传来的 userId 查询（可能是旧数据存储的是 userId 而不是 username）
+            if (clientUserId != null && !clientUserId.isEmpty()) {
+                try {
+                    user = userService.getUserById(clientUserId);
+                    userId = user.getId();
+                    if (user.getNickname() != null && !user.getNickname().isEmpty()) {
+                        nickname = user.getNickname();
+                    }
+                    avatar = user.getAvatar();
+                    log.info("User {} found by clientUserId: {}, using database userId: {}",
+                            userName, clientUserId, userId);
+                } catch (Exception e2) {
+                    log.error("Failed to get user by clientUserId {} for {}", clientUserId, userName, e2);
+                    // 如果两种查询都失败，使用前端传来的 userId 作为最后的 fallback，但记录警告
+                    userId = clientUserId;
+                    log.warn("Using client-provided userId {} for {} as fallback - this may cause user identity issues",
+                            userId, userName);
+                }
+            } else {
+                // 没有前端 userId，生成一个临时 ID（这会导致该会话无法正确识别用户）
+                userId = "unknown-" + UUID.randomUUID().toString();
+                log.error("No client userId provided for {} and database lookup failed. Using temporary userId: {}",
+                        userName, userId);
+            }
         }
 
         WebSocketUserInfo userInfo = WebSocketUserInfo.builder()
@@ -173,13 +207,13 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                         .map(msg -> {
                             if (msg.getSenderAvatar() == null || msg.getSenderAvatar().isEmpty()) {
                                 try {
-                                    // 使用 senderId（用户名）查询，而不是 senderName（昵称）
-                                    User user = userService.getUserByUsername(msg.getSenderId());
-                                    if (user != null && user.getAvatar() != null) {
-                                        return msg.toBuilder().senderAvatar(user.getAvatar()).build();
+                                    // senderId 是 MongoDB 的 userId，不是 username
+                                    User msgUser = userService.getUserById(msg.getSenderId());
+                                    if (msgUser != null && msgUser.getAvatar() != null) {
+                                        return msg.toBuilder().senderAvatar(msgUser.getAvatar()).build();
                                     }
                                 } catch (Exception e) {
-                                    log.debug("Failed to get avatar for user: {}", msg.getSenderId());
+                                    log.debug("Failed to get avatar for userId: {}", msg.getSenderId());
                                 }
                             }
                             return msg;
