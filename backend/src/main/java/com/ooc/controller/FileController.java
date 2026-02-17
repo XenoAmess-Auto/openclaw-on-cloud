@@ -27,21 +27,21 @@ public class FileController {
         log.info("Uploading file: {}, size: {}", file.getOriginalFilename(), file.getSize());
         FileInfo fileInfo = fileStorageService.store(file);
 
-        // 构建完整 URL（包含后端地址）
-        String baseUrl = request.getScheme() + "://" + request.getServerName() + ":" + request.getServerPort();
-        String wrapperUrl = baseUrl + "/api/files/" + fileInfo.getFilename();
+        // 返回相对路径，让前端根据配置的 baseUrl 拼接完整 URL
+        // 这样可以避免安卓端和网页端使用不同后端地址时的问题
+        String relativeUrl = "/api/files/" + fileInfo.getFilename();
 
         FileInfo result = FileInfo.builder()
                 .filename(fileInfo.getFilename())
                 .originalName(fileInfo.getOriginalName())
-                .url(wrapperUrl)
+                .url(relativeUrl)
                 .localPath(fileInfo.getLocalPath())
                 .type(fileInfo.getType())
                 .contentType(fileInfo.getContentType())
                 .size(fileInfo.getSize())
                 .build();
 
-        log.info("File uploaded successfully: {} -> {}", fileInfo.getFilename(), wrapperUrl);
+        log.info("File uploaded successfully: {} -> {}", fileInfo.getFilename(), relativeUrl);
         return ResponseEntity.ok(result);
     }
 

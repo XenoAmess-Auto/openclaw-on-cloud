@@ -352,6 +352,7 @@ import { chatRoomApi } from '@/api/chatRoom'
 import SessionManager from '@/components/SessionManager.vue'
 import MemberManager from '@/components/MemberManager.vue'
 import { fileApi } from '@/api/file'
+import { getBaseUrl } from '@/utils/config'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import type { MemberDto, Message, FileUploadResponse } from '@/types'
@@ -661,8 +662,8 @@ async function handlePaste(event: ClipboardEvent) {
     for (const file of imageFiles) {
       // 先上传文件到服务器
       const response = await fileApi.upload(file)
-      // 使用上传后返回的 URL（服务器可访问），而不是本地 blob URL
-      const previewUrl = response.data.url
+      // 使用上传后返回的 URL（可能是相对路径），转换为完整 URL
+      const previewUrl = resolveFileUrl(response.data.url)
       attachments.value.push({
         ...response.data,
         previewUrl
@@ -676,7 +677,16 @@ async function handlePaste(event: ClipboardEvent) {
   }
 }
 
-// 文件处理
+// 文件处理 - 将相对 URL 转换为完整 URL
+function resolveFileUrl(url: string): string {
+  if (url.startsWith('http://') || url.startsWith('https://')) {
+    return url
+  }
+  // 相对路径，拼接 baseUrl
+  const baseUrl = getBaseUrl()
+  return baseUrl + url
+}
+
 async function handleFileSelect(event: Event) {
   const target = event.target as HTMLInputElement
   const files = target.files
@@ -688,8 +698,8 @@ async function handleFileSelect(event: Event) {
     for (const file of Array.from(files)) {
       // 先上传文件到服务器
       const response = await fileApi.upload(file)
-      // 使用上传后返回的 URL（服务器可访问），而不是本地 blob URL
-      const previewUrl = response.data.url
+      // 使用上传后返回的 URL（可能是相对路径），转换为完整 URL
+      const previewUrl = resolveFileUrl(response.data.url)
 
       attachments.value.push({
         ...response.data,
@@ -1044,7 +1054,7 @@ function renderAttachments(msg: Message): string {
   if (!msg.attachments || msg.attachments.length === 0) {
     return ''
   }
-  
+
   return '<div class="message-attachments">' +
     msg.attachments.map(att => {
       // 更可靠的图片检测：检查 type、contentType 或 url
@@ -1062,10 +1072,13 @@ function renderAttachments(msg: Message): string {
                      urlStr.endsWith('.gif') ||
                      urlStr.endsWith('.webp')
 
+      // 将相对 URL 转换为完整 URL
+      const fullUrl = resolveFileUrl(att.url || '')
+
       if (isImage) {
-        return `<img src="${att.url}" alt="${att.name || '图片'}" class="message-image" loading="lazy" />`
+        return `<img src="${fullUrl}" alt="${att.name || '图片'}" class="message-image" loading="lazy" />`
       }
-      return `<a href="${att.url}" target="_blank" class="message-file">${att.name || '附件'}</a>`
+      return `<a href="${fullUrl}" target="_blank" class="message-file">${att.name || '附件'}</a>`
     }).join('') +
     '</div>'
 }
