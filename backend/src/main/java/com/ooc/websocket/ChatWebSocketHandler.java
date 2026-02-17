@@ -126,21 +126,24 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
 
     private void handleJoin(WebSocketSession session, WebSocketMessage payload) {
         String roomId = payload.getRoomId();
-        String userId = payload.getUserId();
         String userName = payload.getUserName();
 
-        // Get user's nickname and avatar from database
+        // Get user's info from database - 强制使用数据库中的 userId 确保一致性
+        String userId = null;
         String nickname = userName;
         String avatar = null;
         try {
             User user = userService.getUserByUsername(userName);
+            userId = user.getId();  // 使用数据库中的 ID，而不是前端传来的
             if (user.getNickname() != null && !user.getNickname().isEmpty()) {
                 nickname = user.getNickname();
             }
             avatar = user.getAvatar();
-            log.info("User {} joined, avatar: {}", userName, avatar != null ? avatar : "(null)");
+            log.info("User {} joined, userId: {}, avatar: {}", userName, userId, avatar != null ? avatar : "(null)");
         } catch (Exception e) {
-            log.warn("Failed to get user info for {}", userName, e);
+            log.warn("Failed to get user info for {}, using fallback", userName, e);
+            // 如果数据库查询失败，使用前端传来的 userId 作为 fallback
+            userId = payload.getUserId();
         }
 
         WebSocketUserInfo userInfo = WebSocketUserInfo.builder()
@@ -1290,21 +1293,32 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
      */
     public void updateUserAvatar(String userId, String newAvatarUrl) {
         Set<WebSocketSession> sessions = userSessions.get(userId);
-        if (sessions == null || sessions.isEmpty()) {
-            log.debug("User {} is not online, avatar update will apply on next connection", userId);
-            return;
-        }
-
-        int updatedCount = 0;
-        for (WebSocketSession session : sessions) {
-            WebSocketUserInfo userInfo = userInfoMap.get(session);
-            if (userInfo != null) {
-                // 创建新的 userInfo 对象（因为 Lombok @Data 是可变的，但这里我们直接修改）
-                userInfo.setAvatar(newAvatarUrl);
-                updatedCount++;
+        String roomId = null;
+        
+        if (sessions != null && !sessions.isEmpty()) {
+            int updatedCount = 0;
+            for (WebSocketSession session : sessions) {
+                WebSocketUserInfo userInfo = userInfoMap.get(session);
+                if (userInfo != null) {
+                    userInfo.setAvatar(newAvatarUrl);
+                    roomId = userInfo.getRoomId();  // 记录用户所在的房间
+                    updatedCount++;
+                }
             }
+            log.info("Updated avatar for user {} in {} WebSocket session(s)", userId, updatedCount);
+            
+            // 广播头像更新事件给房间内的其他用户
+            if (roomId != null) {
+                broadcastToRoom(roomId, WebSocketMessage.builder()
+                        .type("user_avatar_updated")
+                        .userId(userId)
+                        .content(newAvatarUrl)
+                        .build());
+                log.info("Broadcasted avatar update for user {} to room {}", userId, roomId);
+            }
+        } else {
+            log.debug("User {} is not online, avatar update will apply on next connection", userId);
         }
-        log.info("Updated avatar for user {} in {} WebSocket session(s)", userId, updatedCount);
     }
 
     /**

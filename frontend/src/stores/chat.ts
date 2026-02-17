@@ -100,6 +100,16 @@ export const useChatStore = defineStore('chat', () => {
   async function connect(roomId: string) {
     const authStore = useAuthStore()
     
+    // 连接前刷新用户信息，确保 userId 和头像是最新的
+    if (authStore.isAuthenticated) {
+      try {
+        await authStore.refreshUserInfo()
+        console.log('[WebSocket] User info refreshed before connect')
+      } catch (error) {
+        console.warn('[WebSocket] Failed to refresh user info:', error)
+      }
+    }
+    
     // 如果已有连接，先断开
     if (ws.value) {
       ws.value.close()
@@ -403,6 +413,17 @@ export const useChatStore = defineStore('chat', () => {
           fromOpenClaw: false,
           isSystem: true
         } as Message)
+        break
+      case 'user_avatar_updated':
+        // 用户头像更新 - 更新消息列表中该用户的所有消息头像
+        if (data.userId && data.content) {
+          messages.value.forEach((msg, index) => {
+            if (msg.senderId === data.userId) {
+              messages.value[index] = { ...msg, senderAvatar: data.content }
+            }
+          })
+          console.log('[WebSocket] Updated avatar for user:', data.userId)
+        }
         break
     }
   }
