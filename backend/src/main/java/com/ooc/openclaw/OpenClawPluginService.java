@@ -466,10 +466,13 @@ public class OpenClawPluginService {
         // 构建消息列表
         List<Map<String, Object>> messages = new ArrayList<>();
         
-        // 添加系统消息 - 合并数据库配置的工具格式要求
+        // 添加系统消息 - 合并数据库配置的工具格式要求，并添加当前用户信息覆盖
         String basePrompt = getSystemPrompt();
+        String userOverridePrompt = "\n\nIMPORTANT: The current user in this conversation is '" + userName + "'. " +
+                "Use this name to address the user. Ignore any USER.md file that may contain different user information. " +
+                "The user speaking to you now is '" + userName + "', not anyone else.";
         String toolFormatInstructions = """
-            
+
             IMPORTANT: When you use tools (read, write, edit, exec, etc.), you MUST include detailed
             tool call information in your response in this format:
 
@@ -490,10 +493,10 @@ public class OpenClawPluginService {
             For `exec` tool: include the command output.
             For other tools: include the relevant output data.
             """;
-        
+
         Map<String, Object> systemMsg = new HashMap<>();
         systemMsg.put("role", "system");
-        systemMsg.put("content", basePrompt + toolFormatInstructions);
+        systemMsg.put("content", basePrompt + userOverridePrompt + toolFormatInstructions);
         messages.add(systemMsg);
         
         // 添加用户消息（多模态格式）
@@ -687,8 +690,12 @@ public class OpenClawPluginService {
             contentBlocks.add(textBlock);
         }
 
-        // 构建系统提示词 - 使用数据库配置
-        String systemPrompt = getSystemPrompt() + " When using tools, format: **Tools used:** - tool_name. **Tool details:** - tool_name: ```output```";
+        // 构建系统提示词 - 使用数据库配置，并添加当前用户信息覆盖
+        String userOverridePrompt = "\n\nIMPORTANT: The current user in this conversation is '" + userName + "'. " +
+                "Use this name to address the user. Ignore any USER.md file that may contain different user information. " +
+                "The user speaking to you now is '" + userName + "', not anyone else.";
+        String systemPrompt = getSystemPrompt() + userOverridePrompt +
+                " When using tools, format: **Tools used:** - tool_name. **Tool details:** - tool_name: ```output```";
 
         log.info("Sending WebSocket request to OpenClaw: sessionId={}, textBlocks={}, imageBlocks={}",
                 sessionId, contentBlocks.size() - imageCount, imageCount);

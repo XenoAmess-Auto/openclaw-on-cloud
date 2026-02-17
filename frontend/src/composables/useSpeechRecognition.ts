@@ -1,5 +1,9 @@
 import { ref, onUnmounted } from 'vue'
-import { pipeline, AutomaticSpeechRecognitionPipeline } from '@xenova/transformers'
+import { pipeline, AutomaticSpeechRecognitionPipeline, env } from '@xenova/transformers'
+
+// 配置 transformers 环境
+env.allowLocalModels = true
+env.useBrowserCache = true
 
 // Whisper base 模型，30MB，中英混合识别准确
 const WHISPER_MODEL = 'Xenova/whisper-base'
@@ -34,6 +38,9 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}) 
       isModelLoading.value = true
       error.value = null
 
+      // 设置缓存目录（浏览器 IndexedDB）
+      env.cacheDir = 'openclaw-whisper-models'
+
       transcriber = await pipeline(
         'automatic-speech-recognition',
         WHISPER_MODEL,
@@ -48,7 +55,18 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}) 
       isModelLoading.value = false
       return true
     } catch (err) {
-      error.value = '模型加载失败: ' + (err as Error).message
+      const errorMsg = (err as Error).message
+      console.error('[useSpeechRecognition] 模型加载失败:', err)
+
+      // 提供更友好的错误信息
+      if (errorMsg.includes('Unexpected token') || errorMsg.includes('<!DOCTYPE')) {
+        error.value = '模型下载失败：网络连接问题或 CDN 访问受限，请检查网络后重试'
+      } else if (errorMsg.includes('fetch') || errorMsg.includes('network')) {
+        error.value = '网络连接失败，无法下载语音识别模型'
+      } else {
+        error.value = '模型加载失败: ' + errorMsg
+      }
+
       isModelLoading.value = false
       options.onError?.(err as Error)
       return false
