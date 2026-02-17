@@ -6,6 +6,21 @@ env.allowLocalModels = true
 env.allowRemoteModels = false  // 强制使用本地模型，防止请求 Hugging Face
 env.useBrowserCache = false
 
+// 设置本地模型路径
+env.localModelPath = '/models'
+
+// 调试：拦截 fetch 请求以查看哪些文件被请求
+const originalFetch = window.fetch
+window.fetch = async (...args) => {
+  const url = args[0] as string
+  console.log('[fetch]', url)
+  const response = await originalFetch(...args)
+  if (!response.ok && url.includes('/models/')) {
+    console.error('[fetch] 模型文件加载失败:', url, response.status)
+  }
+  return response
+}
+
 // 尝试本地模型路径，使用分块模型文件
 const LOCAL_MODEL_PATH = '/models'
 
@@ -57,6 +72,22 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}) 
       } else {
         console.warn('[useSpeechRecognition] 本地模型文件检测失败，但仍尝试使用本地路径:', modelPath)
         console.warn('[useSpeechRecognition] 如果模型加载失败，请运行: ./download-model.sh')
+      }
+
+      // 预检所有必要的模型文件
+      const requiredFiles = [
+        'config.json',
+        'preprocessor_config.json',
+        'tokenizer.json',
+        'encoder_model_quantized.onnx',
+        'decoder_model_quantized.onnx',
+        'decoder_with_past_model_quantized.onnx'
+      ]
+      
+      console.log('[useSpeechRecognition] 检查模型文件...')
+      for (const file of requiredFiles) {
+        const resp = await fetch(`/models/${file}`, { method: 'HEAD' })
+        console.log(`[useSpeechRecognition] ${file}: ${resp.ok ? '✓' : '✗'} (${resp.status})`)
       }
 
       console.log('[useSpeechRecognition] 开始加载模型...')
