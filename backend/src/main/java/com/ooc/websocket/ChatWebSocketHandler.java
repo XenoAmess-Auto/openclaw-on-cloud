@@ -1350,9 +1350,40 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                                 event -> handleOpenClawStreamEvent(roomId, streamingMessageId, contentBuilder, streamingMessage, event, task),
                                 error -> {
                                     log.error("OpenClaw streaming error in task {}", taskId, error);
-                                    task.setStatus(OpenClawTask.TaskStatus.FAILED);
-                                    handleOpenClawStreamError(roomId, streamingMessageId, contentBuilder.get().toString(), error.getMessage(), task);
-                                    onOpenClawTaskComplete(roomId);
+                                    // 检查是否是 SESSION_BUSY 错误，如果是则重新入队
+                                    if (error.getMessage() != null && error.getMessage().contains("SESSION_BUSY")) {
+                                        log.warn("Task {} received SESSION_BUSY, will requeue and retry", taskId);
+                                        task.setStatus(OpenClawTask.TaskStatus.PENDING);
+                                        // 将任务重新加入队列头部（优先处理）
+                                        ConcurrentLinkedQueue<OpenClawTask> queue = openclawTaskQueues.get(roomId);
+                                        if (queue != null) {
+                                            // 创建一个新队列，把当前任务放最前面
+                                            ConcurrentLinkedQueue<OpenClawTask> newQueue = new ConcurrentLinkedQueue<>();
+                                            newQueue.offer(task);
+                                            while (!queue.isEmpty()) {
+                                                OpenClawTask t = queue.poll();
+                                                if (t != null) newQueue.offer(t);
+                                            }
+                                            openclawTaskQueues.put(roomId, newQueue);
+                                            log.info("Task {} requeued at front of queue", taskId);
+                                        }
+                                        // 延迟一点再试
+                                        try {
+                                            Thread.sleep(500);
+                                        } catch (InterruptedException e) {
+                                            Thread.currentThread().interrupt();
+                                        }
+                                        // 重置处理标志并尝试下一个
+                                        AtomicBoolean isProcessing = openclawProcessingFlags.get(roomId);
+                                        if (isProcessing != null) {
+                                            isProcessing.set(false);
+                                        }
+                                        tryProcessNextOpenClawTask(roomId);
+                                    } else {
+                                        task.setStatus(OpenClawTask.TaskStatus.FAILED);
+                                        handleOpenClawStreamError(roomId, streamingMessageId, contentBuilder.get().toString(), error.getMessage(), task);
+                                        onOpenClawTaskComplete(roomId);
+                                    }
                                 },
                                 () -> {
                                     log.info("OpenClaw streaming completed for task {}", taskId);
@@ -1953,8 +1984,17 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
         if (isProcessing != null) {
             isProcessing.set(false);
         }
-        // 尝试处理下一个任务
-        tryProcessNextOpenClawTask(roomId);
+        // 延迟一小段时间再处理下一个任务，确保 WebSocket 锁已释放
+        // 这是为了解决 WebSocketClient 的锁释放和 onComplete 回调之间的竞争条件
+        new Thread(() -> {
+            try {
+                Thread.sleep(300);
+                tryProcessNextOpenClawTask(roomId);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                tryProcessNextOpenClawTask(roomId);
+            }
+        }).start();
     }
 
     /**

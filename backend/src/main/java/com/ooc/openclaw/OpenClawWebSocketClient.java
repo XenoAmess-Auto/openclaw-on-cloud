@@ -72,9 +72,10 @@ public class OpenClawWebSocketClient {
         // 尝试获取锁，如果该session已有请求在处理，返回错误
         if (!lock.compareAndSet(false, true)) {
             log.warn("[OpenClaw WS] Session {} already has a request in progress, rejecting new request", sessionId);
-            handler.onError("Session is already processing a request. Please wait for it to complete.");
+            handler.onError("SESSION_BUSY: Session is already processing a request. Please wait for it to complete.");
             return;
         }
+        log.info("[OpenClaw WS] Acquired lock for session {}, proceeding with request", sessionId);
 
         try {
             // 检查或创建连接
@@ -382,7 +383,8 @@ public class OpenClawWebSocketClient {
                     log.debug("[OpenClaw WS] Agent run started: {}", payload.path("runId").asText());
                     break;
                 case "agent.run.completed":
-                    log.debug("[OpenClaw WS] Agent run completed: {}", payload.path("runId").asText());
+                    String runId = payload.path("runId").asText();
+                    log.info("[OpenClaw WS] Agent run completed: {}", runId);
                     ResponseHandler completedHandler = responseHandlers.remove(sessionId);
                     if (completedHandler != null) {
                         try {
@@ -392,6 +394,7 @@ public class OpenClawWebSocketClient {
                             AtomicBoolean lock = requestLocks.get(sessionId);
                             if (lock != null) {
                                 lock.set(false);
+                                log.info("[OpenClaw WS] Lock released for session {} after agent.run.completed (runId={})", sessionId, runId);
                             }
                         }
                     }
@@ -430,19 +433,9 @@ public class OpenClawWebSocketClient {
             String state = payload.path("state").asText("");
             boolean isComplete = payload.path("complete").asBoolean(false) || "final".equals(state);
             if (isComplete) {
-                log.debug("[OpenClaw WS] Chat completed, calling onComplete()");
-                // 移除handler并调用onComplete，然后释放锁
-                ResponseHandler completedHandler = responseHandlers.remove(sessionId);
-                if (completedHandler != null) {
-                    try {
-                        completedHandler.onComplete();
-                    } finally {
-                        AtomicBoolean lock = requestLocks.get(sessionId);
-                        if (lock != null) {
-                            lock.set(false);
-                        }
-                    }
-                }
+                log.info("[OpenClaw WS] Chat completed event received for session {}", sessionId);
+                // 注意：不在这里调用onComplete，让 agent.run.completed 事件来处理完成逻辑
+                // 避免重复释放锁和调用onComplete
             }
 
             // 注意：不处理 chat 事件的内容，因为 agent 事件的 assistant 流已经处理了增量内容
