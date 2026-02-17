@@ -171,7 +171,7 @@ const handleDragEnd = () => {
   dragOverTaskId.value = null
 }
 
-const handleDragOver = (event: DragEvent, task: any, index: number) => {
+const handleDragOver = (event: DragEvent, task: any, _index: number) => {
   event.preventDefault()
   if (task.status !== 'PENDING' || draggedTaskId.value === task.taskId) {
     return
