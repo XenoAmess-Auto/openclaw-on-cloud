@@ -1,5 +1,27 @@
 import { ref, onUnmounted } from 'vue'
 
+// Web Speech API TypeScript 类型声明
+declare global {
+  interface Window {
+    SpeechRecognition: new () => SpeechRecognitionInstance
+    webkitSpeechRecognition: new () => SpeechRecognitionInstance
+  }
+}
+
+interface SpeechRecognitionInstance extends EventTarget {
+  lang: string
+  continuous: boolean
+  interimResults: boolean
+  maxAlternatives: number
+  onstart: ((this: SpeechRecognitionInstance, ev: Event) => void) | null
+  onend: ((this: SpeechRecognitionInstance, ev: Event) => void) | null
+  onresult: ((this: SpeechRecognitionInstance, ev: any) => void) | null
+  onerror: ((this: SpeechRecognitionInstance, ev: any) => void) | null
+  start(): void
+  stop(): void
+  abort(): void
+}
+
 interface UseSpeechRecognitionOptions {
   onResult?: (text: string) => void
   onError?: (error: Error) => void
@@ -15,7 +37,7 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}) 
   const error = ref<string | null>(null)
   const useLocalModel = ref(true)
 
-  let recognition: SpeechRecognition | null = null
+  let recognition: SpeechRecognitionInstance | null = null
   let recordingTimer: number | null = null
 
   // 检查浏览器支持
@@ -47,8 +69,8 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}) 
       loadingProgress.value = 0
 
       // 创建 SpeechRecognition 实例
-      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
-      recognition = new SpeechRecognition()
+      const SpeechRecognitionConstructor = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+      recognition = new SpeechRecognitionConstructor()
       
       recognition.lang = 'zh-CN'
       recognition.continuous = false
@@ -68,7 +90,7 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}) 
         }, 1000)
       }
 
-      recognition.onresult = (event: SpeechRecognitionEvent) => {
+      recognition.onresult = (event: any) => {
         let interimTranscript = ''
         
         for (let i = event.resultIndex; i < event.results.length; i++) {
@@ -84,7 +106,7 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}) 
         console.log('[useSpeechRecognition] 识别结果:', transcript.value)
       }
 
-      recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+      recognition.onerror = (event: any) => {
         console.error('[useSpeechRecognition] 识别错误:', event.error)
         
         if (event.error === 'no-speech') {
@@ -131,8 +153,8 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}) 
       if (recognition) {
         // 设置一个临时回调来获取最终结果
         const originalOnEnd = recognition.onend
-        recognition.onend = (event) => {
-          if (originalOnEnd) originalOnEnd.call(recognition!, event as any)
+        recognition.onend = (event: Event) => {
+          if (originalOnEnd) originalOnEnd.call(recognition!, event)
           resolve(transcript.value)
         }
         
