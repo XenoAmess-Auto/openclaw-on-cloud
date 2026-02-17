@@ -1,40 +1,27 @@
 import { ref, onUnmounted } from 'vue'
+import { pipeline, AutomaticSpeechRecognitionPipeline, env } from '@xenova/transformers'
+
+// 配置 transformers 环境
+env.allowLocalModels = true
+env.useBrowserCache = false
+
+// 尝试本地模型路径，如果不存在则回退到远程
+const LOCAL_MODEL_PATH = '/models/whisper-base'
+const REMOTE_MODEL_PATH = 'Xenova/whisper-base'
+
+// 检测是否有本地模型
+async function hasLocalModel(): Promise<boolean> {
+  try {
+    const response = await fetch('/models/config.json', { method: 'HEAD' })
+    return response.ok
+  } catch {
+    return false
+  }
+}
 
 interface UseSpeechRecognitionOptions {
   onResult?: (text: string) => void
   onError?: (error: Error) => void
-}
-
-// TypeScript 类型声明
-interface SpeechRecognition extends EventTarget {
-  continuous: boolean
-  interimResults: boolean
-  lang: string
-  start(): void
-  stop(): void
-  onresult: ((event: SpeechRecognitionEvent) => void) | null
-  onerror: ((event: SpeechRecognitionErrorEvent) => void) | null
-  onend: (() => void) | null
-}
-
-interface SpeechRecognitionConstructor {
-  new (): SpeechRecognition
-}
-
-interface SpeechRecognitionEvent extends Event {
-  resultIndex: number
-  results: SpeechRecognitionResultList
-}
-
-interface SpeechRecognitionErrorEvent extends Event {
-  error: string
-}
-
-declare global {
-  interface Window {
-    SpeechRecognition: SpeechRecognitionConstructor
-    webkitSpeechRecognition: SpeechRecognitionConstructor
-  }
 }
 
 export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}) {
@@ -44,141 +31,192 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}) 
   const transcript = ref('')
   const recordingTime = ref(0)
   const error = ref<string | null>(null)
-  const isWebSpeechAvailable = ref(false)
+  const useLocalModel = ref(false)
 
-  let recognition: SpeechRecognition | null = null
+  let transcriber: AutomaticSpeechRecognitionPipeline | null = null
+  let mediaRecorder: MediaRecorder | null = null
+  let audioChunks: Blob[] = []
   let recordingTimer: number | null = null
+  let audioContext: AudioContext | null = null
 
-  // 检查浏览器是否支持 Web Speech API
-  function checkWebSpeechSupport(): boolean {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
-    if (!SpeechRecognition) {
-      return false
-    }
-    isWebSpeechAvailable.value = true
-    return true
-  }
+  // 懒加载模型
+  async function loadModel(): Promise<boolean> {
+    if (transcriber) return true
 
-  // 初始化语音识别
-  function initRecognition(): boolean {
-    if (!checkWebSpeechSupport()) {
-      error.value = '您的浏览器不支持语音识别功能，请使用 Chrome 浏览器'
-      return false
-    }
+    try {
+      isModelLoading.value = true
+      error.value = null
 
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
-    recognition = new SpeechRecognition()
-    recognition.continuous = true
-    recognition.interimResults = true
-    recognition.lang = 'zh-CN'
+      // 检测本地模型
+      useLocalModel.value = await hasLocalModel()
+      const modelPath = useLocalModel.value ? LOCAL_MODEL_PATH : REMOTE_MODEL_PATH
 
-    recognition.onresult = (event: SpeechRecognitionEvent) => {
-      let interimTranscript = ''
-      let finalTranscript = ''
-
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const result = event.results[i]
-        if (result.isFinal) {
-          finalTranscript += result[0].transcript
-        } else {
-          interimTranscript += result[0].transcript
-        }
-      }
-
-      // 实时更新显示（包括临时结果）
-      transcript.value = finalTranscript + interimTranscript
-
-      if (finalTranscript) {
-        options.onResult?.(finalTranscript)
-      }
-    }
-
-    recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-      console.error('[useSpeechRecognition] 识别错误:', event.error)
-      if (event.error === 'not-allowed') {
-        error.value = '麦克风权限被拒绝，请在浏览器设置中允许访问麦克风'
-      } else if (event.error === 'no-speech') {
-        // 没有检测到语音，不视为错误
-        return
+      if (useLocalModel.value) {
+        console.log('[useSpeechRecognition] 使用本地模型:', modelPath)
       } else {
-        error.value = '语音识别错误: ' + event.error
+        console.log('[useSpeechRecognition] 使用远程模型:', modelPath)
+        error.value = '正在从 Hugging Face 下载模型，请确保网络可以访问 huggingface.co'
       }
-      options.onError?.(new Error(event.error))
-      stopRecording()
-    }
 
-    recognition.onend = () => {
-      // 如果不是手动停止，可能是意外结束
-      if (isRecording.value) {
-        isRecording.value = false
-        if (recordingTimer) {
-          clearInterval(recordingTimer)
-          recordingTimer = null
+      transcriber = await pipeline(
+        'automatic-speech-recognition',
+        modelPath,
+        {
+          quantized: true,
+          progress_callback: (progress: number) => {
+            loadingProgress.value = Math.round(progress * 100)
+          }
         }
-      }
-    }
+      )
 
-    return true
+      isModelLoading.value = false
+      return true
+    } catch (err) {
+      const errorMsg = (err as Error).message
+      console.error('[useSpeechRecognition] 模型加载失败:', err)
+
+      if (errorMsg.includes('Unexpected token') || errorMsg.includes('<!DOCTYPE')) {
+        error.value = '模型加载失败：无法访问 Hugging Face CDN。请手动下载模型文件到 public/models/ 目录，或使用 Chrome 浏览器内置语音识别。'
+      } else if (errorMsg.includes('fetch') || errorMsg.includes('network')) {
+        error.value = '网络连接失败，无法下载语音识别模型'
+      } else {
+        error.value = '模型加载失败: ' + errorMsg
+      }
+
+      isModelLoading.value = false
+      options.onError?.(err as Error)
+      return false
+    }
   }
 
-  // 预加载（Web Speech API 不需要预加载，但保持接口兼容）
+  // 预加载模型
   async function preloadModel(): Promise<void> {
-    checkWebSpeechSupport()
+    if (transcriber) return
+    await loadModel()
   }
 
   // 开始录音
   async function startRecording(): Promise<boolean> {
-    if (!recognition && !initRecognition()) {
-      return false
-    }
+    const modelReady = await loadModel()
+    if (!modelReady) return false
 
     try {
       error.value = null
-      transcript.value = ''
 
-      // 请求麦克风权限并开始识别
-      recognition!.start()
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          sampleRate: 16000,
+          channelCount: 1,
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        }
+      })
+
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+        ? 'audio/webm;codecs=opus'
+        : MediaRecorder.isTypeSupported('audio/webm')
+          ? 'audio/webm'
+          : 'audio/mp4'
+
+      mediaRecorder = new MediaRecorder(stream, { mimeType })
+      audioChunks = []
+
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) {
+          audioChunks.push(e.data)
+        }
+      }
+
+      mediaRecorder.start(100)
       isRecording.value = true
       recordingTime.value = 0
 
-      // 开始计时
       recordingTimer = window.setInterval(() => {
         recordingTime.value++
       }, 1000)
 
       return true
     } catch (err) {
-      error.value = '启动录音失败: ' + (err as Error).message
+      error.value = '无法访问麦克风: ' + (err as Error).message
       options.onError?.(err as Error)
       return false
     }
   }
 
-  // 停止录音
+  // 停止录音并识别
   async function stopRecording(): Promise<string | null> {
-    if (!recognition || !isRecording.value) {
-      return transcript.value || null
-    }
+    if (!mediaRecorder || !isRecording.value) return null
 
-    recognition.stop()
-    isRecording.value = false
+    return new Promise((resolve) => {
+      mediaRecorder!.onstop = async () => {
+        if (recordingTimer) {
+          clearInterval(recordingTimer)
+          recordingTimer = null
+        }
 
-    if (recordingTimer) {
-      clearInterval(recordingTimer)
-      recordingTimer = null
-    }
+        mediaRecorder!.stream.getTracks().forEach(t => t.stop())
 
-    const result = transcript.value.trim()
-    if (result) {
-      options.onResult?.(result)
-    }
-    return result || null
+        try {
+          const audioBlob = new Blob(audioChunks, { type: mediaRecorder!.mimeType })
+          const result = await transcribeAudio(audioBlob)
+
+          transcript.value = result
+          isRecording.value = false
+          options.onResult?.(result)
+          resolve(result)
+        } catch (err) {
+          error.value = '识别失败: ' + (err as Error).message
+          isRecording.value = false
+          options.onError?.(err as Error)
+          resolve(null)
+        }
+      }
+
+      mediaRecorder!.stop()
+    })
+  }
+
+  // 音频转录
+  async function transcribeAudio(audioBlob: Blob): Promise<string> {
+    if (!transcriber) throw new Error('模型未加载')
+
+    const audioData = await blobToFloat32Array(audioBlob)
+
+    const result = await transcriber(audioData, {
+      language: 'chinese',
+      task: 'transcribe',
+      return_timestamps: false,
+      max_new_tokens: 128,
+      chunk_length_s: 30,
+      stride_length_s: 5
+    })
+
+    const output = Array.isArray(result) ? result[0] : result
+    return (output?.text || '').trim()
+  }
+
+  // 将 Blob 转换为 Float32Array
+  async function blobToFloat32Array(blob: Blob): Promise<Float32Array> {
+    audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({
+      sampleRate: 16000
+    })
+
+    const arrayBuffer = await blob.arrayBuffer()
+    const audioBuffer = await audioContext.decodeAudioData(arrayBuffer)
+    const channelData = audioBuffer.getChannelData(0)
+
+    await audioContext.close()
+    audioContext = null
+
+    return channelData
   }
 
   // 取消录音
   function cancelRecording(): void {
-    if (recognition && isRecording.value) {
-      recognition.stop()
+    if (mediaRecorder && isRecording.value) {
+      mediaRecorder.stop()
+      mediaRecorder.stream.getTracks().forEach(t => t.stop())
     }
 
     if (recordingTimer) {
@@ -188,7 +226,7 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}) 
 
     isRecording.value = false
     recordingTime.value = 0
-    transcript.value = ''
+    audioChunks = []
   }
 
   // 清除识别结果
@@ -196,7 +234,7 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}) 
     transcript.value = ''
   }
 
-  // 格式化录音时间 (MM:SS)
+  // 格式化录音时间
   function formatRecordingTime(seconds: number): string {
     const mins = Math.floor(seconds / 60)
     const secs = seconds % 60
@@ -206,28 +244,25 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}) 
   // 组件卸载时清理
   onUnmounted(() => {
     cancelRecording()
-    if (recognition) {
-      recognition.stop()
+    if (audioContext) {
+      audioContext.close()
     }
   })
 
   return {
-    // 状态
     isRecording,
     isModelLoading,
     loadingProgress,
     transcript,
     recordingTime,
     error,
-    isWebSpeechAvailable,
-
-    // 方法
-    preloadModel,
+    useLocalModel,
     startRecording,
     stopRecording,
     cancelRecording,
     clearTranscript,
-    formatRecordingTime
+    formatRecordingTime,
+    preloadModel
   }
 }
 
