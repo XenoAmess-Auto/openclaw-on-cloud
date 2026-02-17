@@ -3,7 +3,7 @@
 # Restart script for OOC Backend
 
 APP_NAME="ooc-backend"
-JAR_FILE="target/ooc-backend-1.0.0.jar"
+JAR_FILE="target/ooc-backend-0.1.0.jar"
 LOG_FILE="backend.log"
 
 # Kill existing process

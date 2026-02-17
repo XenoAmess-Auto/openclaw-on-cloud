@@ -12,7 +12,9 @@ import com.ooc.service.ClaudeCodePluginService;
 import com.ooc.service.KimiPluginService;
 import com.ooc.service.MentionService;
 import com.ooc.service.OocSessionService;
+import com.ooc.service.PersistentTaskQueueService;
 import com.ooc.service.UserService;
+import com.ooc.entity.BotTaskQueue;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Lazy;
@@ -42,6 +44,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
     private final UserService userService;
     private final AvatarCacheService avatarCacheService;
     private final ObjectMapper objectMapper;
+    private final PersistentTaskQueueService taskQueueService;
 
     @Lazy
     @org.springframework.beans.factory.annotation.Autowired
@@ -57,16 +60,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
     private final Map<String, Set<WebSocketSession>> userSessions = new ConcurrentHashMap<>();
 
     // ========== 队列系统 ==========
-    // 每个机器人独立的队列和处理标志
-    // OpenClaw
-    private final Map<String, LinkedBlockingQueue<OpenClawTask>> openclawTaskQueues = new ConcurrentHashMap<>();
-    private final Map<String, AtomicBoolean> openclawProcessingFlags = new ConcurrentHashMap<>();
-    // Kimi
-    private final Map<String, LinkedBlockingQueue<OpenClawTask>> kimiTaskQueues = new ConcurrentHashMap<>();
-    private final Map<String, AtomicBoolean> kimiProcessingFlags = new ConcurrentHashMap<>();
-    // Claude
-    private final Map<String, LinkedBlockingQueue<OpenClawTask>> claudeTaskQueues = new ConcurrentHashMap<>();
-    private final Map<String, AtomicBoolean> claudeProcessingFlags = new ConcurrentHashMap<>();
+    // 使用 PersistentTaskQueueService 进行持久化队列管理
 
     /**
      * OpenClaw 任务
@@ -89,14 +83,24 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
     }
 
     /**
+     * 服务启动时注册任务处理器
+     */
+    @jakarta.annotation.PostConstruct
+    public void init() {
+        // 注册 OpenClaw 任务处理器
+        taskQueueService.registerTaskProcessor(BotTaskQueue.BotType.OPENCLAW, this::executeOpenClawTask);
+        // 注册 Kimi 任务处理器
+        taskQueueService.registerTaskProcessor(BotTaskQueue.BotType.KIMI, this::executeKimiTask);
+        // 注册 Claude 任务处理器
+        taskQueueService.registerTaskProcessor(BotTaskQueue.BotType.CLAUDE, this::executeClaudeTask);
+        log.info("Task processors registered for OPENCLAW, KIMI, and CLAUDE");
+    }
+
+    /**
      * 获取指定房间的 OpenClaw 任务队列状态
      */
     public java.util.List<OpenClawTask> getRoomTaskQueue(String roomId) {
-        LinkedBlockingQueue<OpenClawTask> queue = openclawTaskQueues.get(roomId);
-        if (queue == null) {
-            return java.util.List.of();
-        }
-        return new java.util.ArrayList<>(queue);
+        return taskQueueService.getRoomTaskQueue(roomId, BotTaskQueue.BotType.OPENCLAW);
     }
 
     /**
@@ -106,43 +110,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
      * @return 是否成功
      */
     public boolean reorderTaskQueue(String roomId, java.util.List<String> taskIds) {
-        LinkedBlockingQueue<OpenClawTask> queue = openclawTaskQueues.get(roomId);
-        if (queue == null || queue.isEmpty()) {
-            return false;
-        }
-
-        // 获取当前队列中的所有任务
-        java.util.List<OpenClawTask> currentTasks = new java.util.ArrayList<>(queue);
-        
-        // 过滤出正在处理的任务（不能重排序）
-        java.util.List<OpenClawTask> processingTasks = currentTasks.stream()
-            .filter(t -> t.getStatus() == OpenClawTask.TaskStatus.PROCESSING)
-            .collect(java.util.stream.Collectors.toList());
-        
-        // 过滤出待处理的任务
-        java.util.List<OpenClawTask> pendingTasks = currentTasks.stream()
-            .filter(t -> t.getStatus() == OpenClawTask.TaskStatus.PENDING)
-            .collect(java.util.stream.Collectors.toList());
-
-        // 按新的顺序重建队列
-        LinkedBlockingQueue<OpenClawTask> newQueue = new LinkedBlockingQueue<>();
-        
-        // 首先添加正在处理的任务（保持在最前面）
-        newQueue.addAll(processingTasks);
-        
-        // 然后按传入的顺序添加待处理任务
-        for (String taskId : taskIds) {
-            pendingTasks.stream()
-                .filter(t -> t.getTaskId().equals(taskId))
-                .findFirst()
-                .ifPresent(newQueue::add);
-        }
-        
-        // 替换原队列
-        openclawTaskQueues.put(roomId, newQueue);
-        
-        log.info("Task queue reordered for room {}, new size: {}", roomId, newQueue.size());
-        return true;
+        return taskQueueService.reorderQueue(roomId, BotTaskQueue.BotType.OPENCLAW, taskIds);
     }
 
     /**
@@ -152,37 +120,14 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
      * @return 是否成功取消
      */
     public boolean cancelTask(String roomId, String taskId) {
-        LinkedBlockingQueue<OpenClawTask> queue = openclawTaskQueues.get(roomId);
-        if (queue == null) {
-            return false;
-        }
-
-        // 查找并移除任务
-        java.util.Iterator<OpenClawTask> iterator = queue.iterator();
-        while (iterator.hasNext()) {
-            OpenClawTask task = iterator.next();
-            if (task.getTaskId().equals(taskId)) {
-                // 只能取消待处理的任务
-                if (task.getStatus() == OpenClawTask.TaskStatus.PENDING) {
-                    task.setStatus(OpenClawTask.TaskStatus.FAILED);
-                    iterator.remove();
-                    log.info("Task {} cancelled in room {}", taskId, roomId);
-                    return true;
-                } else {
-                    log.warn("Cannot cancel task {} in room {}: status is {}", taskId, roomId, task.getStatus());
-                    return false;
-                }
-            }
-        }
-        return false;
+        return taskQueueService.cancelTask(roomId, taskId, BotTaskQueue.BotType.OPENCLAW);
     }
 
     /**
      * 获取指定房间是否正在处理 OpenClaw 任务
      */
     public boolean isRoomProcessing(String roomId) {
-        AtomicBoolean flag = openclawProcessingFlags.get(roomId);
-        return flag != null && flag.get();
+        return taskQueueService.isRoomProcessing(roomId, BotTaskQueue.BotType.OPENCLAW);
     }
 
     @Override
@@ -532,68 +477,24 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
         return claudeCodePluginService.isBotEnabled();
     }
 
+
     private void triggerKimi(String roomId, String content, List<Attachment> attachments, WebSocketUserInfo userInfo, String sourceMessageId) {
         log.info("Adding Kimi task to queue for room: {}, content: {}, attachments: {}",
                 roomId,
                 content != null ? content.substring(0, Math.min(50, content.length())) : "",
                 attachments != null ? attachments.size() : 0);
 
-        // 创建任务
-        OpenClawTask task = OpenClawTask.builder()
-                .taskId(UUID.randomUUID().toString())
-                .roomId(roomId)
-                .content(content)
-                .attachments(attachments)
-                .userInfo(userInfo)
-                .sourceMessageId(sourceMessageId)
-                .createdAt(Instant.now())
-                .status(OpenClawTask.TaskStatus.PENDING)
-                .build();
+        // 添加任务到持久化队列
+        String taskId = taskQueueService.addTask(roomId, content, attachments, userInfo, sourceMessageId, BotTaskQueue.BotType.KIMI);
+        int queueSize = taskQueueService.getQueueSize(roomId, BotTaskQueue.BotType.KIMI);
 
-        // 获取或创建该房间的任务队列
-        LinkedBlockingQueue<OpenClawTask> queue = kimiTaskQueues.computeIfAbsent(roomId, k -> new LinkedBlockingQueue<>());
-        AtomicBoolean isProcessing = kimiProcessingFlags.computeIfAbsent(roomId, k -> new AtomicBoolean(false));
-
-        // 将任务加入队列
-        queue.offer(task);
-
-        int queueSize = queue.size();
-        log.info("Kimi task {} added to room {} queue. Queue size: {}", task.getTaskId(), roomId, queueSize);
+        log.info("Kimi task {} added to room {} queue. Queue size: {}", taskId, roomId, queueSize);
 
         // 发送排队状态消息
-        sendKimiQueueStatusMessage(roomId, task, queueSize - 1); // -1 因为当前任务已经加入队列
+        sendKimiQueueStatusMessage(roomId, taskId, sourceMessageId, queueSize - 1);
 
-        // 尝试启动队列处理（如果当前没有任务在执行）
-        tryProcessNextKimiTask(roomId);
-    }
-
-    /**
-     * 尝试处理队列中的下一个 Kimi 任务
-     */
-    private void tryProcessNextKimiTask(String roomId) {
-        LinkedBlockingQueue<OpenClawTask> queue = kimiTaskQueues.get(roomId);
-        AtomicBoolean isProcessing = kimiProcessingFlags.get(roomId);
-
-        if (queue == null || isProcessing == null) {
-            return;
-        }
-
-        // 使用 CAS 操作确保只有一个线程能开始处理
-        if (!isProcessing.compareAndSet(false, true)) {
-            log.debug("Room {} is already processing a task, skipping", roomId);
-            return;
-        }
-
-        OpenClawTask task = queue.poll();
-        if (task == null) {
-            // 队列为空，重置处理标志
-            isProcessing.set(false);
-            log.debug("Room {} queue is empty, resetting processing flag", roomId);
-            return;
-        }
-
-        // 执行 Kimi 任务
-        executeKimiTask(task);
+        // 尝试启动队列处理
+        taskQueueService.tryProcessNext(roomId, BotTaskQueue.BotType.KIMI);
     }
 
     /**
@@ -645,7 +546,8 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
         } catch (Exception e) {
             log.error("Failed to initialize Kimi streaming message for task {}: {}", taskId, e.getMessage(), e);
             task.setStatus(OpenClawTask.TaskStatus.FAILED);
-            onKimiTaskComplete(roomId);
+            taskQueueService.markTaskFailed(taskId);
+            taskQueueService.onTaskComplete(roomId, BotTaskQueue.BotType.KIMI);
             return;
         }
 
@@ -698,14 +600,16 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                                 error -> {
                                     log.error("Kimi streaming error in task {}", taskId, error);
                                     task.setStatus(OpenClawTask.TaskStatus.FAILED);
+                                    taskQueueService.markTaskFailed(taskId);
                                     handleKimiStreamError(roomId, streamingMessageId, contentBuilder.get().toString(), error.getMessage(), task);
-                                    onKimiTaskComplete(roomId);
+                                    taskQueueService.onTaskComplete(roomId, BotTaskQueue.BotType.KIMI);
                                 },
                                 () -> {
                                     log.info("Kimi streaming completed for task {}", taskId);
                                     task.setStatus(OpenClawTask.TaskStatus.COMPLETED);
+                                    taskQueueService.markTaskCompleted(taskId);
                                     finalizeKimiStreamMessage(roomId, streamingMessageId, contentBuilder.get().toString(), task);
-                                    onKimiTaskComplete(roomId);
+                                    taskQueueService.onTaskComplete(roomId, BotTaskQueue.BotType.KIMI);
                                 }
                         );
             } else {
@@ -723,27 +627,31 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                                 error -> {
                                     log.error("Kimi streaming error in task {}", taskId, error);
                                     task.setStatus(OpenClawTask.TaskStatus.FAILED);
+                                    taskQueueService.markTaskFailed(taskId);
                                     handleKimiStreamError(roomId, streamingMessageId, contentBuilder.get().toString(), error.getMessage(), task);
-                                    onKimiTaskComplete(roomId);
+                                    taskQueueService.onTaskComplete(roomId, BotTaskQueue.BotType.KIMI);
                                 },
                                 () -> {
                                     log.info("Kimi streaming completed for task {}", taskId);
                                     task.setStatus(OpenClawTask.TaskStatus.COMPLETED);
+                                    taskQueueService.markTaskCompleted(taskId);
                                     finalizeKimiStreamMessage(roomId, streamingMessageId, contentBuilder.get().toString(), task);
-                                    onKimiTaskComplete(roomId);
+                                    taskQueueService.onTaskComplete(roomId, BotTaskQueue.BotType.KIMI);
                                 }
                         );
             }
             } catch (Exception e) {
                 log.error("Error in Kimi task execution for task {}: {}", taskId, e.getMessage(), e);
                 task.setStatus(OpenClawTask.TaskStatus.FAILED);
+                taskQueueService.markTaskFailed(taskId);
                 handleKimiStreamError(roomId, streamingMessageId, contentBuilder.get().toString(), e.getMessage(), task);
-                onKimiTaskComplete(roomId);
+                taskQueueService.onTaskComplete(roomId, BotTaskQueue.BotType.KIMI);
             }
         }, () -> {
             log.error("Chat room not found: {}", roomId);
             task.setStatus(OpenClawTask.TaskStatus.FAILED);
-            onKimiTaskComplete(roomId);
+            taskQueueService.markTaskFailed(taskId);
+            taskQueueService.onTaskComplete(roomId, BotTaskQueue.BotType.KIMI);
         });
     }
 
@@ -869,21 +777,9 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
     }
 
     /**
-     * Kimi 任务完成后的回调
-     */
-    private void onKimiTaskComplete(String roomId) {
-        log.info("Kimi task completed for room {}, checking queue for next task", roomId);
-        AtomicBoolean isProcessing = kimiProcessingFlags.get(roomId);
-        if (isProcessing != null) {
-            isProcessing.set(false);
-        }
-        tryProcessNextKimiTask(roomId);
-    }
-
-    /**
      * 发送 Kimi 排队状态消息
      */
-    private void sendKimiQueueStatusMessage(String roomId, OpenClawTask task, int position) {
+    private void sendKimiQueueStatusMessage(String roomId, String taskId, String sourceMessageId, int position) {
         String statusText = position == 0
                 ? "🤖 Kimi 任务已加入队列，正在准备处理..."
                 : String.format("🤖 Kimi 任务已加入队列，当前排第 %d 位...", position + 1);
@@ -896,7 +792,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                 .timestamp(Instant.now())
                 .openclawMentioned(false)
                 .fromOpenClaw(true)
-                .replyToMessageId(task.getSourceMessageId())
+                .replyToMessageId(sourceMessageId)
                 .build();
 
         chatRoomService.addMessage(roomId, message);
@@ -914,62 +810,17 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                 content != null ? content.substring(0, Math.min(50, content.length())) : "",
                 attachments != null ? attachments.size() : 0);
 
-        // 创建任务
-        OpenClawTask task = OpenClawTask.builder()
-                .taskId(UUID.randomUUID().toString())
-                .roomId(roomId)
-                .content(content)
-                .attachments(attachments)
-                .userInfo(userInfo)
-                .sourceMessageId(sourceMessageId)
-                .createdAt(Instant.now())
-                .status(OpenClawTask.TaskStatus.PENDING)
-                .build();
+        // 添加任务到持久化队列
+        String taskId = taskQueueService.addTask(roomId, content, attachments, userInfo, sourceMessageId, BotTaskQueue.BotType.CLAUDE);
+        int queueSize = taskQueueService.getQueueSize(roomId, BotTaskQueue.BotType.CLAUDE);
 
-        // 获取或创建该房间的任务队列
-        LinkedBlockingQueue<OpenClawTask> queue = claudeTaskQueues.computeIfAbsent(roomId, k -> new LinkedBlockingQueue<>());
-        AtomicBoolean isProcessing = claudeProcessingFlags.computeIfAbsent(roomId, k -> new AtomicBoolean(false));
-
-        // 将任务加入队列
-        queue.offer(task);
-
-        int queueSize = queue.size();
-        log.info("Claude task {} added to room {} queue. Queue size: {}", task.getTaskId(), roomId, queueSize);
+        log.info("Claude task {} added to room {} queue. Queue size: {}", taskId, roomId, queueSize);
 
         // 发送排队状态消息
-        sendClaudeQueueStatusMessage(roomId, task, queueSize - 1); // -1 因为当前任务已经加入队列
+        sendClaudeQueueStatusMessage(roomId, taskId, sourceMessageId, queueSize - 1);
 
-        // 尝试启动队列处理（如果当前没有任务在执行）
-        tryProcessNextClaudeTask(roomId);
-    }
-
-    /**
-     * 尝试处理队列中的下一个 Claude 任务
-     */
-    private void tryProcessNextClaudeTask(String roomId) {
-        LinkedBlockingQueue<OpenClawTask> queue = claudeTaskQueues.get(roomId);
-        AtomicBoolean isProcessing = claudeProcessingFlags.get(roomId);
-
-        if (queue == null || isProcessing == null) {
-            return;
-        }
-
-        // 使用 CAS 操作确保只有一个线程能开始处理
-        if (!isProcessing.compareAndSet(false, true)) {
-            log.debug("Room {} is already processing a task, skipping", roomId);
-            return;
-        }
-
-        OpenClawTask task = queue.poll();
-        if (task == null) {
-            // 队列为空，重置处理标志
-            isProcessing.set(false);
-            log.debug("Room {} queue is empty, resetting processing flag", roomId);
-            return;
-        }
-
-        // 执行 Claude 任务
-        executeClaudeTask(task);
+        // 尝试启动队列处理
+        taskQueueService.tryProcessNext(roomId, BotTaskQueue.BotType.CLAUDE);
     }
 
     /**
@@ -1087,14 +938,16 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                                 error -> {
                                     log.error("Claude streaming error in task {}", taskId, error);
                                     task.setStatus(OpenClawTask.TaskStatus.FAILED);
+                                    taskQueueService.markTaskFailed(taskId);
                                     handleClaudeStreamError(roomId, streamingMessageId, contentBuilder.get().toString(), error.getMessage(), task);
-                                    onClaudeTaskComplete(roomId);
+                                    taskQueueService.onTaskComplete(roomId, BotTaskQueue.BotType.CLAUDE);
                                 },
                                 () -> {
                                     log.info("Claude streaming completed for task {}", taskId);
                                     task.setStatus(OpenClawTask.TaskStatus.COMPLETED);
+                                    taskQueueService.markTaskCompleted(taskId);
                                     finalizeClaudeStreamMessage(roomId, streamingMessageId, contentBuilder.get().toString(), task);
-                                    onClaudeTaskComplete(roomId);
+                                    taskQueueService.onTaskComplete(roomId, BotTaskQueue.BotType.CLAUDE);
                                 }
                         );
             } else {
@@ -1113,21 +966,24 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                                 error -> {
                                     log.error("Claude streaming error in task {}", taskId, error);
                                     task.setStatus(OpenClawTask.TaskStatus.FAILED);
+                                    taskQueueService.markTaskFailed(taskId);
                                     handleClaudeStreamError(roomId, streamingMessageId, contentBuilder.get().toString(), error.getMessage(), task);
-                                    onClaudeTaskComplete(roomId);
+                                    taskQueueService.onTaskComplete(roomId, BotTaskQueue.BotType.CLAUDE);
                                 },
                                 () -> {
                                     log.info("Claude streaming completed for task {}", taskId);
                                     task.setStatus(OpenClawTask.TaskStatus.COMPLETED);
+                                    taskQueueService.markTaskCompleted(taskId);
                                     finalizeClaudeStreamMessage(roomId, streamingMessageId, contentBuilder.get().toString(), task);
-                                    onClaudeTaskComplete(roomId);
+                                    taskQueueService.onTaskComplete(roomId, BotTaskQueue.BotType.CLAUDE);
                                 }
                         );
             }
         } catch (Exception e) {
             log.error("Error executing Claude task {}", taskId, e);
             task.setStatus(OpenClawTask.TaskStatus.FAILED);
-            onClaudeTaskComplete(roomId);
+            taskQueueService.markTaskFailed(taskId);
+            taskQueueService.onTaskComplete(roomId, BotTaskQueue.BotType.CLAUDE);
         }
     }
 
@@ -1258,21 +1114,9 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
     }
 
     /**
-     * Claude 任务完成后的回调
-     */
-    private void onClaudeTaskComplete(String roomId) {
-        log.info("Claude task completed for room {}, checking queue for next task", roomId);
-        AtomicBoolean isProcessing = claudeProcessingFlags.get(roomId);
-        if (isProcessing != null) {
-            isProcessing.set(false);
-        }
-        tryProcessNextClaudeTask(roomId);
-    }
-
-    /**
      * 发送 Claude 排队状态消息
      */
-    private void sendClaudeQueueStatusMessage(String roomId, OpenClawTask task, int position) {
+    private void sendClaudeQueueStatusMessage(String roomId, String taskId, String sourceMessageId, int position) {
         String statusText = position == 0
                 ? "🤖 Claude 任务已加入队列，正在准备处理..."
                 : String.format("🤖 Claude 任务已加入队列，当前排第 %d 位...", position + 1);
@@ -1285,7 +1129,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                 .timestamp(Instant.now())
                 .openclawMentioned(false)
                 .fromOpenClaw(true)
-                .replyToMessageId(task.getSourceMessageId())
+                .replyToMessageId(sourceMessageId)
                 .build();
 
         chatRoomService.addMessage(roomId, message);
@@ -1301,62 +1145,17 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                 content != null ? content.substring(0, Math.min(50, content.length())) : "",
                 attachments != null ? attachments.size() : 0);
 
-        // 创建任务
-        OpenClawTask task = OpenClawTask.builder()
-                .taskId(UUID.randomUUID().toString())
-                .roomId(roomId)
-                .content(content)
-                .attachments(attachments)
-                .userInfo(userInfo)
-                .sourceMessageId(sourceMessageId)
-                .createdAt(Instant.now())
-                .status(OpenClawTask.TaskStatus.PENDING)
-                .build();
+        // 添加任务到持久化队列
+        String taskId = taskQueueService.addTask(roomId, content, attachments, userInfo, sourceMessageId, BotTaskQueue.BotType.OPENCLAW);
+        int queueSize = taskQueueService.getQueueSize(roomId, BotTaskQueue.BotType.OPENCLAW);
 
-        // 获取或创建该房间的 OpenClaw 任务队列
-        LinkedBlockingQueue<OpenClawTask> queue = openclawTaskQueues.computeIfAbsent(roomId, k -> new LinkedBlockingQueue<>());
-        AtomicBoolean isProcessing = openclawProcessingFlags.computeIfAbsent(roomId, k -> new AtomicBoolean(false));
-
-        // 将任务加入队列
-        queue.offer(task);
-
-        int queueSize = queue.size();
-        log.info("OpenClaw task {} added to room {} queue. Queue size: {}", task.getTaskId(), roomId, queueSize);
+        log.info("OpenClaw task {} added to room {} queue. Queue size: {}", taskId, roomId, queueSize);
 
         // 发送排队状态消息
-        sendQueueStatusMessage(roomId, task, queueSize - 1); // -1 因为当前任务已经加入队列
+        sendQueueStatusMessage(roomId, taskId, sourceMessageId, queueSize - 1);
 
-        // 尝试启动队列处理（如果当前没有任务在执行）
-        tryProcessNextOpenClawTask(roomId);
-    }
-
-    /**
-     * 尝试处理队列中的下一个 OpenClaw 任务
-     */
-    private void tryProcessNextOpenClawTask(String roomId) {
-        LinkedBlockingQueue<OpenClawTask> queue = openclawTaskQueues.get(roomId);
-        AtomicBoolean isProcessing = openclawProcessingFlags.get(roomId);
-
-        if (queue == null || isProcessing == null) {
-            return;
-        }
-
-        // 使用 CAS 操作确保只有一个线程能开始处理
-        if (!isProcessing.compareAndSet(false, true)) {
-            log.debug("Room {} is already processing an OpenClaw task, skipping", roomId);
-            return;
-        }
-
-        OpenClawTask task = queue.poll();
-        if (task == null) {
-            // 队列为空，重置处理标志
-            isProcessing.set(false);
-            log.debug("Room {} OpenClaw queue is empty, resetting processing flag", roomId);
-            return;
-        }
-
-        // 执行 OpenClaw 任务
-        executeOpenClawTask(task);
+        // 尝试启动队列处理
+        taskQueueService.tryProcessNext(roomId, BotTaskQueue.BotType.OPENCLAW);
     }
 
     /**
@@ -1408,7 +1207,8 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
         } catch (Exception e) {
             log.error("Failed to initialize streaming message for task {}: {}", taskId, e.getMessage(), e);
             task.setStatus(OpenClawTask.TaskStatus.FAILED);
-            onOpenClawTaskComplete(roomId);
+            taskQueueService.markTaskFailed(taskId);
+            taskQueueService.onTaskComplete(roomId, BotTaskQueue.BotType.OPENCLAW);
             return;
         }
 
@@ -1464,42 +1264,30 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                                     if (error.getMessage() != null && error.getMessage().contains("SESSION_BUSY")) {
                                         log.warn("Task {} received SESSION_BUSY, will requeue and retry", taskId);
                                         task.setStatus(OpenClawTask.TaskStatus.PENDING);
-                                        // 将任务重新加入队列头部（优先处理）
-                                        LinkedBlockingQueue<OpenClawTask> queue = openclawTaskQueues.get(roomId);
-                                        if (queue != null) {
-                                            // 创建一个新队列，把当前任务放最前面
-                                            LinkedBlockingQueue<OpenClawTask> newQueue = new LinkedBlockingQueue<>();
-                                            newQueue.offer(task);
-                                            while (!queue.isEmpty()) {
-                                                OpenClawTask t = queue.poll();
-                                                if (t != null) newQueue.offer(t);
-                                            }
-                                            openclawTaskQueues.put(roomId, newQueue);
-                                            log.info("Task {} requeued at front of queue", taskId);
-                                        }
+                                        taskQueueService.markTaskFailed(taskId); // 标记当前任务失败
+                                        // 重新添加任务到队列
+                                        taskQueueService.addTask(roomId, task.getContent(), task.getAttachments(), 
+                                                task.getUserInfo(), task.getSourceMessageId(), BotTaskQueue.BotType.OPENCLAW);
                                         // 延迟一点再试
                                         try {
                                             Thread.sleep(500);
                                         } catch (InterruptedException e) {
                                             Thread.currentThread().interrupt();
                                         }
-                                        // 重置处理标志并尝试下一个
-                                        AtomicBoolean isProcessing = openclawProcessingFlags.get(roomId);
-                                        if (isProcessing != null) {
-                                            isProcessing.set(false);
-                                        }
-                                        tryProcessNextOpenClawTask(roomId);
+                                        taskQueueService.onTaskComplete(roomId, BotTaskQueue.BotType.OPENCLAW);
                                     } else {
                                         task.setStatus(OpenClawTask.TaskStatus.FAILED);
+                                        taskQueueService.markTaskFailed(taskId);
                                         handleOpenClawStreamError(roomId, streamingMessageId, contentBuilder.get().toString(), error.getMessage(), task);
-                                        onOpenClawTaskComplete(roomId);
+                                        taskQueueService.onTaskComplete(roomId, BotTaskQueue.BotType.OPENCLAW);
                                     }
                                 },
                                 () -> {
                                     log.info("OpenClaw streaming completed for task {}", taskId);
                                     task.setStatus(OpenClawTask.TaskStatus.COMPLETED);
+                                    taskQueueService.markTaskCompleted(taskId);
                                     finalizeOpenClawStreamMessage(roomId, streamingMessageId, contentBuilder.get().toString(), task, streamingMessage.get().getToolCalls());
-                                    onOpenClawTaskComplete(roomId);
+                                    taskQueueService.onTaskComplete(roomId, BotTaskQueue.BotType.OPENCLAW);
                                 }
                         );
             } else {
@@ -1517,27 +1305,31 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                                 error -> {
                                     log.error("OpenClaw streaming error in task {}", taskId, error);
                                     task.setStatus(OpenClawTask.TaskStatus.FAILED);
+                                    taskQueueService.markTaskFailed(taskId);
                                     handleOpenClawStreamError(roomId, streamingMessageId, contentBuilder.get().toString(), error.getMessage(), task);
-                                    onOpenClawTaskComplete(roomId);
+                                    taskQueueService.onTaskComplete(roomId, BotTaskQueue.BotType.OPENCLAW);
                                 },
                                 () -> {
                                     log.info("OpenClaw streaming completed for task {}", taskId);
                                     task.setStatus(OpenClawTask.TaskStatus.COMPLETED);
+                                    taskQueueService.markTaskCompleted(taskId);
                                     finalizeOpenClawStreamMessage(roomId, streamingMessageId, contentBuilder.get().toString(), task, streamingMessage.get().getToolCalls());
-                                    onOpenClawTaskComplete(roomId);
+                                    taskQueueService.onTaskComplete(roomId, BotTaskQueue.BotType.OPENCLAW);
                                 }
                         );
             }
             } catch (Exception e) {
                 log.error("Error in OpenClaw task execution for task {}: {}", taskId, e.getMessage(), e);
                 task.setStatus(OpenClawTask.TaskStatus.FAILED);
+                taskQueueService.markTaskFailed(taskId);
                 handleOpenClawStreamError(roomId, streamingMessageId, contentBuilder.get().toString(), e.getMessage(), task);
-                onOpenClawTaskComplete(roomId);
+                taskQueueService.onTaskComplete(roomId, BotTaskQueue.BotType.OPENCLAW);
             }
         }, () -> {
             log.error("Chat room not found: {}", roomId);
             task.setStatus(OpenClawTask.TaskStatus.FAILED);
-            onOpenClawTaskComplete(roomId);
+            taskQueueService.markTaskFailed(taskId);
+            taskQueueService.onTaskComplete(roomId, BotTaskQueue.BotType.OPENCLAW);
         });
     }
 
@@ -2096,31 +1888,9 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
     }
 
     /**
-     * 任务完成后的回调
-     */
-    private void onOpenClawTaskComplete(String roomId) {
-        log.info("Task completed for room {}, checking queue for next task", roomId);
-        AtomicBoolean isProcessing = openclawProcessingFlags.get(roomId);
-        if (isProcessing != null) {
-            isProcessing.set(false);
-        }
-        // 延迟一小段时间再处理下一个任务，确保 WebSocket 锁已释放
-        // 这是为了解决 WebSocketClient 的锁释放和 onComplete 回调之间的竞争条件
-        new Thread(() -> {
-            try {
-                Thread.sleep(300);
-                tryProcessNextOpenClawTask(roomId);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                tryProcessNextOpenClawTask(roomId);
-            }
-        }).start();
-    }
-
-    /**
      * 发送排队状态消息
      */
-    private void sendQueueStatusMessage(String roomId, OpenClawTask task, int position) {
+    private void sendQueueStatusMessage(String roomId, String taskId, String sourceMessageId, int position) {
         String statusText = position == 0
                 ? "🤖 OpenClaw 任务已加入队列，正在准备处理..."
                 : String.format("🤖 OpenClaw 任务已加入队列，当前排第 %d 位...", position + 1);
@@ -2134,7 +1904,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                 .timestamp(Instant.now())
                 .openclawMentioned(false)
                 .fromOpenClaw(true)
-                .replyToMessageId(task.getSourceMessageId())
+                .replyToMessageId(sourceMessageId)
                 .build();
 
         chatRoomService.addMessage(roomId, message);

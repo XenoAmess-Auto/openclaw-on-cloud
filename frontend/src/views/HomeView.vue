@@ -96,7 +96,7 @@
               <template v-else-if="msg.fromOpenClaw">
                 <!-- 使用段落式渲染 - 按位置顺序显示文本和工具调用 -->
                 <template v-for="(segment, _segIndex) in renderSegments(msg)" :key="segment.type + _segIndex">
-                  <div class="message openclaw-message-container">
+                  <div :id="'msg-' + msg.id" class="message openclaw-message-container">
                     <div class="message-avatar">
                       <img v-if="msg.senderAvatar" :src="msg.senderAvatar" :alt="msg.senderName" />
                       <div v-else class="avatar-placeholder">🤖</div>
@@ -106,7 +106,7 @@
                         <span class="sender">{{ msg.senderName }}</span>
                         <span class="time">{{ formatTime(msg.timestamp) }}</span>
                         <span v-if="msg.id" class="message-id" title="Message ID">{{ msg.id.slice(-6) }}</span>
-                        <span v-if="msg.replyToMessageId" class="reply-to-id" title="Reply to: {{ msg.replyToMessageId }}">↩ {{ msg.replyToMessageId.slice(-6) }}</span>
+                        <span v-if="msg.replyToMessageId" class="reply-to-id clickable" :title="'点击跳转到消息: ' + msg.replyToMessageId" @click="scrollToMessage(msg.replyToMessageId!)">↩ {{ msg.replyToMessageId.slice(-6) }}</span>
                       </div>
                       <div class="message-content" v-html="segment.html"></div>
                     </div>
@@ -115,10 +115,10 @@
               </template>
               
               <!-- 纯工具调用消息（不含 fromOpenClaw） -->
-              <div v-else-if="msg.isToolCall || msg.toolCalls?.length" class="tool-call-message">
+              <div v-else-if="msg.isToolCall || msg.toolCalls?.length" :id="'msg-' + msg.id" class="tool-call-message">
                 <div v-if="msg.id || msg.replyToMessageId" class="tool-call-header">
                   <span v-if="msg.id" class="message-id" title="Message ID">{{ msg.id.slice(-6) }}</span>
-                  <span v-if="msg.replyToMessageId" class="reply-to-id" title="Reply to: {{ msg.replyToMessageId }}">↩ {{ msg.replyToMessageId.slice(-6) }}</span>
+                  <span v-if="msg.replyToMessageId" class="reply-to-id clickable" :title="'点击跳转到消息: ' + msg.replyToMessageId" @click="scrollToMessage(msg.replyToMessageId!)">↩ {{ msg.replyToMessageId.slice(-6) }}</span>
                 </div>
                 <div class="message-content tool-call-content" v-html="renderContent(msg)"></div>
               </div>
@@ -126,6 +126,7 @@
               <!-- 普通消息 -->
               <div
                 v-else
+                :id="'msg-' + msg.id"
                 :class="[
                   'message',
                   {
@@ -147,7 +148,7 @@
                     <span v-else-if="msg.mentionHere" class="mention-tag mention-here">@在线</span>
                     <span class="time">{{ formatTime(msg.timestamp) }}</span>
                     <span v-if="msg.id" class="message-id" title="Message ID">{{ msg.id.slice(-6) }}</span>
-                    <span v-if="msg.replyToMessageId" class="reply-to-id" title="Reply to: {{ msg.replyToMessageId }}">↩ {{ msg.replyToMessageId.slice(-6) }}</span>
+                    <span v-if="msg.replyToMessageId" class="reply-to-id clickable" :title="'点击跳转到消息: ' + msg.replyToMessageId" @click="scrollToMessage(msg.replyToMessageId!)">↩ {{ msg.replyToMessageId.slice(-6) }}</span>
                   </div>
                   <div class="message-content" v-html="renderContent(msg)"></div>
                   
@@ -561,6 +562,29 @@ function scrollToBottom() {
   if (messageContainer.value) {
     messageContainer.value.scrollTop = messageContainer.value.scrollHeight
   }
+}
+
+// 滚动到指定消息
+function scrollToMessage(messageId: string) {
+  if (!messageContainer.value) return
+  
+  const targetElement = document.getElementById('msg-' + messageId)
+  if (!targetElement) {
+    console.warn('Message not found:', messageId)
+    // 可以在这里添加提示：消息不存在或已被删除
+    return
+  }
+  
+  // 高亮目标消息
+  targetElement.classList.add('highlight-message')
+  
+  // 滚动到目标消息
+  targetElement.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  
+  // 3秒后移除高亮效果
+  setTimeout(() => {
+    targetElement.classList.remove('highlight-message')
+  }, 3000)
 }
 
 // 滚动位置记录，用于加载更多后保持位置
@@ -1753,6 +1777,44 @@ function isSameDay(d1: Date, d2: Date): boolean {
   color: #4f46e5;
 }
 
+.reply-to-id.clickable {
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.reply-to-id.clickable:hover {
+  background: #4f46e5;
+  color: white;
+  opacity: 1;
+}
+
+/* 消息高亮动画 */
+@keyframes message-highlight {
+  0% {
+    box-shadow: 0 0 0 0 rgba(79, 70, 229, 0.7);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(79, 70, 229, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(79, 70, 229, 0);
+  }
+}
+
+.highlight-message {
+  animation: message-highlight 1s ease-out;
+  border-radius: 12px;
+}
+
+.highlight-message .message-body {
+  background: linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%) !important;
+  transition: background 0.3s ease;
+}
+
+.highlight-message.from-me .message-body {
+  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%) !important;
+}
+
 .message.from-me .message-id {
   background: rgba(255,255,255,0.2);
   color: rgba(255,255,255,0.9);
@@ -1979,6 +2041,17 @@ function isSameDay(d1: Date, d2: Date): boolean {
   margin-bottom: 0.5rem;
   padding-bottom: 0.375rem;
   border-bottom: 1px solid var(--border-color);
+}
+
+.tool-call-message > .tool-call-header .reply-to-id.clickable {
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.tool-call-message > .tool-call-header .reply-to-id.clickable:hover {
+  background: #4f46e5;
+  color: white;
+  opacity: 1;
 }
 
 :deep(.tool-icon) {
