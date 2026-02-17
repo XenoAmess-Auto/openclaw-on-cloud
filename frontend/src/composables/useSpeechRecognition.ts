@@ -3,7 +3,8 @@ import { pipeline, AutomaticSpeechRecognitionPipeline, env } from '@xenova/trans
 
 // 配置 transformers 环境
 env.allowLocalModels = true
-env.useBrowserCache = true
+env.useBrowserCache = false  // 禁用浏览器缓存，避免隐私模式问题
+env.allowRemoteModels = true // 允许从远程 CDN 加载
 
 // Whisper base 模型，30MB，中英混合识别准确
 const WHISPER_MODEL = 'Xenova/whisper-base'
@@ -37,9 +38,6 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}) 
     try {
       isModelLoading.value = true
       error.value = null
-
-      // 设置缓存目录（浏览器 IndexedDB）
-      env.cacheDir = 'openclaw-whisper-models'
 
       transcriber = await pipeline(
         'automatic-speech-recognition',
