@@ -345,6 +345,116 @@ public class AdminController {
     }
 
     /**
+     * 获取单个机器人用户详情
+     */
+    @GetMapping("/bots/{botId}")
+    public ResponseEntity<BotUserDto> getBotUser(@PathVariable String botId) {
+        User bot = userRepository.findById(botId)
+                .orElseThrow(() -> new RuntimeException("Bot not found"));
+        
+        if (!bot.isBot()) {
+            throw new RuntimeException("Not a bot user");
+        }
+        
+        return ResponseEntity.ok(toBotDto(bot));
+    }
+
+    /**
+     * 创建机器人用户
+     */
+    @PostMapping("/bots")
+    public ResponseEntity<BotUserDto> createBotUser(@RequestBody CreateBotUserRequest request) {
+        // 检查用户名是否已存在
+        if (userRepository.existsByUsername(request.username())) {
+            throw new RuntimeException("Username already exists");
+        }
+        
+        BotUserConfig config = BotUserConfig.builder()
+                .gatewayUrl(request.gatewayUrl())
+                .apiKey(request.apiKey())
+                .systemPrompt(request.systemPrompt() != null ? request.systemPrompt() : "You are a helpful assistant.")
+                .build();
+        
+        User bot = User.builder()
+                .username(request.username())
+                .email(request.username() + "@bot.local")
+                .password(passwordEncoder.encode(request.password() != null ? request.password() : "botpassword123"))
+                .avatar(request.avatarUrl())
+                .enabled(request.enabled() != null ? request.enabled() : true)
+                .roles(Set.of("ROLE_USER"))
+                .isBot(true)
+                .botType(request.botType() != null ? request.botType() : "openclaw")
+                .botConfig(config)
+                .createdAt(Instant.now())
+                .updatedAt(Instant.now())
+                .build();
+        
+        User saved = userRepository.save(bot);
+        log.info("Bot created: username={}, type={}", saved.getUsername(), saved.getBotType());
+        return ResponseEntity.ok(toBotDto(saved));
+    }
+
+    /**
+     * 更新机器人用户
+     */
+    @PutMapping("/bots/{botId}")
+    public ResponseEntity<BotUserDto> updateBotUser(
+            @PathVariable String botId,
+            @RequestBody UpdateBotUserRequest request) {
+        
+        User bot = userRepository.findById(botId)
+                .orElseThrow(() -> new RuntimeException("Bot not found"));
+        
+        if (!bot.isBot()) {
+            throw new RuntimeException("Not a bot user");
+        }
+        
+        if (request.username() != null && !request.username().equals(bot.getUsername())) {
+            if (userRepository.existsByUsername(request.username())) {
+                throw new RuntimeException("Username already exists");
+            }
+            bot.setUsername(request.username());
+            bot.setEmail(request.username() + "@bot.local");
+        }
+        
+        if (request.avatarUrl() != null) {
+            bot.setAvatar(request.avatarUrl());
+        }
+        
+        if (request.password() != null && !request.password().isBlank()) {
+            bot.setPassword(passwordEncoder.encode(request.password()));
+        }
+        
+        if (request.enabled() != null) {
+            bot.setEnabled(request.enabled());
+        }
+        
+        BotUserConfig config = bot.getBotConfig();
+        if (config == null) {
+            config = new BotUserConfig();
+        }
+        
+        if (request.gatewayUrl() != null) {
+            config.setGatewayUrl(request.gatewayUrl());
+        }
+        
+        if (request.systemPrompt() != null) {
+            config.setSystemPrompt(request.systemPrompt());
+        }
+        
+        if (request.apiKey() != null && !request.apiKey().isBlank()) {
+            config.setApiKey(request.apiKey());
+        }
+        
+        bot.setBotConfig(config);
+        bot.setUpdatedAt(Instant.now());
+        
+        User saved = userRepository.save(bot);
+        log.info("Bot updated: username={}, type={}", saved.getUsername(), saved.getBotType());
+        return ResponseEntity.ok(toBotDto(saved));
+    }
+
+    /**
      * 删除机器人用户
      */
     @DeleteMapping("/bots/{botId}")
@@ -370,6 +480,7 @@ public class AdminController {
                 null,
                 "You are a helpful assistant.",
                 true,
+                "openclaw",
                 null,
                 null
         );
@@ -385,6 +496,7 @@ public class AdminController {
                 config != null && config.getApiKey() != null ? maskApiKey(config.getApiKey()) : null,
                 config != null ? config.getSystemPrompt() : null,
                 bot.isEnabled(),
+                bot.getBotType(),
                 bot.getCreatedAt(),
                 bot.getUpdatedAt()
         );
@@ -431,11 +543,33 @@ public class AdminController {
             String apiKey,
             String systemPrompt,
             boolean enabled,
+            String botType,
             Instant createdAt,
             Instant updatedAt
     ) {}
 
     public record BotUserRequest(
+            String username,
+            String avatarUrl,
+            String gatewayUrl,
+            String apiKey,
+            String systemPrompt,
+            String password,
+            Boolean enabled
+    ) {}
+
+    public record CreateBotUserRequest(
+            String username,
+            String avatarUrl,
+            String gatewayUrl,
+            String apiKey,
+            String systemPrompt,
+            String password,
+            Boolean enabled,
+            String botType
+    ) {}
+
+    public record UpdateBotUserRequest(
             String username,
             String avatarUrl,
             String gatewayUrl,
