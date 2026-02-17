@@ -5,8 +5,10 @@ import { AutoProcessor, WhisperForConditionalGeneration, env } from '@xenova/tra
 env.allowLocalModels = true
 env.allowRemoteModels = false
 env.useBrowserCache = false
-// 不设置 localModelPath，让 transformers 使用默认行为
-// 然后在 from_pretrained 中指定完整路径
+
+// 配置 ONNX Runtime WASM 后端
+env.backends.onnx.wasm.numThreads = 1
+env.backends.onnx.wasm.simd = true
 
 // 调试：拦截 fetch 请求
 const originalFetch = window.fetch
@@ -122,6 +124,17 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}) 
     } catch (err) {
       const errorMsg = (err as Error).message
       console.error('[useSpeechRecognition] 模型加载失败:', err)
+      console.error('[useSpeechRecognition] 错误堆栈:', (err as Error).stack)
+      
+      // 检查是否是 ONNX 会话创建失败
+      if (errorMsg.includes('session')) {
+        console.error('[useSpeechRecognition] ONNX 会话创建失败，可能原因:')
+        console.error('  1. 模型文件损坏或不兼容')
+        console.error('  2. WASM 文件缺失')
+        console.error('  3. 内存不足')
+        console.error('  4. 浏览器安全限制')
+      }
+      
       error.value = '模型加载失败: ' + errorMsg
       isModelLoading.value = false
       options.onError?.(err as Error)
