@@ -3,6 +3,7 @@ import { pipeline, AutomaticSpeechRecognitionPipeline, env } from '@xenova/trans
 
 // 配置 transformers 环境
 env.allowLocalModels = true
+env.allowRemoteModels = false  // 强制使用本地模型，防止请求 Hugging Face
 env.useBrowserCache = false
 
 // 尝试本地模型路径，使用分块模型文件
@@ -49,15 +50,17 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}) 
 
       // 检测本地模型
       useLocalModel.value = await hasLocalModel()
-      const modelPath = useLocalModel.value ? LOCAL_MODEL_PATH : REMOTE_MODEL_PATH
+      // 强制使用本地模型路径
+      const modelPath = LOCAL_MODEL_PATH
 
       if (useLocalModel.value) {
         console.log('[useSpeechRecognition] 使用本地模型:', modelPath)
       } else {
-        console.log('[useSpeechRecognition] 使用远程模型:', modelPath)
-        error.value = '正在从 Hugging Face 下载模型，请确保网络可以访问 huggingface.co'
+        console.warn('[useSpeechRecognition] 本地模型文件检测失败，但仍尝试使用本地路径:', modelPath)
+        console.warn('[useSpeechRecognition] 如果模型加载失败，请运行: ./download-model.sh')
       }
 
+      console.log('[useSpeechRecognition] 开始加载模型...')
       transcriber = await pipeline(
         'automatic-speech-recognition',
         modelPath,
@@ -65,10 +68,12 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}) 
           quantized: true,
           progress_callback: (progress: number) => {
             loadingProgress.value = Math.round(progress * 100)
+            console.log(`[useSpeechRecognition] 模型加载进度: ${Math.round(progress * 100)}%`)
           }
         }
       )
 
+      console.log('[useSpeechRecognition] 模型加载成功')
       isModelLoading.value = false
       return true
     } catch (err) {
@@ -76,9 +81,11 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}) 
       console.error('[useSpeechRecognition] 模型加载失败:', err)
 
       if (errorMsg.includes('Unexpected token') || errorMsg.includes('<!DOCTYPE')) {
-        error.value = '模型加载失败：无法访问 Hugging Face CDN。请手动下载模型文件到 public/models/ 目录，或使用 Chrome 浏览器内置语音识别。'
-      } else if (errorMsg.includes('fetch') || errorMsg.includes('network')) {
-        error.value = '网络连接失败，无法下载语音识别模型'
+        error.value = '模型加载失败：服务器返回了 HTML 而非模型文件。请确保 public/models/ 目录下有完整的模型文件，或运行 ./download-model.sh 下载。'
+      } else if (errorMsg.includes('fetch') || errorMsg.includes('network') || errorMsg.includes('Failed to fetch')) {
+        error.value = '模型加载失败：无法获取模型文件。请检查网络连接或运行 ./download-model.sh 下载本地模型。'
+      } else if (errorMsg.includes('Cannot find module') || errorMsg.includes('Could not locate')) {
+        error.value = '模型文件缺失：请在项目根目录运行 ./download-model.sh 下载模型文件。'
       } else {
         error.value = '模型加载失败: ' + errorMsg
       }
