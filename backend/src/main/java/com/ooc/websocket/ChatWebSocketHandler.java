@@ -81,6 +81,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
         private WebSocketUserInfo userInfo;
         private Instant createdAt;
         private volatile TaskStatus status; // PENDING, PROCESSING, COMPLETED, FAILED
+        private String sourceMessageId; // 原始用户消息ID，用于replyTo
 
         public enum TaskStatus {
             PENDING, PROCESSING, COMPLETED, FAILED
@@ -404,7 +405,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                 shouldTriggerOpenClaw, memberCount, mentionedOpenClaw);
 
         if (shouldTriggerOpenClaw) {
-            triggerOpenClaw(roomId, content, attachments, userInfo);
+            triggerOpenClaw(roomId, content, attachments, userInfo, message.getId());
         }
 
         // 决定是否触发 Kimi
@@ -413,7 +414,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                 shouldTriggerKimi, memberCount, mentionedKimi);
 
         if (shouldTriggerKimi) {
-            triggerKimi(roomId, content, attachments, userInfo);
+            triggerKimi(roomId, content, attachments, userInfo, message.getId());
         }
 
         // 决定是否触发 Claude Code
@@ -422,7 +423,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                 shouldTriggerClaude, memberCount, mentionedClaude);
 
         if (shouldTriggerClaude) {
-            triggerClaude(roomId, content, attachments, userInfo);
+            triggerClaude(roomId, content, attachments, userInfo, message.getId());
         }
     }
 
@@ -453,7 +454,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
         return claudeCodePluginService.isBotEnabled();
     }
 
-    private void triggerKimi(String roomId, String content, List<Attachment> attachments, WebSocketUserInfo userInfo) {
+    private void triggerKimi(String roomId, String content, List<Attachment> attachments, WebSocketUserInfo userInfo, String sourceMessageId) {
         log.info("Adding Kimi task to queue for room: {}, content: {}, attachments: {}",
                 roomId,
                 content != null ? content.substring(0, Math.min(50, content.length())) : "",
@@ -466,6 +467,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                 .content(content)
                 .attachments(attachments)
                 .userInfo(userInfo)
+                .sourceMessageId(sourceMessageId)
                 .createdAt(Instant.now())
                 .status(OpenClawTask.TaskStatus.PENDING)
                 .build();
@@ -545,6 +547,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                 .fromOpenClaw(true)
                 .isStreaming(true)
                 .toolCalls(new ArrayList<>())
+                .replyToMessageId(task.getSourceMessageId())
                 .build()
         );
 
@@ -821,7 +824,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
 
     // ========== Claude Code 任务处理 ==========
 
-    private void triggerClaude(String roomId, String content, List<Attachment> attachments, WebSocketUserInfo userInfo) {
+    private void triggerClaude(String roomId, String content, List<Attachment> attachments, WebSocketUserInfo userInfo, String sourceMessageId) {
         log.info("Adding Claude task to queue for room: {}, content: {}, attachments: {}",
                 roomId,
                 content != null ? content.substring(0, Math.min(50, content.length())) : "",
@@ -834,6 +837,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                 .content(content)
                 .attachments(attachments)
                 .userInfo(userInfo)
+                .sourceMessageId(sourceMessageId)
                 .createdAt(Instant.now())
                 .status(OpenClawTask.TaskStatus.PENDING)
                 .build();
@@ -911,6 +915,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                 .openclawMentioned(false)
                 .fromOpenClaw(true)
                 .isStreaming(true) // 标记为流式消息
+                .replyToMessageId(task.getSourceMessageId())
                 .build();
 
         try {
@@ -1201,7 +1206,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                 .build());
     }
 
-    private void triggerOpenClaw(String roomId, String content, List<Attachment> attachments, WebSocketUserInfo userInfo) {
+    private void triggerOpenClaw(String roomId, String content, List<Attachment> attachments, WebSocketUserInfo userInfo, String sourceMessageId) {
         log.info("Adding OpenClaw task to queue for room: {}, content: {}, attachments: {}",
                 roomId,
                 content != null ? content.substring(0, Math.min(50, content.length())) : "",
@@ -1214,6 +1219,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                 .content(content)
                 .attachments(attachments)
                 .userInfo(userInfo)
+                .sourceMessageId(sourceMessageId)
                 .createdAt(Instant.now())
                 .status(OpenClawTask.TaskStatus.PENDING)
                 .build();
@@ -1293,6 +1299,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                 .fromOpenClaw(true)
                 .isStreaming(true)
                 .toolCalls(new ArrayList<>())
+                .replyToMessageId(task.getSourceMessageId())
                 .build()
         );
 

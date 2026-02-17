@@ -118,6 +118,10 @@ public class ChatRoom {
         @JsonProperty("delta")
         private boolean delta;
 
+        @JsonProperty("replyToMessageId")
+        @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+        private String replyToMessageId;
+
         @Data
         @Builder
         @NoArgsConstructor
