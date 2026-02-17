@@ -22,6 +22,13 @@
       >
         机器人管理
       </button>
+      <button 
+        class="tab-btn" 
+        :class="{ active: activeTab === 'config' }"
+        @click="activeTab = 'config'"
+      >
+        系统配置
+      </button>
     </div>
 
     <div class="container">
@@ -137,6 +144,45 @@
 
         <div v-if="filteredBots.length === 0 && !botsLoading" class="empty">
           没有找到机器人账户
+        </div>
+      </div>
+
+      <!-- 系统配置标签页 -->
+      <div v-else-if="activeTab === 'config'" class="config-panel">
+        <div class="config-card">
+          <h3>🤖 OpenClaw 配置</h3>
+          <p class="config-desc">配置 OpenClaw 连接参数和超时设置</p>
+          
+          <div class="form-group">
+            <label>Gateway URL</label>
+            <input v-model="openclawConfig.gatewayUrl" type="text" placeholder="http://localhost:18789" />
+            <span class="hint">OpenClaw Gateway 服务地址</span>
+          </div>
+          
+          <div class="form-group">
+            <label>API Key</label>
+            <input v-model="openclawConfig.apiKey" type="password" placeholder="留空保持原值" />
+            <span v-if="openclawConfig.apiKeyMasked" class="hint">当前: {{ openclawConfig.apiKeyMasked }}</span>
+          </div>
+          
+          <div class="form-group">
+            <label>请求超时时间（秒）</label>
+            <input 
+              v-model.number="openclawConfig.requestTimeoutSeconds" 
+              type="number" 
+              min="60" 
+              max="3600" 
+              placeholder="1800"
+            />
+            <span class="hint">单个请求的最大等待时间，范围 60-3600 秒，默认 1800 秒（30 分钟）</span>
+          </div>
+          
+          <div class="config-actions">
+            <button @click="loadOpenClawConfig" class="btn-refresh">刷新</button>
+            <button @click="saveOpenClawConfig" class="btn-primary" :disabled="savingConfig">
+              {{ savingConfig ? '保存中...' : '保存配置' }}
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -417,6 +463,15 @@ const editBotForm = ref({
   enabled: true
 })
 
+// OpenClaw 系统配置
+const openclawConfig = ref({
+  gatewayUrl: '',
+  apiKey: '',
+  apiKeyMasked: '',
+  requestTimeoutSeconds: 1800
+})
+const savingConfig = ref(false)
+
 const isValidNewUser = computed(() => {
   const u = newUser.value.username?.trim() || ''
   const e = newUser.value.email?.trim() || ''
@@ -456,6 +511,7 @@ onMounted(() => {
   }
   loadUsers()
   loadBots()
+  loadOpenClawConfig()
 })
 
 async function loadUsers() {
@@ -669,6 +725,47 @@ async function testBotConnection(bot: BotUser) {
 function formatDate(dateStr: string | undefined) {
   if (!dateStr) return '-'
   return new Date(dateStr).toLocaleString('zh-CN')
+}
+
+// ============ OpenClaw 系统配置 ============
+
+async function loadOpenClawConfig() {
+  try {
+    const response = await apiClient.get('/config/openclaw')
+    openclawConfig.value = {
+      gatewayUrl: response.data.gatewayUrl || '',
+      apiKey: '', // 密码字段不显示
+      apiKeyMasked: response.data.apiKey || '',
+      requestTimeoutSeconds: response.data.requestTimeoutSeconds || 1800
+    }
+  } catch (err: any) {
+    alert('加载配置失败: ' + (err.response?.data?.message || '未知错误'))
+  }
+}
+
+async function saveOpenClawConfig() {
+  savingConfig.value = true
+  try {
+    const payload: any = {
+      requestTimeoutSeconds: openclawConfig.value.requestTimeoutSeconds
+    }
+    
+    if (openclawConfig.value.gatewayUrl) {
+      payload.gatewayUrl = openclawConfig.value.gatewayUrl
+    }
+    
+    if (openclawConfig.value.apiKey) {
+      payload.apiKey = openclawConfig.value.apiKey
+    }
+    
+    await apiClient.post('/config/openclaw', payload)
+    alert('配置保存成功')
+    loadOpenClawConfig() // 刷新显示
+  } catch (err: any) {
+    alert('保存失败: ' + (err.response?.data?.message || '未知错误'))
+  } finally {
+    savingConfig.value = false
+  }
 }
 </script>
 
@@ -1189,6 +1286,26 @@ select {
 }
 
 /* 移动端适配 */
+.config-panel {
+  max-width: 640px;
+}
+
+input[type="number"] {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  font-size: 0.9375rem;
+  background: var(--bg-color);
+  color: var(--text-primary);
+  box-sizing: border-box;
+}
+
+input[type="number"]:focus {
+  outline: none;
+  border-color: var(--primary-color);
+}
+
 @media (max-width: 768px) {
   .admin-view {
     height: 100dvh;

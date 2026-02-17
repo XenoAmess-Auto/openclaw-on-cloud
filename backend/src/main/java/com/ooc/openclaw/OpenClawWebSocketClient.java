@@ -54,7 +54,6 @@ public class OpenClawWebSocketClient {
     // 连接配置
     private static final int CONNECT_TIMEOUT_MS = 10000;
     private static final int MAX_RECONNECT_ATTEMPTS = 3;
-    private static final int REQUEST_TIMEOUT_MS = 1800000; // 30分钟请求超时
 
     /**
      * 响应处理器接口
@@ -104,12 +103,13 @@ public class OpenClawWebSocketClient {
                 session.sendMessage(new TextMessage(request));
 
                 // 启动超时定时器
+                int timeoutMs = properties.getRequestTimeoutSeconds() * 1000;
                 ScheduledFuture<?> timeoutTask = timeoutScheduler.schedule(() -> {
                     log.warn("[OpenClaw WS] Request timeout for session {}, forcing lock release", sessionId);
                     ResponseHandler timeoutHandler = responseHandlers.remove(sessionId);
                     if (timeoutHandler != null) {
                         try {
-                            timeoutHandler.onError("REQUEST_TIMEOUT: Request timed out after " + REQUEST_TIMEOUT_MS + "ms");
+                            timeoutHandler.onError("REQUEST_TIMEOUT: Request timed out after " + properties.getRequestTimeoutSeconds() + "s");
                         } finally {
                             AtomicBoolean timeoutLock = requestLocks.get(sessionId);
                             if (timeoutLock != null) {
@@ -119,7 +119,7 @@ public class OpenClawWebSocketClient {
                         }
                     }
                     requestTimeouts.remove(sessionId);
-                }, REQUEST_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+                }, timeoutMs, TimeUnit.MILLISECONDS);
 
                 requestTimeouts.put(sessionId, timeoutTask);
 

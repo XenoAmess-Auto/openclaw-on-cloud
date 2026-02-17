@@ -15,4 +15,5 @@ public class OpenClawProperties {
     private int maxSessionMessages = 50;
     private boolean autoSummarize = true;
     private int summarizeThreshold = 30;
+    private int requestTimeoutSeconds = 1800; // 默认30分钟，可在管理页面配置
 }
