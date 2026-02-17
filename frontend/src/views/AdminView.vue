@@ -2,60 +2,174 @@
   <div class="admin-view">
     <header class="header">
       <router-link to="/" class="back">←</router-link>
-      <h1>用户管理</h1>
+      <h1>管理后台</h1>
       <span class="subtitle">管理员: {{ authStore.user?.username }}</span>
     </header>
 
+    <!-- 标签页切换 -->
+    <div class="tabs">
+      <button 
+        class="tab-btn" 
+        :class="{ active: activeTab === 'users' }"
+        @click="activeTab = 'users'"
+      >
+        用户管理
+      </button>
+      <button 
+        class="tab-btn" 
+        :class="{ active: activeTab === 'bot' }"
+        @click="activeTab = 'bot'"
+      >
+        机器人配置
+      </button>
+    </div>
+
     <div class="container">
-      <div class="toolbar">
-        <input 
-          v-model="searchQuery" 
-          type="text" 
-          placeholder="搜索用户名或邮箱..."
-          class="search-input"
-        />
-        <button @click="showCreateDialog = true" class="btn-primary">+ 新建用户</button>
-        <button @click="loadUsers" class="btn-refresh">刷新</button>
+      <!-- 用户管理标签页 -->
+      <div v-if="activeTab === 'users'">
+        <div class="toolbar">
+          <input 
+            v-model="searchQuery" 
+            type="text" 
+            placeholder="搜索用户名或邮箱..."
+            class="search-input"
+          />
+          <button @click="showCreateDialog = true" class="btn-primary">+ 新建用户</button>
+          <button @click="loadUsers" class="btn-refresh">刷新</button>
+        </div>
+
+        <div v-if="loading" class="loading">加载中...</div>
+
+        <table v-else class="user-table">
+          <thead>
+            <tr>
+              <th>用户名</th>
+              <th>邮箱</th>
+              <th>角色</th>
+              <th>状态</th>
+              <th>创建时间</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="user in filteredUsers" :key="user.id">
+              <td>{{ user.username }}</td>
+              <td>{{ user.email }}</td>
+              <td>
+                <span v-for="role in user.roles" :key="role" class="role-badge" :class="role">
+                  {{ role.replace('ROLE_', '') }}
+                </span>
+              </td>
+              <td>
+                <span class="status-badge" :class="user.enabled ? 'enabled' : 'disabled'">
+                  {{ user.enabled ? '启用' : '禁用' }}
+                </span>
+              </td>
+              <td>{{ formatDate(user.createdAt) }}</td>
+              <td>
+                <button @click="editUser(user)" class="btn-edit" :disabled="user.username === 'admin'">编辑</button>
+                <button @click="deleteUser(user)" class="btn-delete" :disabled="user.username === 'admin'">删除</button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div v-if="filteredUsers.length === 0 && !loading" class="empty">
+          没有找到用户
+        </div>
       </div>
 
-      <div v-if="loading" class="loading">加载中...</div>
+      <!-- 机器人配置标签页 -->
+      <div v-else-if="activeTab === 'bot'" class="bot-config">
+        <div class="config-card">
+          <h3>OpenClaw 机器人配置</h3>
+          <p class="config-desc">配置 OpenClaw 机器人用户的账号、头像和 Gateway URL。</p>
+          
+          <div class="form-group">
+            <label>机器人用户名 *</label>
+            <input 
+              v-model="botConfig.username" 
+              type="text" 
+              placeholder="例如: openclaw"
+            />
+            <span class="hint">用户在聊天中 @ 此用户名来触发机器人</span>
+          </div>
 
-      <table v-else class="user-table">
-        <thead>
-          <tr>
-            <th>用户名</th>
-            <th>邮箱</th>
-            <th>角色</th>
-            <th>状态</th>
-            <th>创建时间</th>
-            <th>操作</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="user in filteredUsers" :key="user.id">
-            <td>{{ user.username }}</td>
-            <td>{{ user.email }}</td>
-            <td>
-              <span v-for="role in user.roles" :key="role" class="role-badge" :class="role">
-                {{ role.replace('ROLE_', '') }}
-              </span>
-            </td>
-            <td>
-              <span class="status-badge" :class="user.enabled ? 'enabled' : 'disabled'">
-                {{ user.enabled ? '启用' : '禁用' }}
-              </span>
-            </td>
-            <td>{{ formatDate(user.createdAt) }}</td>
-            <td>
-              <button @click="editUser(user)" class="btn-edit" :disabled="user.username === 'admin'">编辑</button>
-              <button @click="deleteUser(user)" class="btn-delete" :disabled="user.username === 'admin'">删除</button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+          <div class="form-group">
+            <label>机器人密码</label>
+            <input 
+              v-model="botConfig.password" 
+              type="password" 
+              placeholder="输入密码（创建时必填，更新时留空表示不修改）"
+            />
+          </div>
 
-      <div v-if="filteredUsers.length === 0 && !loading" class="empty">
-        没有找到用户
+          <div class="form-group">
+            <label>机器人头像 URL</label>
+            <input 
+              v-model="botConfig.avatarUrl" 
+              type="text" 
+              placeholder="https://example.com/avatar.png"
+            />
+          </div>
+
+          <div class="form-group">
+            <label>Gateway URL *</label>
+            <input 
+              v-model="botConfig.gatewayUrl" 
+              type="text" 
+              placeholder="http://localhost:18789"
+            />
+            <span class="hint">OpenClaw Gateway 服务地址</span>
+          </div>
+
+          <div class="form-group">
+            <label>API Key（留空保持原值）</label>
+            <input 
+              v-model="botConfig.apiKey" 
+              type="password" 
+              placeholder="输入新的 API Key"
+            />
+            <span v-if="botConfig.existingApiKeyMasked" class="hint">
+              当前: {{ botConfig.existingApiKeyMasked }}
+            </span>
+          </div>
+
+          <div class="form-group">
+            <label>系统提示词</label>
+            <textarea 
+              v-model="botConfig.systemPrompt" 
+              rows="4"
+              placeholder="You are a helpful assistant."
+            ></textarea>
+            <span class="hint">定义机器人的行为方式和角色</span>
+          </div>
+
+          <div class="form-group checkbox-group">
+            <label>
+              <input type="checkbox" v-model="botConfig.enabled" />
+              启用机器人
+            </label>
+          </div>
+
+          <div class="config-actions">
+            <button @click="loadBotConfig" class="btn-refresh">刷新</button>
+            <button @click="saveBotConfig" class="btn-primary" :disabled="botSaving">
+              {{ botSaving ? '保存中...' : '保存配置' }}
+            </button>
+          </div>
+        </div>
+
+        <div class="config-card test-card">
+          <h3>连接测试</h3>
+          <p class="config-desc">测试与 OpenClaw Gateway 的连接是否正常。</p>
+          <button @click="testBotConnection" class="btn-test" :disabled="testingConnection">
+            {{ testingConnection ? '测试中...' : '测试连接' }}
+          </button>
+          <div v-if="testResult" class="test-result" :class="testResult.success ? 'success' : 'error'">
+            {{ testResult.message }}
+          </div>
+        </div>
       </div>
     </div>
 
@@ -141,8 +255,25 @@ interface User {
   createdAt: string
 }
 
+interface BotConfig {
+  id?: string
+  username: string
+  password: string
+  avatarUrl: string
+  gatewayUrl: string
+  apiKey: string
+  existingApiKeyMasked?: string
+  systemPrompt: string
+  enabled: boolean
+}
+
 const router = useRouter()
 const authStore = useAuthStore()
+
+// 标签页
+const activeTab = ref('users')
+
+// 用户管理
 const users = ref<User[]>([])
 const loading = ref(false)
 const searchQuery = ref('')
@@ -167,6 +298,21 @@ const editForm = ref({
   enabled: true
 })
 
+// 机器人配置
+const botConfig = ref<BotConfig>({
+  username: 'openclaw',
+  password: '',
+  avatarUrl: '',
+  gatewayUrl: 'http://localhost:18789',
+  apiKey: '',
+  existingApiKeyMasked: '',
+  systemPrompt: 'You are a helpful assistant.',
+  enabled: true
+})
+const botSaving = ref(false)
+const testingConnection = ref(false)
+const testResult = ref<{ success: boolean; message: string } | null>(null)
+
 const isValidNewUser = computed(() => {
   const u = newUser.value.username?.trim() || ''
   const e = newUser.value.email?.trim() || ''
@@ -189,6 +335,7 @@ onMounted(() => {
     return
   }
   loadUsers()
+  loadBotConfig()
 })
 
 async function loadUsers() {
@@ -266,6 +413,83 @@ async function deleteUser(user: User) {
   }
 }
 
+async function loadBotConfig() {
+  try {
+    const response = await apiClient.get('/admin/bots/openclaw')
+    const data = response.data
+    botConfig.value = {
+      id: data.id,
+      username: data.username || 'openclaw',
+      password: '',
+      avatarUrl: data.avatarUrl || '',
+      gatewayUrl: data.gatewayUrl || 'http://localhost:18789',
+      apiKey: '',
+      existingApiKeyMasked: data.apiKey || '',
+      systemPrompt: data.systemPrompt || 'You are a helpful assistant.',
+      enabled: data.enabled !== false
+    }
+  } catch (err: any) {
+    console.error('加载机器人配置失败:', err)
+    // 使用默认值
+  }
+}
+
+async function saveBotConfig() {
+  botSaving.value = true
+  try {
+    const payload = {
+      username: botConfig.value.username,
+      password: botConfig.value.password || undefined,
+      avatarUrl: botConfig.value.avatarUrl,
+      gatewayUrl: botConfig.value.gatewayUrl,
+      apiKey: botConfig.value.apiKey || undefined,
+      systemPrompt: botConfig.value.systemPrompt,
+      enabled: botConfig.value.enabled
+    }
+
+    await apiClient.post('/admin/bots/openclaw', payload)
+    alert('配置已保存')
+    loadBotConfig() // 刷新以获取 masked API key
+  } catch (err: any) {
+    alert('保存失败: ' + (err.response?.data?.message || '未知错误'))
+  } finally {
+    botSaving.value = false
+  }
+}
+
+async function testBotConnection() {
+  testingConnection.value = true
+  testResult.value = null
+  
+  try {
+    // 测试 Gateway 连接
+    const gatewayUrl = botConfig.value.gatewayUrl
+    const response = await fetch(`${gatewayUrl}/health`, {
+      method: 'GET',
+      signal: AbortSignal.timeout(5000)
+    })
+    
+    if (response.ok) {
+      testResult.value = {
+        success: true,
+        message: '连接成功！Gateway 服务正常运行。'
+      }
+    } else {
+      testResult.value = {
+        success: false,
+        message: `连接失败: HTTP ${response.status}`
+      }
+    }
+  } catch (err: any) {
+    testResult.value = {
+      success: false,
+      message: `连接失败: ${err.message || '无法连接到 Gateway'}`
+    }
+  } finally {
+    testingConnection.value = false
+  }
+}
+
 function formatDate(dateStr: string) {
   return new Date(dateStr).toLocaleString('zh-CN')
 }
@@ -313,6 +537,35 @@ h1 {
   color: var(--text-secondary);
 }
 
+/* 标签页 */
+.tabs {
+  display: flex;
+  background: var(--surface-color);
+  border-bottom: 1px solid var(--border-color);
+  padding: 0 1.5rem;
+}
+
+.tab-btn {
+  padding: 0.875rem 1.5rem;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-secondary);
+  font-size: 0.9375rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.tab-btn:hover {
+  color: var(--text-primary);
+}
+
+.tab-btn.active {
+  color: var(--primary-color);
+  border-bottom-color: var(--primary-color);
+  font-weight: 500;
+}
+
 .container {
   flex: 1;
   padding: 1.5rem;
@@ -343,12 +596,152 @@ h1 {
   cursor: pointer;
 }
 
+.btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .btn-refresh {
   padding: 0.5rem 1rem;
   background: var(--surface-color);
   border: 1px solid var(--border-color);
   border-radius: 6px;
   cursor: pointer;
+}
+
+/* 机器人配置样式 */
+.bot-config {
+  max-width: 640px;
+}
+
+.config-card {
+  background: var(--surface-color);
+  border-radius: 12px;
+  padding: 1.5rem;
+  margin-bottom: 1rem;
+  border: 1px solid var(--border-color);
+}
+
+.config-card h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1.125rem;
+  color: var(--text-primary);
+}
+
+.config-desc {
+  margin: 0 0 1.5rem;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}
+
+.config-card .form-group {
+  margin-bottom: 1.25rem;
+}
+
+.config-card .form-group label {
+  display: block;
+  margin-bottom: 0.5rem;
+  color: var(--text-primary);
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.config-card .form-group input[type="text"],
+.config-card .form-group input[type="password"],
+.config-card .form-group textarea {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  font-size: 0.9375rem;
+  background: var(--bg-color);
+  color: var(--text-primary);
+  box-sizing: border-box;
+}
+
+.config-card .form-group textarea {
+  resize: vertical;
+  min-height: 100px;
+  font-family: inherit;
+}
+
+.config-card .form-group input:focus,
+.config-card .form-group textarea:focus {
+  outline: none;
+  border-color: var(--primary-color);
+}
+
+.config-card .hint {
+  display: block;
+  margin-top: 0.375rem;
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+}
+
+.config-card .checkbox-group label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+}
+
+.config-card .checkbox-group input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+}
+
+.config-actions {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 1.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--border-color);
+}
+
+.config-actions button {
+  padding: 0.625rem 1.25rem;
+  border-radius: 6px;
+  font-size: 0.9375rem;
+  cursor: pointer;
+}
+
+.test-card {
+  margin-top: 1rem;
+}
+
+.btn-test {
+  padding: 0.625rem 1.25rem;
+  background: #22c55e;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.9375rem;
+  cursor: pointer;
+}
+
+.btn-test:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.test-result {
+  margin-top: 1rem;
+  padding: 0.75rem 1rem;
+  border-radius: 6px;
+  font-size: 0.875rem;
+}
+
+.test-result.success {
+  background: #dcfce7;
+  color: #166534;
+  border: 1px solid #86efac;
+}
+
+.test-result.error {
+  background: #fee2e2;
+  color: #991b1b;
+  border: 1px solid #fca5a5;
 }
 
 .user-table {
@@ -535,6 +928,17 @@ h1 {
     display: none; /* 移动端隐藏副标题 */
   }
 
+  .tabs {
+    padding: 0;
+    overflow-x: auto;
+  }
+
+  .tab-btn {
+    padding: 0.75rem 1rem;
+    font-size: 0.875rem;
+    white-space: nowrap;
+  }
+
   .container {
     padding: 1rem;
   }
@@ -558,6 +962,41 @@ h1 {
     padding: 0.625rem 1rem;
     font-size: 0.875rem;
     min-height: 44px;
+  }
+
+  /* 机器人配置移动端适配 */
+  .bot-config {
+    max-width: 100%;
+  }
+
+  .config-card {
+    padding: 1rem;
+  }
+
+  .config-card h3 {
+    font-size: 1rem;
+  }
+
+  .config-desc {
+    font-size: 0.8125rem;
+  }
+
+  .config-card .form-group {
+    margin-bottom: 1rem;
+  }
+
+  .config-actions {
+    flex-direction: column;
+  }
+
+  .config-actions button {
+    width: 100%;
+    padding: 0.75rem;
+  }
+
+  .btn-test {
+    width: 100%;
+    padding: 0.75rem;
   }
 
   /* 表格改为卡片布局 */

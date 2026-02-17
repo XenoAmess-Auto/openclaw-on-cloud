@@ -273,8 +273,10 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
         List<Attachment> attachments = payload.getAttachments();
         boolean hasAttachments = attachments != null && !attachments.isEmpty();
 
-        // 检查是否@OpenClaw
-        boolean mentionedOpenClaw = content != null && content.toLowerCase().contains("@openclaw");
+        // 检查是否@OpenClaw（使用配置的机器人用户名）
+        String botUsername = openClawPluginService.getBotUsername();
+        boolean mentionedOpenClaw = content != null && 
+                content.toLowerCase().contains("@" + botUsername.toLowerCase());
 
         // 解析@提及
         MentionService.MentionParseResult mentionResult = mentionService.parseMentions(content != null ? content : "", roomId);
@@ -458,14 +460,19 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
 
         task.setStatus(OpenClawTask.TaskStatus.PROCESSING);
 
-        // 创建流式消息 - senderAvatar 为 null，让前端显示默认机器人头像
+        // 获取机器人配置
+        String botUsername = openClawPluginService.getBotUsername();
+        String botAvatarUrl = openClawPluginService.getBotAvatarUrl();
+
+        // 创建流式消息 - 使用配置的机器人用户名和头像
         String streamingMessageId = UUID.randomUUID().toString();
         AtomicReference<StringBuilder> contentBuilder = new AtomicReference<>(new StringBuilder());
         AtomicReference<ChatRoom.Message> streamingMessage = new AtomicReference<>(
             ChatRoom.Message.builder()
                 .id(streamingMessageId)
-                .senderId("openclaw")
-                .senderName("OpenClaw")
+                .senderId(openClawPluginService.getBotUsername())
+                .senderName(openClawPluginService.getBotUsername())
+                .senderAvatar(botAvatarUrl)
                 .content("")
                 .timestamp(Instant.now())
                 .openclawMentioned(false)
@@ -657,8 +664,8 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                     .roomId(roomId)
                     .message(ChatRoom.Message.builder()
                             .id(messageId)
-                            .senderId("openclaw")
-                            .senderName("OpenClaw")
+                            .senderId(openClawPluginService.getBotUsername())
+                            .senderName(openClawPluginService.getBotUsername())
                             .toolCalls(List.of(toolCall))
                             .isToolCall(true)
                             .fromOpenClaw(true)
@@ -705,8 +712,8 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                         .roomId(roomId)
                         .message(ChatRoom.Message.builder()
                                 .id(messageId)
-                                .senderId("openclaw")
-                                .senderName("OpenClaw")
+                                .senderId(openClawPluginService.getBotUsername())
+                                .senderName(openClawPluginService.getBotUsername())
                                 .toolCalls(currentToolCalls)
                                 .isToolCall(true)
                                 .fromOpenClaw(true)
@@ -731,8 +738,8 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
         // 更新消息为错误状态 - senderAvatar 为 null，让前端显示默认机器人头像
         ChatRoom.Message errorMsg = ChatRoom.Message.builder()
                 .id(messageId)
-                .senderId("openclaw")
-                .senderName("OpenClaw")
+                .senderId(openClawPluginService.getBotUsername())
+                .senderName(openClawPluginService.getBotUsername())
                 .content(partialContent + "\n\n[错误: " + error + "]")
                 .timestamp(Instant.now())
                 .openclawMentioned(false)
@@ -789,8 +796,8 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
         // 创建最终消息 - senderAvatar 为 null，让前端显示默认机器人头像
         ChatRoom.Message finalMsg = ChatRoom.Message.builder()
                 .id(messageId)
-                .senderId("openclaw")
-                .senderName("OpenClaw")
+                .senderId(openClawPluginService.getBotUsername())
+                .senderName(openClawPluginService.getBotUsername())
                 .content(finalContent)
                 .timestamp(Instant.now())
                 .openclawMentioned(false)
@@ -803,8 +810,8 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
         // 保存到 OOC 会话
         oocSessionService.addMessage(roomId, OocSession.SessionMessage.builder()
                 .id(UUID.randomUUID().toString())
-                .senderId("openclaw")
-                .senderName("OpenClaw")
+                .senderId(openClawPluginService.getBotUsername())
+                .senderName(openClawPluginService.getBotUsername())
                 .content(finalContent)
                 .timestamp(Instant.now())
                 .fromOpenClaw(true)
@@ -1146,8 +1153,8 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
         // senderAvatar 为 null，让前端显示默认机器人头像
         ChatRoom.Message message = ChatRoom.Message.builder()
                 .id(UUID.randomUUID().toString())
-                .senderId("openclaw")
-                .senderName("OpenClaw")
+                .senderId(openClawPluginService.getBotUsername())
+                .senderName(openClawPluginService.getBotUsername())
                 .content(statusText)
                 .timestamp(Instant.now())
                 .openclawMentioned(false)
@@ -1168,8 +1175,8 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
         // senderAvatar 为 null，让前端显示默认机器人头像
         ChatRoom.Message message = ChatRoom.Message.builder()
                 .id(UUID.randomUUID().toString())
-                .senderId("openclaw")
-                .senderName("OpenClaw")
+                .senderId(openClawPluginService.getBotUsername())
+                .senderName(openClawPluginService.getBotUsername())
                 .content("❌ 任务执行失败: " + (error != null ? error : "未知错误"))
                 .timestamp(Instant.now())
                 .openclawMentioned(false)
@@ -1250,8 +1257,8 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
         // 保存 OpenClaw 回复到 OOC 会话（保存完整内容）
         oocSessionService.addMessage(roomId, OocSession.SessionMessage.builder()
                 .id(UUID.randomUUID().toString())
-                .senderId("openclaw")
-                .senderName("OpenClaw")
+                .senderId(openClawPluginService.getBotUsername())
+                .senderName(openClawPluginService.getBotUsername())
                 .content(content)
                 .timestamp(Instant.now())
                 .fromOpenClaw(true)
@@ -1260,8 +1267,8 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
         // 保存到聊天室 - 保留完整的 OpenClaw 响应内容
         ChatRoom.Message message = ChatRoom.Message.builder()
                 .id(UUID.randomUUID().toString())
-                .senderId("openclaw")
-                .senderName("OpenClaw")
+                .senderId(openClawPluginService.getBotUsername())
+                .senderName(openClawPluginService.getBotUsername())
                 .content(content)
                 .timestamp(Instant.now())
                 .openclawMentioned(false)

@@ -50,6 +50,16 @@ public class User {
     @JsonProperty("enabled")
     private boolean enabled;
 
+    @JsonProperty("isBot")
+    @Builder.Default
+    private boolean isBot = false;
+
+    @JsonProperty("botType")
+    private String botType;
+
+    @JsonProperty("botConfig")
+    private BotUserConfig botConfig;
+
     @JsonProperty("createdAt")
     @CreatedDate
     private Instant createdAt;

@@ -1,6 +1,6 @@
 package com.ooc.controller;
 
-import com.ooc.dto.RegisterRequest;
+import com.ooc.entity.BotUserConfig;
 import com.ooc.entity.User;
 import com.ooc.repository.UserRepository;
 import com.ooc.websocket.ChatWebSocketHandler;
@@ -14,7 +14,9 @@ import org.springframework.web.bind.annotation.*;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @Slf4j
 @RestController
@@ -29,7 +31,10 @@ public class AdminController {
 
     @GetMapping("/users")
     public ResponseEntity<List<UserDto>> getAllUsers() {
-        List<User> users = userRepository.findAll();
+        // 只返回普通用户，不包含机器人用户
+        List<User> users = userRepository.findAll().stream()
+                .filter(u -> !u.isBot())
+                .toList();
         List<UserDto> userDtos = users.stream()
                 .map(this::toDto)
                 .toList();
@@ -51,6 +56,7 @@ public class AdminController {
                 .password(passwordEncoder.encode(request.password()))
                 .enabled(request.enabled())
                 .roles(request.isAdmin() ? Set.of("ROLE_ADMIN", "ROLE_USER") : Set.of("ROLE_USER"))
+                .isBot(false)
                 .createdAt(Instant.now())
                 .updatedAt(Instant.now())
                 .build();
@@ -243,6 +249,154 @@ public class AdminController {
                "测试完成！检查代码高亮、复制按钮、语言标签是否正常显示。";
     }
 
+    // ==================== 机器人用户管理 API ====================
+
+    /**
+     * 获取所有机器人用户
+     */
+    @GetMapping("/bots")
+    public ResponseEntity<List<BotUserDto>> getAllBotUsers() {
+        List<User> bots = userRepository.findAll().stream()
+                .filter(User::isBot)
+                .toList();
+        List<BotUserDto> botDtos = bots.stream()
+                .map(this::toBotDto)
+                .toList();
+        return ResponseEntity.ok(botDtos);
+    }
+
+    /**
+     * 获取启用的 OpenClaw 机器人配置
+     */
+    @GetMapping("/bots/openclaw")
+    public ResponseEntity<BotUserDto> getOpenClawBot() {
+        Optional<User> bot = userRepository.findAll().stream()
+                .filter(User::isBot)
+                .filter(User::isEnabled)
+                .filter(u -> "openclaw".equals(u.getBotType()))
+                .findFirst();
+        
+        return ResponseEntity.ok(bot.map(this::toBotDto)
+                .orElse(getDefaultOpenClawBotDto()));
+    }
+
+    /**
+     * 创建或更新 OpenClaw 机器人
+     */
+    @PostMapping("/bots/openclaw")
+    public ResponseEntity<BotUserDto> saveOpenClawBot(@RequestBody BotUserRequest request) {
+        Optional<User> existing = userRepository.findAll().stream()
+                .filter(User::isBot)
+                .filter(u -> "openclaw".equals(u.getBotType()))
+                .findFirst();
+        
+        User bot;
+        if (existing.isPresent()) {
+            bot = existing.get();
+            bot.setUsername(request.username());
+            bot.setAvatar(request.avatarUrl());
+            if (request.password() != null && !request.password().isBlank()) {
+                bot.setPassword(passwordEncoder.encode(request.password()));
+            }
+            bot.setEnabled(request.enabled());
+            
+            BotUserConfig config = bot.getBotConfig();
+            if (config == null) {
+                config = new BotUserConfig();
+            }
+            config.setGatewayUrl(request.gatewayUrl());
+            config.setSystemPrompt(request.systemPrompt());
+            if (request.apiKey() != null && !request.apiKey().isBlank()) {
+                config.setApiKey(request.apiKey());
+            }
+            bot.setBotConfig(config);
+            bot.setUpdatedAt(Instant.now());
+        } else {
+            // 检查用户名是否已存在
+            if (userRepository.existsByUsername(request.username())) {
+                throw new RuntimeException("Username already exists");
+            }
+            
+            BotUserConfig config = BotUserConfig.builder()
+                    .gatewayUrl(request.gatewayUrl())
+                    .apiKey(request.apiKey())
+                    .systemPrompt(request.systemPrompt())
+                    .build();
+            
+            bot = User.builder()
+                    .username(request.username())
+                    .email(request.username() + "@bot.local")
+                    .password(passwordEncoder.encode(request.password() != null ? request.password() : "botpassword123"))
+                    .avatar(request.avatarUrl())
+                    .enabled(request.enabled())
+                    .roles(Set.of("ROLE_USER"))
+                    .isBot(true)
+                    .botType("openclaw")
+                    .botConfig(config)
+                    .createdAt(Instant.now())
+                    .updatedAt(Instant.now())
+                    .build();
+        }
+        
+        User saved = userRepository.save(bot);
+        log.info("OpenClaw bot saved: username={}, gatewayUrl={}", saved.getUsername(), 
+                saved.getBotConfig() != null ? saved.getBotConfig().getGatewayUrl() : null);
+        return ResponseEntity.ok(toBotDto(saved));
+    }
+
+    /**
+     * 删除机器人用户
+     */
+    @DeleteMapping("/bots/{botId}")
+    public ResponseEntity<Void> deleteBotUser(@PathVariable String botId) {
+        User bot = userRepository.findById(botId)
+                .orElseThrow(() -> new RuntimeException("Bot not found"));
+        
+        if (!bot.isBot()) {
+            throw new RuntimeException("Not a bot user");
+        }
+        
+        userRepository.delete(bot);
+        log.info("Bot deleted: {} ({})", bot.getUsername(), bot.getBotType());
+        return ResponseEntity.ok().build();
+    }
+
+    private BotUserDto getDefaultOpenClawBotDto() {
+        return new BotUserDto(
+                null,
+                "openclaw",
+                null,
+                "http://localhost:18789",
+                null,
+                "You are a helpful assistant.",
+                true,
+                null,
+                null
+        );
+    }
+
+    private BotUserDto toBotDto(User bot) {
+        BotUserConfig config = bot.getBotConfig();
+        return new BotUserDto(
+                bot.getId(),
+                bot.getUsername(),
+                bot.getAvatar(),
+                config != null ? config.getGatewayUrl() : null,
+                config != null && config.getApiKey() != null ? maskApiKey(config.getApiKey()) : null,
+                config != null ? config.getSystemPrompt() : null,
+                bot.isEnabled(),
+                bot.getCreatedAt(),
+                bot.getUpdatedAt()
+        );
+    }
+
+    private String maskApiKey(String apiKey) {
+        if (apiKey == null || apiKey.length() <= 8) {
+            return apiKey;
+        }
+        return apiKey.substring(0, 4) + "****" + apiKey.substring(apiKey.length() - 4);
+    }
+
     public record TestMessageRequest(String content) {}
 
     public record UserDto(
@@ -267,5 +421,27 @@ public class AdminController {
             String password,
             Boolean enabled,
             Set<String> roles
+    ) {}
+
+    public record BotUserDto(
+            String id,
+            String username,
+            String avatarUrl,
+            String gatewayUrl,
+            String apiKey,
+            String systemPrompt,
+            boolean enabled,
+            Instant createdAt,
+            Instant updatedAt
+    ) {}
+
+    public record BotUserRequest(
+            String username,
+            String avatarUrl,
+            String gatewayUrl,
+            String apiKey,
+            String systemPrompt,
+            String password,
+            Boolean enabled
     ) {}
 }

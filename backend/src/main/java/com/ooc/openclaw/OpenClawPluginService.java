@@ -3,7 +3,10 @@ package com.ooc.openclaw;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ooc.config.FileProperties;
+import com.ooc.entity.BotUserConfig;
 import com.ooc.entity.ChatRoom;
+import com.ooc.entity.User;
+import com.ooc.repository.UserRepository;
 import com.ooc.storage.StorageProvider;
 import com.ooc.websocket.ChatWebSocketHandler;
 import lombok.RequiredArgsConstructor;
@@ -42,6 +45,7 @@ public class OpenClawPluginService {
     private static final float JPEG_QUALITY = 0.85f;
 
     private final OpenClawProperties properties;
+    private final UserRepository userRepository;
     private final WebClient.Builder webClientBuilder;
     private final ObjectMapper objectMapper;
     private final OpenClawWebSocketClient webSocketClient;
@@ -51,8 +55,81 @@ public class OpenClawPluginService {
     // 内存中的会话状态管理
     private final Map<String, OpenClawSessionState> sessionStates = new ConcurrentHashMap<>();
 
+    /**
+     * 获取 OpenClaw 机器人用户配置
+     */
+    private Optional<BotUserConfig> getBotConfig() {
+        return userRepository.findAll().stream()
+                .filter(User::isBot)
+                .filter(User::isEnabled)
+                .filter(u -> "openclaw".equals(u.getBotType()))
+                .map(User::getBotConfig)
+                .filter(Objects::nonNull)
+                .findFirst();
+    }
+
+    /**
+     * 获取 OpenClaw 机器人用户
+     */
+    private Optional<User> getBotUser() {
+        return userRepository.findAll().stream()
+                .filter(User::isBot)
+                .filter(User::isEnabled)
+                .filter(u -> "openclaw".equals(u.getBotType()))
+                .findFirst();
+    }
+
+    /**
+     * 获取 Gateway URL，优先使用机器人配置
+     */
+    private String getGatewayUrl() {
+        return getBotConfig()
+                .map(BotUserConfig::getGatewayUrl)
+                .filter(url -> url != null && !url.isBlank())
+                .orElse(properties.getGatewayUrl());
+    }
+
+    /**
+     * 获取 API Key，优先使用机器人配置
+     */
+    private String getApiKey() {
+        return getBotConfig()
+                .map(BotUserConfig::getApiKey)
+                .filter(key -> key != null && !key.isBlank())
+                .orElse(properties.getApiKey());
+    }
+
+    /**
+     * 获取机器人用户名
+     */
+    public String getBotUsername() {
+        return getBotUser()
+                .map(User::getUsername)
+                .filter(name -> name != null && !name.isBlank())
+                .orElse("openclaw");
+    }
+
+    /**
+     * 获取机器人头像 URL
+     */
+    public String getBotAvatarUrl() {
+        return getBotUser()
+                .map(User::getAvatar)
+                .orElse(null);
+    }
+
+    /**
+     * 获取系统提示词
+     */
+    private String getSystemPrompt() {
+        return getBotConfig()
+                .map(BotUserConfig::getSystemPrompt)
+                .filter(prompt -> prompt != null && !prompt.isBlank())
+                .orElse("You are a helpful assistant.");
+    }
+
     private WebClient getWebClient() {
-        return webClientBuilder.baseUrl(properties.getGatewayUrl()).build();
+        return webClientBuilder.baseUrl(getGatewayUrl()).build();
     }
 
     /**
@@ -373,12 +450,10 @@ public class OpenClawPluginService {
         // 构建消息列表
         List<Map<String, Object>> messages = new ArrayList<>();
         
-        // 添加系统消息 - 要求包含工具调用信息
-        Map<String, Object> systemMsg = new HashMap<>();
-        systemMsg.put("role", "system");
-        systemMsg.put("content", """
-            You are OpenClaw, a helpful AI assistant. Be concise and direct in your responses.
-
+        // 添加系统消息 - 合并数据库配置的工具格式要求
+        String basePrompt = getSystemPrompt();
+        String toolFormatInstructions = """
+            
             IMPORTANT: When you use tools (read, write, edit, exec, etc.), you MUST include detailed
             tool call information in your response in this format:
 
@@ -398,7 +473,11 @@ public class OpenClawPluginService {
             For `read` tool: include the file content you read.
             For `exec` tool: include the command output.
             For other tools: include the relevant output data.
-            """);
+            """;
+        
+        Map<String, Object> systemMsg = new HashMap<>();
+        systemMsg.put("role", "system");
+        systemMsg.put("content", basePrompt + toolFormatInstructions);
         messages.add(systemMsg);
         
         // 添加用户消息（多模态格式）
@@ -420,7 +499,7 @@ public class OpenClawPluginService {
 
         return getWebClient().post()
                 .uri("/v1/chat/completions")
-                .header(HttpHeaders.AUTHORIZATION, "Bearer " + properties.getApiKey())
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + getApiKey())
                 .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
                 .bodyValue(request)
                 .retrieve()
@@ -498,7 +577,7 @@ public class OpenClawPluginService {
 
         return getWebClient().post()
                 .uri("/v1/chat/completions")
-                .header(HttpHeaders.AUTHORIZATION, "Bearer " + properties.getApiKey())
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + getApiKey())
                 .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
                 .bodyValue(request)
                 .retrieve()
@@ -580,8 +659,8 @@ public class OpenClawPluginService {
             contentBlocks.add(textBlock);
         }
 
-        // 构建系统提示词 - 最小化以减少消息大小
-        String systemPrompt = "You are OpenClaw. When using tools, format: **Tools used:** - tool_name. **Tool details:** - tool_name: ```output```";
+        // 构建系统提示词 - 使用数据库配置
+        String systemPrompt = getSystemPrompt() + " When using tools, format: **Tools used:** - tool_name. **Tool details:** - tool_name: ```output```";
 
         log.info("Sending WebSocket request to OpenClaw: sessionId={}, textBlocks={}, imageBlocks={}",
                 sessionId, contentBlocks.size() - imageCount, imageCount);
