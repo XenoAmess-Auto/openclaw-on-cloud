@@ -549,15 +549,22 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                 .build()
         );
 
-        // 保存初始消息到聊天室
-        chatRoomService.addMessage(roomId, streamingMessage.get());
+        try {
+            // 保存初始消息到聊天室
+            chatRoomService.addMessage(roomId, streamingMessage.get());
 
-        // 广播流式消息开始
-        broadcastToRoom(roomId, WebSocketMessage.builder()
-                .type("stream_start")
-                .roomId(roomId)
-                .message(streamingMessage.get())
-                .build());
+            // 广播流式消息开始
+            broadcastToRoom(roomId, WebSocketMessage.builder()
+                    .type("stream_start")
+                    .roomId(roomId)
+                    .message(streamingMessage.get())
+                    .build());
+        } catch (Exception e) {
+            log.error("Failed to initialize Kimi streaming message for task {}: {}", taskId, e.getMessage(), e);
+            task.setStatus(OpenClawTask.TaskStatus.FAILED);
+            onKimiTaskComplete(roomId);
+            return;
+        }
 
         chatRoomService.getChatRoom(roomId).ifPresentOrElse(room -> {
             String kimiSessionId = room.getOpenClawSessions().stream()
@@ -899,13 +906,20 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                 .isStreaming(true) // 标记为流式消息
                 .build();
 
-        // 保存到数据库并广播
-        chatRoomService.addMessage(roomId, streamingMessage);
-        broadcastToRoom(roomId, WebSocketMessage.builder()
-                .type("stream_start")
-                .roomId(roomId)
-                .message(streamingMessage)
-                .build());
+        try {
+            // 保存到数据库并广播
+            chatRoomService.addMessage(roomId, streamingMessage);
+            broadcastToRoom(roomId, WebSocketMessage.builder()
+                    .type("stream_start")
+                    .roomId(roomId)
+                    .message(streamingMessage)
+                    .build());
+        } catch (Exception e) {
+            log.error("Failed to initialize Claude streaming message for task {}: {}", taskId, e.getMessage(), e);
+            task.setStatus(OpenClawTask.TaskStatus.FAILED);
+            onClaudeTaskComplete(roomId);
+            return;
+        }
 
         // 使用 AtomicReference 来累积内容
         AtomicReference<StringBuilder> contentBuilder = new AtomicReference<>(new StringBuilder());
@@ -1273,15 +1287,22 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                 .build()
         );
 
-        // 保存初始消息到聊天室
-        chatRoomService.addMessage(roomId, streamingMessage.get());
+        try {
+            // 保存初始消息到聊天室
+            chatRoomService.addMessage(roomId, streamingMessage.get());
 
-        // 广播流式消息开始
-        broadcastToRoom(roomId, WebSocketMessage.builder()
-                .type("stream_start")
-                .roomId(roomId)
-                .message(streamingMessage.get())
-                .build());
+            // 广播流式消息开始
+            broadcastToRoom(roomId, WebSocketMessage.builder()
+                    .type("stream_start")
+                    .roomId(roomId)
+                    .message(streamingMessage.get())
+                    .build());
+        } catch (Exception e) {
+            log.error("Failed to initialize streaming message for task {}: {}", taskId, e.getMessage(), e);
+            task.setStatus(OpenClawTask.TaskStatus.FAILED);
+            onOpenClawTaskComplete(roomId);
+            return;
+        }
 
         chatRoomService.getChatRoom(roomId).ifPresentOrElse(room -> {
             String openClawSessionId = room.getOpenClawSessions().stream()
