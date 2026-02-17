@@ -25,8 +25,7 @@ import org.springframework.web.socket.handler.TextWebSocketHandler;
 import java.io.IOException;
 import java.time.Instant;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -68,6 +67,11 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
     // Claude
     private final Map<String, ConcurrentLinkedQueue<OpenClawTask>> claudeTaskQueues = new ConcurrentHashMap<>();
     private final Map<String, AtomicBoolean> claudeProcessingFlags = new ConcurrentHashMap<>();
+
+    // 任务超时管理
+    private final ScheduledExecutorService taskTimeoutScheduler = Executors.newScheduledThreadPool(2);
+    private final Map<String, ScheduledFuture<?>> openclawTaskTimeouts = new ConcurrentHashMap<>();
+    private static final int OPENCLAW_TASK_TIMEOUT_SECONDS = 30; // 单个任务最多30秒
 
     /**
      * OpenClaw 任务
@@ -1315,6 +1319,19 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
         }
 
         chatRoomService.getChatRoom(roomId).ifPresentOrElse(room -> {
+            // 启动任务超时定时器（30秒）
+            ScheduledFuture<?> timeoutFuture = taskTimeoutScheduler.schedule(() -> {
+                log.warn("Task {} timed out after {} seconds, forcing completion", taskId, OPENCLAW_TASK_TIMEOUT_SECONDS);
+                // 强制完成任务
+                finalizeOpenClawStreamMessage(roomId, streamingMessageId, 
+                    contentBuilder.get().toString() + "\n\n[任务处理超时，已强制完成]", 
+                    task, streamingMessage.get().getToolCalls());
+                onOpenClawTaskComplete(roomId);
+            }, OPENCLAW_TASK_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+
+            // 存储超时任务，以便完成后取消
+            openclawTaskTimeouts.put(taskId, timeoutFuture);
+
             try {
                 String openClawSessionId = room.getOpenClawSessions() != null ?
                     room.getOpenClawSessions().stream()
@@ -1361,6 +1378,11 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                         .subscribe(
                                 event -> handleOpenClawStreamEvent(roomId, streamingMessageId, contentBuilder, streamingMessage, event, task),
                                 error -> {
+                                    // 取消超时定时器
+                                    ScheduledFuture<?> timeout = openclawTaskTimeouts.remove(taskId);
+                                    if (timeout != null) {
+                                        timeout.cancel(false);
+                                    }
                                     log.error("OpenClaw streaming error in task {}", taskId, error);
                                     // 检查是否是 SESSION_BUSY 错误，如果是则重新入队
                                     if (error.getMessage() != null && error.getMessage().contains("SESSION_BUSY")) {
@@ -1423,6 +1445,11 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                                     onOpenClawTaskComplete(roomId);
                                 },
                                 () -> {
+                                    // 取消超时定时器
+                                    ScheduledFuture<?> timeout = openclawTaskTimeouts.remove(taskId);
+                                    if (timeout != null) {
+                                        timeout.cancel(false);
+                                    }
                                     log.info("OpenClaw streaming completed for task {}", taskId);
                                     task.setStatus(OpenClawTask.TaskStatus.COMPLETED);
                                     finalizeOpenClawStreamMessage(roomId, streamingMessageId, contentBuilder.get().toString(), task, streamingMessage.get().getToolCalls());
@@ -1431,6 +1458,11 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                         );
             }
             } catch (Exception e) {
+                // 取消超时定时器
+                ScheduledFuture<?> timeout = openclawTaskTimeouts.remove(taskId);
+                if (timeout != null) {
+                    timeout.cancel(false);
+                }
                 log.error("Error in OpenClaw task execution for task {}: {}", taskId, e.getMessage(), e);
                 task.setStatus(OpenClawTask.TaskStatus.FAILED);
                 handleOpenClawStreamError(roomId, streamingMessageId, contentBuilder.get().toString(), e.getMessage(), task);
