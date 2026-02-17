@@ -475,13 +475,44 @@ public class OpenClawWebSocketClient {
             String state = payload.path("state").asText("");
             boolean isComplete = payload.path("complete").asBoolean(false) || "final".equals(state);
             if (isComplete) {
-                log.info("[OpenClaw WS] Chat completed event received for session {}", sessionId);
-                // 注意：不在这里调用onComplete，让 agent.run.completed 事件来处理完成逻辑
-                // 避免重复释放锁和调用onComplete
+                log.info("[OpenClaw WS] Chat completed event received for session {} (state={})", sessionId, state);
+                // 某些情况下 OpenClaw 不发送 agent.run.completed，但 chat 事件显示完成
+                // 这里也需要触发完成逻辑
+                triggerCompletionIfNotAlreadyDone();
             }
 
             // 注意：不处理 chat 事件的内容，因为 agent 事件的 assistant 流已经处理了增量内容
             // 同时处理 chat 事件的内容会导致重复（chat 发送累积内容，agent 发送增量内容）
+        }
+
+        private void triggerCompletionIfNotAlreadyDone() {
+            // 检查是否已经有完成或失败事件被处理
+            if (!responseHandlers.containsKey(sessionId)) {
+                log.debug("[OpenClaw WS] Handler already removed for session {}, skipping duplicate completion", sessionId);
+                return;
+            }
+
+            log.info("[OpenClaw WS] Triggering completion for session {} from chat event", sessionId);
+
+            // 取消超时定时器
+            ScheduledFuture<?> chatTimeout = requestTimeouts.remove(sessionId);
+            if (chatTimeout != null) {
+                chatTimeout.cancel(false);
+            }
+
+            ResponseHandler handler = responseHandlers.remove(sessionId);
+            if (handler != null) {
+                try {
+                    handler.onComplete();
+                } finally {
+                    // 释放请求锁
+                    AtomicBoolean lock = requestLocks.get(sessionId);
+                    if (lock != null) {
+                        lock.set(false);
+                        log.info("[OpenClaw WS] Lock released for session {} after chat completion", sessionId);
+                    }
+                }
+            }
         }
 
         private void handleAgentEvent(JsonNode payload) {

@@ -45,6 +45,7 @@ export interface Message {
   isToolCall?: boolean
   isStreaming?: boolean
   delta?: boolean
+  replyToMessageId?: string
   toolCalls?: ToolCall[]
   mentions?: Mention[]
   mentionAll?: boolean

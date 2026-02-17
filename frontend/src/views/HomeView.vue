@@ -105,6 +105,8 @@
                       <div class="message-header">
                         <span class="sender">{{ msg.senderName }}</span>
                         <span class="time">{{ formatTime(msg.timestamp) }}</span>
+                        <span v-if="msg.id" class="message-id" title="Message ID">{{ msg.id.slice(-6) }}</span>
+                        <span v-if="msg.replyToMessageId" class="reply-to-id" title="Reply to: {{ msg.replyToMessageId }}">↩ {{ msg.replyToMessageId.slice(-6) }}</span>
                       </div>
                       <div class="message-content" v-html="segment.html"></div>
                     </div>
@@ -114,6 +116,10 @@
               
               <!-- 纯工具调用消息（不含 fromOpenClaw） -->
               <div v-else-if="msg.isToolCall || msg.toolCalls?.length" class="tool-call-message">
+                <div v-if="msg.id || msg.replyToMessageId" class="tool-call-header">
+                  <span v-if="msg.id" class="message-id" title="Message ID">{{ msg.id.slice(-6) }}</span>
+                  <span v-if="msg.replyToMessageId" class="reply-to-id" title="Reply to: {{ msg.replyToMessageId }}">↩ {{ msg.replyToMessageId.slice(-6) }}</span>
+                </div>
                 <div class="message-content tool-call-content" v-html="renderContent(msg)"></div>
               </div>
               
@@ -140,6 +146,8 @@
                     <span v-if="msg.mentionAll" class="mention-tag mention-all">@所有人</span>
                     <span v-else-if="msg.mentionHere" class="mention-tag mention-here">@在线</span>
                     <span class="time">{{ formatTime(msg.timestamp) }}</span>
+                    <span v-if="msg.id" class="message-id" title="Message ID">{{ msg.id.slice(-6) }}</span>
+                    <span v-if="msg.replyToMessageId" class="reply-to-id" title="Reply to: {{ msg.replyToMessageId }}">↩ {{ msg.replyToMessageId.slice(-6) }}</span>
                   </div>
                   <div class="message-content" v-html="renderContent(msg)"></div>
                   
@@ -1725,6 +1733,36 @@ function isSameDay(d1: Date, d2: Date): boolean {
   font-size: 0.75rem;
 }
 
+.message-id, .reply-to-id {
+  font-size: 0.625rem;
+  color: var(--text-secondary);
+  background: var(--bg-color);
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-family: 'SF Mono', monospace;
+  opacity: 0.7;
+  cursor: help;
+}
+
+.message-id:hover, .reply-to-id:hover {
+  opacity: 1;
+}
+
+.reply-to-id {
+  background: #e0e7ff;
+  color: #4f46e5;
+}
+
+.message.from-me .message-id {
+  background: rgba(255,255,255,0.2);
+  color: rgba(255,255,255,0.9);
+}
+
+.message.from-me .reply-to-id {
+  background: rgba(255,255,255,0.25);
+  color: rgba(255,255,255,0.95);
+}
+
 .message.from-me .message-header {
   color: rgba(255,255,255,0.8);
 }
@@ -1930,6 +1968,16 @@ function isSameDay(d1: Date, d2: Date): boolean {
   gap: 0.5rem;
   margin-bottom: 0.75rem;
   padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.tool-call-message > .tool-call-header {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+  padding-bottom: 0.375rem;
   border-bottom: 1px solid var(--border-color);
 }
 
