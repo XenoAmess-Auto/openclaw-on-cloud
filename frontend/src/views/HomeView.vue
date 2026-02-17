@@ -109,8 +109,8 @@
                     </div>
                   </div>
                 </template>
-                <!-- OpenClaw 回复完成标记 -->
-                <div class="message openclaw-over-message">
+                <!-- OpenClaw 回复完成标记 - 只在最后一条 OpenClaw 消息显示 -->
+                <div v-if="isLastOpenClawMessage(index)" class="message openclaw-over-message">
                   <div class="message-avatar">
                     <div class="avatar-placeholder">🤖</div>
                   </div>
@@ -884,6 +884,17 @@ function isMentionedMe(msg: Message): boolean {
   if (msg.mentionAll) return true
   if (msg.mentions?.some(m => m.userId === authStore.user?.id)) return true
   return false
+}
+
+// 判断是否是最后一条 OpenClaw 消息（用于显示 over 标记）
+function isLastOpenClawMessage(currentIndex: number): boolean {
+  // 从当前索引向后查找，看是否还有其他 fromOpenClaw 的消息
+  for (let i = currentIndex + 1; i < chatStore.messages.length; i++) {
+    if (chatStore.messages[i].fromOpenClaw) {
+      return false
+    }
+  }
+  return true
 }
 
 function renderContent(msg: Message) {
