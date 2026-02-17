@@ -1148,6 +1148,20 @@ select {
   height: 16px;
 }
 
+/* 通用 checkbox-group 样式（用于弹窗） */
+.checkbox-group label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+}
+
+.checkbox-group input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+}
+
 .modal-actions {
   display: flex;
   justify-content: flex-end;
