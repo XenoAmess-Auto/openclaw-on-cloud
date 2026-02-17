@@ -5,7 +5,20 @@ import { AutoProcessor, WhisperForConditionalGeneration, env } from '@xenova/tra
 env.allowLocalModels = true
 env.allowRemoteModels = false
 env.useBrowserCache = false
-env.localModelPath = '/models'
+// 不设置 localModelPath，让 transformers 使用默认行为
+// 然后在 from_pretrained 中指定完整路径
+
+// 调试：拦截 fetch 请求
+const originalFetch = window.fetch
+window.fetch = async (...args) => {
+  const url = args[0] as string
+  console.log('[fetch]', url)
+  const response = await originalFetch(...args)
+  if (!response.ok && url.includes('/models/')) {
+    console.error('[fetch] 模型文件加载失败:', url, response.status)
+  }
+  return response
+}
 
 // 音频处理工具函数
 async function audioBufferToFloat32Array(audioBuffer: AudioBuffer): Promise<Float32Array> {
@@ -86,14 +99,15 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}) 
 
       // 加载 Processor（处理音频特征提取）
       console.log('[useSpeechRecognition] 加载 Processor...')
-      processor = await AutoProcessor.from_pretrained('', {
+      processor = await AutoProcessor.from_pretrained('Xenova/whisper-tiny.en', {
+        quantized: true,
         local_files_only: true
       })
       console.log('[useSpeechRecognition] Processor 加载完成')
 
       // 加载 Whisper 专用模型（Seq2Seq 架构）
       console.log('[useSpeechRecognition] 加载 Whisper Model...')
-      model = await WhisperForConditionalGeneration.from_pretrained('', {
+      model = await WhisperForConditionalGeneration.from_pretrained('Xenova/whisper-tiny.en', {
         quantized: true,
         local_files_only: true,
         progress_callback: (progress: number) => {
