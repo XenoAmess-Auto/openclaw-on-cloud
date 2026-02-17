@@ -9,15 +9,23 @@ env.useBrowserCache = false
 env.localModelPath = '/models'
 
 // 调试：拦截 fetch 请求以查看哪些文件被请求
+const fetchLog: { url: string; status: number; ok: boolean }[] = []
 const originalFetch = window.fetch
 window.fetch = async (...args) => {
   const url = args[0] as string
   console.log('[fetch]', url)
-  const response = await originalFetch(...args)
-  if (!response.ok && url.includes('/models/')) {
-    console.error('[fetch] 模型文件加载失败:', url, response.status)
+  try {
+    const response = await originalFetch(...args)
+    fetchLog.push({ url, status: response.status, ok: response.ok })
+    if (!response.ok && url.includes('/models/')) {
+      console.error('[fetch] 模型文件加载失败:', url, response.status)
+    }
+    return response
+  } catch (err) {
+    fetchLog.push({ url, status: 0, ok: false })
+    console.error('[fetch] 请求失败:', url, err)
+    throw err
   }
-  return response
 }
 
 // 检测是否有本地模型（检查 encoder 文件）
@@ -107,6 +115,13 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}) 
     } catch (err) {
       const errorMsg = (err as Error).message
       console.error('[useSpeechRecognition] 模型加载失败:', err)
+      console.error('[useSpeechRecognition] Fetch 日志:', fetchLog)
+      
+      // 检查 fetch 日志中是否有失败的请求
+      const failedFetches = fetchLog.filter(f => !f.ok && f.url.includes('/models/'))
+      if (failedFetches.length > 0) {
+        console.error('[useSpeechRecognition] 失败的模型文件请求:', failedFetches)
+      }
 
       if (errorMsg.includes('Unexpected token') || errorMsg.includes('<!DOCTYPE')) {
         error.value = '模型加载失败：服务器返回了 HTML 而非模型文件。请确保 public/models/ 目录下有完整的模型文件，或运行 ./download-model.sh 下载。'
