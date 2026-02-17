@@ -582,15 +582,16 @@ async function createBot() {
 
 function editBot(bot: BotUser) {
   editingBot.value = bot
-  editBotForm.value = {
-    username: bot.username,
-    avatarUrl: bot.avatarUrl || '',
-    password: '',
-    gatewayUrl: bot.gatewayUrl,
-    apiKey: '',
-    systemPrompt: bot.systemPrompt || '',
-    enabled: bot.enabled
-  }
+  // 逐个赋值保持响应式
+  editBotForm.value.username = bot.username
+  editBotForm.value.avatarUrl = bot.avatarUrl || ''
+  editBotForm.value.password = ''
+  editBotForm.value.gatewayUrl = bot.gatewayUrl
+  editBotForm.value.apiKey = ''
+  editBotForm.value.systemPrompt = bot.systemPrompt || ''
+  editBotForm.value.enabled = Boolean(bot.enabled)
+  console.log('editBot - bot.enabled:', bot.enabled, typeof bot.enabled)
+  console.log('editBot - form.enabled after set:', editBotForm.value.enabled)
   showEditBotDialog.value = true
 }
 
