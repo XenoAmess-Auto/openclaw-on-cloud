@@ -109,15 +109,6 @@
                     </div>
                   </div>
                 </template>
-                <!-- OpenClaw 回复完成标记 - 只在最后一条 OpenClaw 消息显示 -->
-                <div v-if="isLastOpenClawMessage(index)" class="message openclaw-over-message">
-                  <div class="message-avatar">
-                    <div class="avatar-placeholder">🤖</div>
-                  </div>
-                  <div class="message-body openclaw-over-body">
-                    <div class="message-content over-content">over</div>
-                  </div>
-                </div>
               </template>
               
               <!-- 纯工具调用消息（不含 fromOpenClaw） -->
@@ -884,17 +875,6 @@ function isMentionedMe(msg: Message): boolean {
   if (msg.mentionAll) return true
   if (msg.mentions?.some(m => m.userId === authStore.user?.id)) return true
   return false
-}
-
-// 判断是否是最后一条 OpenClaw 消息（用于显示 over 标记）
-function isLastOpenClawMessage(currentIndex: number): boolean {
-  // 从当前索引向后查找，看是否还有其他 fromOpenClaw 的消息
-  for (let i = currentIndex + 1; i < chatStore.messages.length; i++) {
-    if (chatStore.messages[i].fromOpenClaw) {
-      return false
-    }
-  }
-  return true
 }
 
 function renderContent(msg: Message) {
@@ -2201,33 +2181,6 @@ function isSameDay(d1: Date, d2: Date): boolean {
 
 .openclaw-message-container.has-tool-calls .openclaw-body {
   padding: 0.75rem 1rem;
-}
-
-/* OpenClaw over 消息样式 */
-.openclaw-over-message {
-  display: flex;
-  gap: 0.75rem;
-  max-width: 80%;
-  min-width: 0;
-  align-self: flex-start;
-  margin-top: 0.25rem;
-}
-
-.openclaw-over-message .openclaw-over-body {
-  background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
-  border: 1px solid #6ee7b7;
-  border-radius: 12px;
-  padding: 0.5rem 1rem;
-  flex: 1;
-  min-width: 0;
-}
-
-.openclaw-over-message .over-content {
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: #059669;
-  text-align: center;
-  letter-spacing: 0.1em;
 }
 
 /* 时间分隔线 */

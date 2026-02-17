@@ -1595,6 +1595,9 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                 .message(finalMsg)
                 .build());
 
+        // 发送 over 消息
+        sendOverMessage(roomId);
+
         log.info("Stream message finalized for task {}, content length: {}, toolCalls: {}",
                 task.getTaskId(), finalContent.length(), toolCalls.size());
     }
@@ -2050,6 +2053,9 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                 .type("message")
                 .message(message)
                 .build());
+
+        // 发送 over 消息
+        sendOverMessage(roomId);
     }
 
     private void handleTyping(WebSocketSession session, WebSocketMessage payload) {
@@ -2119,6 +2125,30 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                 .type("message")
                 .message(message)
                 .build());
+    }
+
+    /**
+     * 发送 over 消息，标记 OpenClaw 回复完成
+     */
+    private void sendOverMessage(String roomId) {
+        ChatRoom.Message overMsg = ChatRoom.Message.builder()
+                .id(UUID.randomUUID().toString())
+                .senderId(openClawPluginService.getBotUsername())
+                .senderName(openClawPluginService.getBotUsername())
+                .content("over")
+                .timestamp(Instant.now())
+                .openclawMentioned(false)
+                .fromOpenClaw(true)
+                .build();
+
+        chatRoomService.addMessage(roomId, overMsg);
+
+        broadcastToRoom(roomId, WebSocketMessage.builder()
+                .type("message")
+                .message(overMsg)
+                .build());
+
+        log.info("Sent over message to room {}", roomId);
     }
 
     /**
