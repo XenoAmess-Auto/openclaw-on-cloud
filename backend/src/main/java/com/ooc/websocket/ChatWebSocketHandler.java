@@ -59,13 +59,13 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
     // ========== 队列系统 ==========
     // 每个机器人独立的队列和处理标志
     // OpenClaw
-    private final Map<String, ConcurrentLinkedQueue<OpenClawTask>> openclawTaskQueues = new ConcurrentHashMap<>();
+    private final Map<String, LinkedBlockingQueue<OpenClawTask>> openclawTaskQueues = new ConcurrentHashMap<>();
     private final Map<String, AtomicBoolean> openclawProcessingFlags = new ConcurrentHashMap<>();
     // Kimi
-    private final Map<String, ConcurrentLinkedQueue<OpenClawTask>> kimiTaskQueues = new ConcurrentHashMap<>();
+    private final Map<String, LinkedBlockingQueue<OpenClawTask>> kimiTaskQueues = new ConcurrentHashMap<>();
     private final Map<String, AtomicBoolean> kimiProcessingFlags = new ConcurrentHashMap<>();
     // Claude
-    private final Map<String, ConcurrentLinkedQueue<OpenClawTask>> claudeTaskQueues = new ConcurrentHashMap<>();
+    private final Map<String, LinkedBlockingQueue<OpenClawTask>> claudeTaskQueues = new ConcurrentHashMap<>();
     private final Map<String, AtomicBoolean> claudeProcessingFlags = new ConcurrentHashMap<>();
 
     /**
@@ -92,11 +92,89 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
      * 获取指定房间的 OpenClaw 任务队列状态
      */
     public java.util.List<OpenClawTask> getRoomTaskQueue(String roomId) {
-        ConcurrentLinkedQueue<OpenClawTask> queue = openclawTaskQueues.get(roomId);
+        LinkedBlockingQueue<OpenClawTask> queue = openclawTaskQueues.get(roomId);
         if (queue == null) {
             return java.util.List.of();
         }
         return new java.util.ArrayList<>(queue);
+    }
+
+    /**
+     * 重新排序任务队列
+     * @param roomId 房间ID
+     * @param taskIds 新的任务ID顺序列表
+     * @return 是否成功
+     */
+    public boolean reorderTaskQueue(String roomId, java.util.List<String> taskIds) {
+        LinkedBlockingQueue<OpenClawTask> queue = openclawTaskQueues.get(roomId);
+        if (queue == null || queue.isEmpty()) {
+            return false;
+        }
+
+        // 获取当前队列中的所有任务
+        java.util.List<OpenClawTask> currentTasks = new java.util.ArrayList<>(queue);
+        
+        // 过滤出正在处理的任务（不能重排序）
+        java.util.List<OpenClawTask> processingTasks = currentTasks.stream()
+            .filter(t -> t.getStatus() == OpenClawTask.TaskStatus.PROCESSING)
+            .collect(java.util.stream.Collectors.toList());
+        
+        // 过滤出待处理的任务
+        java.util.List<OpenClawTask> pendingTasks = currentTasks.stream()
+            .filter(t -> t.getStatus() == OpenClawTask.TaskStatus.PENDING)
+            .collect(java.util.stream.Collectors.toList());
+
+        // 按新的顺序重建队列
+        LinkedBlockingQueue<OpenClawTask> newQueue = new LinkedBlockingQueue<>();
+        
+        // 首先添加正在处理的任务（保持在最前面）
+        newQueue.addAll(processingTasks);
+        
+        // 然后按传入的顺序添加待处理任务
+        for (String taskId : taskIds) {
+            pendingTasks.stream()
+                .filter(t -> t.getTaskId().equals(taskId))
+                .findFirst()
+                .ifPresent(newQueue::add);
+        }
+        
+        // 替换原队列
+        openclawTaskQueues.put(roomId, newQueue);
+        
+        log.info("Task queue reordered for room {}, new size: {}", roomId, newQueue.size());
+        return true;
+    }
+
+    /**
+     * 取消指定任务
+     * @param roomId 房间ID
+     * @param taskId 任务ID
+     * @return 是否成功取消
+     */
+    public boolean cancelTask(String roomId, String taskId) {
+        LinkedBlockingQueue<OpenClawTask> queue = openclawTaskQueues.get(roomId);
+        if (queue == null) {
+            return false;
+        }
+
+        // 查找并移除任务
+        java.util.Iterator<OpenClawTask> iterator = queue.iterator();
+        while (iterator.hasNext()) {
+            OpenClawTask task = iterator.next();
+            if (task.getTaskId().equals(taskId)) {
+                // 只能取消待处理的任务
+                if (task.getStatus() == OpenClawTask.TaskStatus.PENDING) {
+                    task.setStatus(OpenClawTask.TaskStatus.FAILED);
+                    iterator.remove();
+                    log.info("Task {} cancelled in room {}", taskId, roomId);
+                    return true;
+                } else {
+                    log.warn("Cannot cancel task {} in room {}: status is {}", taskId, roomId, task.getStatus());
+                    return false;
+                }
+            }
+        }
+        return false;
     }
 
     /**
@@ -473,7 +551,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                 .build();
 
         // 获取或创建该房间的任务队列
-        ConcurrentLinkedQueue<OpenClawTask> queue = kimiTaskQueues.computeIfAbsent(roomId, k -> new ConcurrentLinkedQueue<>());
+        LinkedBlockingQueue<OpenClawTask> queue = kimiTaskQueues.computeIfAbsent(roomId, k -> new LinkedBlockingQueue<>());
         AtomicBoolean isProcessing = kimiProcessingFlags.computeIfAbsent(roomId, k -> new AtomicBoolean(false));
 
         // 将任务加入队列
@@ -493,7 +571,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
      * 尝试处理队列中的下一个 Kimi 任务
      */
     private void tryProcessNextKimiTask(String roomId) {
-        ConcurrentLinkedQueue<OpenClawTask> queue = kimiTaskQueues.get(roomId);
+        LinkedBlockingQueue<OpenClawTask> queue = kimiTaskQueues.get(roomId);
         AtomicBoolean isProcessing = kimiProcessingFlags.get(roomId);
 
         if (queue == null || isProcessing == null) {
@@ -849,7 +927,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                 .build();
 
         // 获取或创建该房间的任务队列
-        ConcurrentLinkedQueue<OpenClawTask> queue = claudeTaskQueues.computeIfAbsent(roomId, k -> new ConcurrentLinkedQueue<>());
+        LinkedBlockingQueue<OpenClawTask> queue = claudeTaskQueues.computeIfAbsent(roomId, k -> new LinkedBlockingQueue<>());
         AtomicBoolean isProcessing = claudeProcessingFlags.computeIfAbsent(roomId, k -> new AtomicBoolean(false));
 
         // 将任务加入队列
@@ -869,7 +947,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
      * 尝试处理队列中的下一个 Claude 任务
      */
     private void tryProcessNextClaudeTask(String roomId) {
-        ConcurrentLinkedQueue<OpenClawTask> queue = claudeTaskQueues.get(roomId);
+        LinkedBlockingQueue<OpenClawTask> queue = claudeTaskQueues.get(roomId);
         AtomicBoolean isProcessing = claudeProcessingFlags.get(roomId);
 
         if (queue == null || isProcessing == null) {
@@ -1236,7 +1314,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                 .build();
 
         // 获取或创建该房间的 OpenClaw 任务队列
-        ConcurrentLinkedQueue<OpenClawTask> queue = openclawTaskQueues.computeIfAbsent(roomId, k -> new ConcurrentLinkedQueue<>());
+        LinkedBlockingQueue<OpenClawTask> queue = openclawTaskQueues.computeIfAbsent(roomId, k -> new LinkedBlockingQueue<>());
         AtomicBoolean isProcessing = openclawProcessingFlags.computeIfAbsent(roomId, k -> new AtomicBoolean(false));
 
         // 将任务加入队列
@@ -1256,7 +1334,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
      * 尝试处理队列中的下一个 OpenClaw 任务
      */
     private void tryProcessNextOpenClawTask(String roomId) {
-        ConcurrentLinkedQueue<OpenClawTask> queue = openclawTaskQueues.get(roomId);
+        LinkedBlockingQueue<OpenClawTask> queue = openclawTaskQueues.get(roomId);
         AtomicBoolean isProcessing = openclawProcessingFlags.get(roomId);
 
         if (queue == null || isProcessing == null) {
@@ -1387,10 +1465,10 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                                         log.warn("Task {} received SESSION_BUSY, will requeue and retry", taskId);
                                         task.setStatus(OpenClawTask.TaskStatus.PENDING);
                                         // 将任务重新加入队列头部（优先处理）
-                                        ConcurrentLinkedQueue<OpenClawTask> queue = openclawTaskQueues.get(roomId);
+                                        LinkedBlockingQueue<OpenClawTask> queue = openclawTaskQueues.get(roomId);
                                         if (queue != null) {
                                             // 创建一个新队列，把当前任务放最前面
-                                            ConcurrentLinkedQueue<OpenClawTask> newQueue = new ConcurrentLinkedQueue<>();
+                                            LinkedBlockingQueue<OpenClawTask> newQueue = new LinkedBlockingQueue<>();
                                             newQueue.offer(task);
                                             while (!queue.isEmpty()) {
                                                 OpenClawTask t = queue.poll();

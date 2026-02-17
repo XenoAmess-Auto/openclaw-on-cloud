@@ -28,8 +28,21 @@
         v-for="(task, index) in queueInfo.tasks" 
         :key="task.taskId"
         class="queue-item"
-        :class="{ 'processing': task.status === 'PROCESSING' }"
+        :class="{ 
+          'processing': task.status === 'PROCESSING',
+          'dragging': draggedTaskId === task.taskId,
+          'drag-over': dragOverTaskId === task.taskId
+        }"
+        :draggable="task.status === 'PENDING'"
+        @dragstart="handleDragStart($event, task, index)"
+        @dragend="handleDragEnd"
+        @dragover="handleDragOver($event, task, index)"
+        @dragleave="handleDragLeave"
+        @drop="handleDrop($event, index)"
       >
+        <div class="drag-handle" v-if="task.status === 'PENDING'" title="拖拽排序">
+          ⋮⋮
+        </div>
         <div class="task-number">{{ index + 1 }}</div>
         <div class="task-info">
           <div class="task-sender">{{ task.senderName }}</div>
@@ -41,6 +54,15 @@
             <span class="task-time">{{ formatTime(task.createdAt) }}</span>
           </div>
         </div>
+        <button 
+          v-if="task.status === 'PENDING'"
+          class="cancel-btn"
+          @click="cancelTask(task.taskId)"
+          title="取消任务"
+          :disabled="cancellingTaskId === task.taskId"
+        >
+          {{ cancellingTaskId === task.taskId ? '...' : '✕' }}
+        </button>
       </div>
     </div>
     
@@ -57,7 +79,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted, watch } from 'vue'
 import { chatRoomApi, type TaskQueueInfo } from '@/api/chatRoom'
 
 interface Props {
@@ -76,7 +98,13 @@ const queueInfo = ref<TaskQueueInfo>({
 })
 
 const loading = ref(false)
+const cancellingTaskId = ref<string | null>(null)
 const refreshInterval = ref<number | null>(null)
+
+// 拖拽相关状态
+const draggedTaskId = ref<string | null>(null)
+const draggedIndex = ref<number>(-1)
+const dragOverTaskId = ref<string | null>(null)
 
 const fetchQueue = async () => {
   if (!props.roomId) return
@@ -98,6 +126,103 @@ const refresh = () => {
 
 const close = () => {
   emit('close')
+}
+
+const cancelTask = async (taskId: string) => {
+  if (!props.roomId) return
+  
+  cancellingTaskId.value = taskId
+  try {
+    await chatRoomApi.cancelTask(props.roomId, taskId)
+    // 刷新队列
+    await fetchQueue()
+  } catch (error) {
+    console.error('Failed to cancel task:', error)
+    alert('取消任务失败，请重试')
+  } finally {
+    cancellingTaskId.value = null
+  }
+}
+
+// 拖拽处理函数
+const handleDragStart = (event: DragEvent, task: any, index: number) => {
+  if (task.status !== 'PENDING') {
+    event.preventDefault()
+    return
+  }
+  
+  draggedTaskId.value = task.taskId
+  draggedIndex.value = index
+  
+  if (event.dataTransfer) {
+    event.dataTransfer.effectAllowed = 'move'
+    event.dataTransfer.setData('text/plain', task.taskId)
+    // 设置拖拽时的自定义图像（可选）
+    const dragImage = event.target as HTMLElement
+    if (dragImage) {
+      event.dataTransfer.setDragImage(dragImage, 0, 0)
+    }
+  }
+}
+
+const handleDragEnd = () => {
+  draggedTaskId.value = null
+  draggedIndex.value = -1
+  dragOverTaskId.value = null
+}
+
+const handleDragOver = (event: DragEvent, task: any, index: number) => {
+  event.preventDefault()
+  if (task.status !== 'PENDING' || draggedTaskId.value === task.taskId) {
+    return
+  }
+  dragOverTaskId.value = task.taskId
+  if (event.dataTransfer) {
+    event.dataTransfer.dropEffect = 'move'
+  }
+}
+
+const handleDragLeave = () => {
+  dragOverTaskId.value = null
+}
+
+const handleDrop = async (event: DragEvent, dropIndex: number) => {
+  event.preventDefault()
+  dragOverTaskId.value = null
+  
+  if (draggedIndex.value === -1 || draggedIndex.value === dropIndex) {
+    return
+  }
+  
+  // 获取所有待处理任务的ID列表
+  const pendingTasks = queueInfo.value.tasks.filter(t => t.status === 'PENDING')
+  const pendingTaskIds = pendingTasks.map(t => t.taskId)
+  
+  // 移动任务ID到新位置
+  const [movedTaskId] = pendingTaskIds.splice(draggedIndex.value, 1)
+  pendingTaskIds.splice(dropIndex, 1, movedTaskId)
+  
+  // 更新本地显示
+  const reorderedTasks = [...queueInfo.value.tasks]
+  const movedTask = reorderedTasks.find(t => t.taskId === movedTaskId)
+  if (movedTask) {
+    const oldIndex = reorderedTasks.indexOf(movedTask)
+    reorderedTasks.splice(oldIndex, 1)
+    reorderedTasks.splice(dropIndex, 0, movedTask)
+    queueInfo.value.tasks = reorderedTasks
+  }
+  
+  // 调用API保存新顺序
+  try {
+    await chatRoomApi.reorderTaskQueue(props.roomId, pendingTaskIds)
+    // 刷新队列以确保状态同步
+    await fetchQueue()
+  } catch (error) {
+    console.error('Failed to reorder tasks:', error)
+    // 如果失败，恢复原顺序
+    await fetchQueue()
+    alert('排序失败，请重试')
+  }
 }
 
 const getStatusText = (status: string): string => {
@@ -137,9 +262,6 @@ watch(() => props.visible, (newVal) => {
     fetchQueue()
   }
 })
-
-// 添加 watch import
-import { watch } from 'vue'
 </script>
 
 <style scoped>
@@ -147,7 +269,7 @@ import { watch } from 'vue'
   position: fixed;
   right: 20px;
   top: 80px;
-  width: 350px;
+  width: 380px;
   max-height: 500px;
   background: white;
   border-radius: 12px;
@@ -242,17 +364,46 @@ import { watch } from 'vue'
 
 .queue-item {
   display: flex;
-  gap: 12px;
+  gap: 8px;
   padding: 12px;
   border-radius: 8px;
   margin-bottom: 8px;
   background: #f8f9fa;
   transition: all 0.2s;
+  align-items: flex-start;
 }
 
 .queue-item.processing {
   background: linear-gradient(90deg, #dbeafe 0%, #bfdbfe 100%);
   border-left: 4px solid #3b82f6;
+}
+
+.queue-item.dragging {
+  opacity: 0.5;
+  transform: scale(1.02);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.queue-item.drag-over {
+  border-top: 3px solid #667eea;
+  transform: translateY(2px);
+}
+
+.drag-handle {
+  cursor: grab;
+  color: #999;
+  font-size: 12px;
+  padding: 4px 2px;
+  user-select: none;
+  line-height: 1;
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+}
+
+.queue-item.processing .drag-handle {
+  display: none;
 }
 
 .task-number {
@@ -331,6 +482,32 @@ import { watch } from 'vue'
 .task-time {
   font-size: 11px;
   color: #999;
+}
+
+.cancel-btn {
+  background: #fee2e2;
+  color: #dc2626;
+  border: none;
+  border-radius: 4px;
+  width: 28px;
+  height: 28px;
+  cursor: pointer;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.cancel-btn:hover:not(:disabled) {
+  background: #fecaca;
+  color: #991b1b;
+}
+
+.cancel-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .queue-empty {

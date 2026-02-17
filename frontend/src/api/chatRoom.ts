@@ -61,5 +61,17 @@ export const chatRoomApi = {
   },
 
   getTaskQueue: (roomId: string) =>
-    apiClient.get<TaskQueueInfo>(`/chat-rooms/${roomId}/queue`)
+    apiClient.get<TaskQueueInfo>(`/chat-rooms/${roomId}/queue`),
+
+  reorderTaskQueue: (roomId: string, taskIds: string[]) =>
+    apiClient.post(`/chat-rooms/${roomId}/queue/reorder`, { taskIds }),
+
+  cancelTask: (roomId: string, taskId: string) =>
+    apiClient.delete(`/chat-rooms/${roomId}/queue/${taskId}`),
+
+  reorderTaskQueue: (roomId: string, taskIds: string[]) =>
+    apiClient.post(`/chat-rooms/${roomId}/queue/reorder`, { taskIds }),
+
+  cancelTask: (roomId: string, taskId: string) =>
+    apiClient.delete(`/chat-rooms/${roomId}/queue/${taskId}`)
 }

@@ -299,6 +299,46 @@ public class ChatRoomController {
         return ResponseEntity.ok(result);
     }
 
+    @PostMapping("/{roomId}/queue/reorder")
+    public ResponseEntity<Map<String, Object>> reorderTaskQueue(
+            @PathVariable String roomId,
+            @RequestBody Map<String, List<String>> request) {
+        List<String> taskIds = request.get("taskIds");
+        if (taskIds == null || taskIds.isEmpty()) {
+            Map<String, Object> error = new HashMap<>();
+            error.put("error", "taskIds is required");
+            return ResponseEntity.badRequest().body(error);
+        }
+
+        boolean success = webSocketHandler.reorderTaskQueue(roomId, taskIds);
+        
+        Map<String, Object> result = new HashMap<>();
+        result.put("success", success);
+        result.put("roomId", roomId);
+        result.put("message", success ? "Queue reordered successfully" : "Failed to reorder queue");
+        
+        return ResponseEntity.ok(result);
+    }
+
+    @DeleteMapping("/{roomId}/queue/{taskId}")
+    public ResponseEntity<Map<String, Object>> cancelTask(
+            @PathVariable String roomId,
+            @PathVariable String taskId) {
+        boolean success = webSocketHandler.cancelTask(roomId, taskId);
+        
+        Map<String, Object> result = new HashMap<>();
+        result.put("success", success);
+        result.put("roomId", roomId);
+        result.put("taskId", taskId);
+        result.put("message", success ? "Task cancelled successfully" : "Failed to cancel task");
+        
+        if (success) {
+            return ResponseEntity.ok(result);
+        } else {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(result);
+        }
+    }
+
     @PostMapping("/{roomId}/messages")
     public ResponseEntity<ChatRoom.Message> sendMessage(
             @PathVariable String roomId,
