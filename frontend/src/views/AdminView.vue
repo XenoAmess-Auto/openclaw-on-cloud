@@ -1160,6 +1160,12 @@ select {
   width: 18px;
   height: 18px;
   cursor: pointer;
+  accent-color: var(--primary-color);
+  background: var(--bg-color);
+  border: 2px solid var(--border-color);
+  border-radius: 4px;
+  appearance: auto;
+  -webkit-appearance: checkbox;
 }
 
 .modal-actions {
