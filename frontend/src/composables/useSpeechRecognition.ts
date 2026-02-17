@@ -5,8 +5,7 @@ import { pipeline, AutomaticSpeechRecognitionPipeline, env } from '@xenova/trans
 env.allowLocalModels = true
 env.allowRemoteModels = false  // 强制使用本地模型，防止请求 Hugging Face
 env.useBrowserCache = false
-
-// 设置本地模型路径
+// localModelPath 决定基础路径，pipeline 路径相对于此
 env.localModelPath = '/models'
 
 // 调试：拦截 fetch 请求以查看哪些文件被请求
@@ -20,9 +19,6 @@ window.fetch = async (...args) => {
   }
   return response
 }
-
-// 尝试本地模型路径，使用分块模型文件
-const LOCAL_MODEL_PATH = '/models'
 
 // 检测是否有本地模型（检查 encoder 文件）
 async function hasLocalModel(): Promise<boolean> {
@@ -64,13 +60,15 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}) 
 
       // 检测本地模型
       useLocalModel.value = await hasLocalModel()
-      // 强制使用本地模型路径
-      const modelPath = LOCAL_MODEL_PATH
+
+      // 由于 env.localModelPath = '/models'，pipeline 应该使用空字符串或模型名称
+      // transformers.js 会拼接: env.localModelPath + modelPath
+      const modelPath = ''  // 使用空字符串，让 transformers 使用 env.localModelPath 作为完整路径
 
       if (useLocalModel.value) {
-        console.log('[useSpeechRecognition] 使用本地模型:', modelPath)
+        console.log('[useSpeechRecognition] 使用本地模型:', env.localModelPath)
       } else {
-        console.warn('[useSpeechRecognition] 本地模型文件检测失败，但仍尝试使用本地路径:', modelPath)
+        console.warn('[useSpeechRecognition] 本地模型文件检测失败，但仍尝试使用本地路径:', env.localModelPath)
         console.warn('[useSpeechRecognition] 如果模型加载失败，请运行: ./download-model.sh')
       }
 
@@ -93,7 +91,7 @@ export function useSpeechRecognition(options: UseSpeechRecognitionOptions = {}) 
       console.log('[useSpeechRecognition] 开始加载模型...')
       transcriber = await pipeline(
         'automatic-speech-recognition',
-        modelPath,
+        modelPath,  // 空字符串，使用 env.localModelPath
         {
           quantized: true,
           progress_callback: (progress: number) => {
