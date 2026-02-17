@@ -707,6 +707,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                                 .id(messageId)
                                 .content(event.content())
                                 .delta(true)
+                                .replyToMessageId(task.getSourceMessageId())
                                 .build())
                         .build());
             }
@@ -817,6 +818,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                 .timestamp(Instant.now())
                 .openclawMentioned(false)
                 .fromOpenClaw(true)
+                .replyToMessageId(task.getSourceMessageId())
                 .build();
 
         chatRoomService.addMessage(roomId, message);
@@ -1084,6 +1086,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                             .fromOpenClaw(true)
                             .isStreaming(true)
                             .delta(true) // 标记为增量更新
+                            .replyToMessageId(task.getSourceMessageId())
                             .build();
 
                     // 广播增量更新
@@ -1204,6 +1207,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                 .timestamp(Instant.now())
                 .openclawMentioned(false)
                 .fromOpenClaw(true)
+                .replyToMessageId(task.getSourceMessageId())
                 .build();
 
         chatRoomService.addMessage(roomId, message);
@@ -1499,6 +1503,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                                 .id(messageId)
                                 .content(event.content())
                                 .delta(true)
+                                .replyToMessageId(task.getSourceMessageId())
                                 .build())
                         .build());
             } else {
@@ -1509,7 +1514,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
             String toolId = event.messageId() != null ? event.messageId() : UUID.randomUUID().toString();
             String toolName = event.toolName() != null ? event.toolName() : "unknown";
             String toolInput = event.toolInput() != null ? event.toolInput() : "";
-            
+
             // 记录工具调用在内容中的位置
             int position = contentBuilder.get().length();
 
@@ -1710,7 +1715,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                 .build());
 
         // 发送 over 消息
-        sendOverMessage(roomId);
+        sendOverMessage(roomId, task.getSourceMessageId());
 
         log.info("Stream message finalized for task {}, content length: {}, toolCalls: {}",
                 task.getTaskId(), finalContent.length(), toolCalls.size());
@@ -2051,6 +2056,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                 .timestamp(Instant.now())
                 .openclawMentioned(false)
                 .fromOpenClaw(true)
+                .replyToMessageId(task.getSourceMessageId())
                 .build();
 
         chatRoomService.addMessage(roomId, message);
@@ -2177,8 +2183,8 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                 .message(message)
                 .build());
 
-        // 发送 over 消息
-        sendOverMessage(roomId);
+        // 发送 over 消息（旧代码路径，replyToMessageId 为 null）
+        sendOverMessage(roomId, null);
     }
 
     private void handleTyping(WebSocketSession session, WebSocketMessage payload) {
@@ -2253,7 +2259,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
     /**
      * 发送 over 消息，标记 OpenClaw 回复完成
      */
-    private void sendOverMessage(String roomId) {
+    private void sendOverMessage(String roomId, String replyToMessageId) {
         ChatRoom.Message overMsg = ChatRoom.Message.builder()
                 .id(UUID.randomUUID().toString())
                 .senderId(openClawPluginService.getBotUsername())
@@ -2262,6 +2268,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                 .timestamp(Instant.now())
                 .openclawMentioned(false)
                 .fromOpenClaw(true)
+                .replyToMessageId(replyToMessageId)
                 .build();
 
         chatRoomService.addMessage(roomId, overMsg);
@@ -2271,7 +2278,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                 .message(overMsg)
                 .build());
 
-        log.info("Sent over message to room {}", roomId);
+        log.info("Sent over message to room {} with replyToMessageId: {}", roomId, replyToMessageId);
     }
 
     /**
