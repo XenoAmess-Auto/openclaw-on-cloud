@@ -45,9 +45,16 @@ public class OpenClawWebSocketClient {
     // 请求锁: sessionId -> AtomicBoolean，防止同一个session并发请求覆盖handler
     private final Map<String, AtomicBoolean> requestLocks = new ConcurrentHashMap<>();
 
+    // 请求超时管理: sessionId -> ScheduledFuture
+    private final Map<String, ScheduledFuture<?>> requestTimeouts = new ConcurrentHashMap<>();
+
+    // 超时调度器
+    private final ScheduledExecutorService timeoutScheduler = Executors.newScheduledThreadPool(1);
+
     // 连接配置
     private static final int CONNECT_TIMEOUT_MS = 10000;
     private static final int MAX_RECONNECT_ATTEMPTS = 3;
+    private static final int REQUEST_TIMEOUT_MS = 120000; // 2分钟请求超时
 
     /**
      * 响应处理器接口
@@ -95,6 +102,27 @@ public class OpenClawWebSocketClient {
                 log.info("[OpenClaw WS] Sending chat.send: sessionId={}, messageLength={}",
                         sessionId, message != null ? message.length() : 0);
                 session.sendMessage(new TextMessage(request));
+
+                // 启动超时定时器
+                ScheduledFuture<?> timeoutTask = timeoutScheduler.schedule(() -> {
+                    log.warn("[OpenClaw WS] Request timeout for session {}, forcing lock release", sessionId);
+                    ResponseHandler timeoutHandler = responseHandlers.remove(sessionId);
+                    if (timeoutHandler != null) {
+                        try {
+                            timeoutHandler.onError("REQUEST_TIMEOUT: Request timed out after " + REQUEST_TIMEOUT_MS + "ms");
+                        } finally {
+                            AtomicBoolean timeoutLock = requestLocks.get(sessionId);
+                            if (timeoutLock != null) {
+                                timeoutLock.set(false);
+                                log.info("[OpenClaw WS] Lock released for session {} after timeout", sessionId);
+                            }
+                        }
+                    }
+                    requestTimeouts.remove(sessionId);
+                }, REQUEST_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+
+                requestTimeouts.put(sessionId, timeoutTask);
+
             } catch (IOException e) {
                 log.error("[OpenClaw WS] Failed to send message", e);
                 responseHandlers.remove(sessionId);
@@ -385,6 +413,13 @@ public class OpenClawWebSocketClient {
                 case "agent.run.completed":
                     String runId = payload.path("runId").asText();
                     log.info("[OpenClaw WS] Agent run completed: {}", runId);
+
+                    // 取消超时定时器
+                    ScheduledFuture<?> completedTimeout = requestTimeouts.remove(sessionId);
+                    if (completedTimeout != null) {
+                        completedTimeout.cancel(false);
+                    }
+
                     ResponseHandler completedHandler = responseHandlers.remove(sessionId);
                     if (completedHandler != null) {
                         try {
@@ -402,6 +437,13 @@ public class OpenClawWebSocketClient {
                 case "agent.run.failed":
                     String error = payload.path("error").asText("Unknown error");
                     log.error("[OpenClaw WS] Agent run failed: {}", error);
+
+                    // 取消超时定时器
+                    ScheduledFuture<?> failedTimeout = requestTimeouts.remove(sessionId);
+                    if (failedTimeout != null) {
+                        failedTimeout.cancel(false);
+                    }
+
                     ResponseHandler failedHandler = responseHandlers.remove(sessionId);
                     if (failedHandler != null) {
                         try {
