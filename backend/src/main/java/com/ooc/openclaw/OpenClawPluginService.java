@@ -396,6 +396,15 @@ public class OpenClawPluginService {
         // 转换消息中的 /uploads/ 路径为绝对路径
         String processedMessage = convertUploadsPath(message);
         
+        // 移除 @openclaw 前缀（大小写不敏感）
+        String botUsername = getBotUsername();
+        if (processedMessage != null) {
+            String mentionPattern = "@" + botUsername;
+            if (processedMessage.toLowerCase().startsWith(mentionPattern.toLowerCase())) {
+                processedMessage = processedMessage.substring(mentionPattern.length()).trim();
+            }
+        }
+        
         // 构建消息内容块（支持多模态）
         List<Map<String, Object>> contentBlocks = new ArrayList<>();
         
@@ -603,7 +612,19 @@ public class OpenClawPluginService {
 
         String processedMessage = convertUploadsPath(message);
 
+        // 移除 @openclaw 前缀（大小写不敏感）
+        String botUsername = getBotUsername();
+        if (processedMessage != null) {
+            String mentionPattern = "@" + botUsername;
+            if (processedMessage.toLowerCase().startsWith(mentionPattern.toLowerCase())) {
+                processedMessage = processedMessage.substring(mentionPattern.length()).trim();
+            }
+        }
+
         log.info("[sendMessageStream] Processing {} attachments", attachments != null ? attachments.size() : 0);
+
+        // 用于 lambda 表达式的 final 变量
+        final String finalProcessedMessage = processedMessage;
 
         // 构建多模态内容块列表
         List<Map<String, Object>> contentBlocks = new ArrayList<>();
@@ -674,7 +695,7 @@ public class OpenClawPluginService {
 
         // 使用 WebSocket 客户端发送消息
         return Flux.create(sink -> {
-            webSocketClient.sendMessage(sessionId, processedMessage, contentBlocks,
+            webSocketClient.sendMessage(sessionId, finalProcessedMessage, contentBlocks,
                     new OpenClawWebSocketClient.ResponseHandler() {
                         private final StringBuilder fullContent = new StringBuilder();
 
