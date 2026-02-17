@@ -567,11 +567,13 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
         }
 
         chatRoomService.getChatRoom(roomId).ifPresentOrElse(room -> {
-            String kimiSessionId = room.getOpenClawSessions().stream()
-                    .filter(ChatRoom.OpenClawSession::isActive)
-                    .findFirst()
-                    .map(ChatRoom.OpenClawSession::getSessionId)
-                    .orElse(null);
+            try {
+                String kimiSessionId = room.getOpenClawSessions() != null ?
+                    room.getOpenClawSessions().stream()
+                            .filter(ChatRoom.OpenClawSession::isActive)
+                            .findFirst()
+                            .map(ChatRoom.OpenClawSession::getSessionId)
+                            .orElse(null) : null;
 
             // 检查会话是否存活
             if (kimiSessionId != null && !kimiPluginService.isSessionAlive(kimiSessionId)) {
@@ -648,6 +650,12 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                                     onKimiTaskComplete(roomId);
                                 }
                         );
+            }
+            } catch (Exception e) {
+                log.error("Error in Kimi task execution for task {}: {}", taskId, e.getMessage(), e);
+                task.setStatus(OpenClawTask.TaskStatus.FAILED);
+                handleKimiStreamError(roomId, streamingMessageId, contentBuilder.get().toString(), e.getMessage(), task);
+                onKimiTaskComplete(roomId);
             }
         }, () -> {
             log.error("Chat room not found: {}", roomId);
@@ -934,11 +942,13 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
             ChatRoom room = roomOpt.get();
 
             // 检查现有会话
-            String claudeSessionId = room.getOpenClawSessions().stream()
-                    .filter(ChatRoom.OpenClawSession::isActive)
-                    .findFirst()
-                    .map(ChatRoom.OpenClawSession::getSessionId)
-                    .orElse(null);
+            String claudeSessionId = room.getOpenClawSessions() != null ?
+                    room.getOpenClawSessions().stream()
+                            .filter(ChatRoom.OpenClawSession::isActive)
+                            .findFirst()
+                            .map(ChatRoom.OpenClawSession::getSessionId)
+                            .orElse(null)
+                    : null;
 
             if (claudeSessionId != null && !claudeCodePluginService.isSessionAlive(claudeSessionId)) {
                 log.info("Claude session {} is not alive, will create new", claudeSessionId);
@@ -1305,11 +1315,13 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
         }
 
         chatRoomService.getChatRoom(roomId).ifPresentOrElse(room -> {
-            String openClawSessionId = room.getOpenClawSessions().stream()
-                    .filter(ChatRoom.OpenClawSession::isActive)
-                    .findFirst()
-                    .map(ChatRoom.OpenClawSession::getSessionId)
-                    .orElse(null);
+            try {
+                String openClawSessionId = room.getOpenClawSessions() != null ?
+                    room.getOpenClawSessions().stream()
+                            .filter(ChatRoom.OpenClawSession::isActive)
+                            .findFirst()
+                            .map(ChatRoom.OpenClawSession::getSessionId)
+                            .orElse(null) : null;
 
             // 检查会话是否存活
             if (openClawSessionId != null && !openClawPluginService.isSessionAlive(openClawSessionId)) {
@@ -1417,6 +1429,12 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                                     onOpenClawTaskComplete(roomId);
                                 }
                         );
+            }
+            } catch (Exception e) {
+                log.error("Error in OpenClaw task execution for task {}: {}", taskId, e.getMessage(), e);
+                task.setStatus(OpenClawTask.TaskStatus.FAILED);
+                handleOpenClawStreamError(roomId, streamingMessageId, contentBuilder.get().toString(), e.getMessage(), task);
+                onOpenClawTaskComplete(roomId);
             }
         }, () -> {
             log.error("Chat room not found: {}", roomId);
