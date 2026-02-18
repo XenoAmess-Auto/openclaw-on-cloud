@@ -133,7 +133,7 @@
     <div v-if="selectedNode" class="config-panel">
       <div class="panel-header">
         <h3>节点配置</h3>
-        <button class="btn-icon" @click="deleteNode"></button>
+        <button class="btn-delete" @click="deleteNode" title="删除节点">🗑️</button>
       </div>
 
       <div class="panel-content">
@@ -449,6 +449,25 @@ defineExpose({
 .btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+.btn-delete {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  transition: background 0.2s;
+}
+
+.btn-delete:hover {
+  background: #fee2e2;
 }
 
 .canvas-container {
