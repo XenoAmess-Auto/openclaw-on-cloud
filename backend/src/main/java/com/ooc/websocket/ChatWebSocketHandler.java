@@ -104,6 +104,20 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
     }
 
     /**
+     * 获取指定房间指定机器人类型的任务队列状态
+     */
+    public java.util.List<OpenClawTask> getRoomTaskQueue(String roomId, BotTaskQueue.BotType botType) {
+        return taskQueueService.getRoomTaskQueue(roomId, botType);
+    }
+
+    /**
+     * 获取指定房间所有机器人类型的任务队列
+     */
+    public Map<String, java.util.List<OpenClawTask>> getRoomAllTaskQueues(String roomId) {
+        return taskQueueService.getRoomAllTaskQueues(roomId);
+    }
+
+    /**
      * 重新排序任务队列
      * @param roomId 房间ID
      * @param taskIds 新的任务ID顺序列表

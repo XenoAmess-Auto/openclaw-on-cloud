@@ -10,7 +10,10 @@ import org.springframework.stereotype.Service;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -418,16 +421,51 @@ public class PersistentTaskQueueService {
     }
 
     /**
-     * 获取房间任务队列
+     * 获取房间任务队列（包括 PENDING 和 PROCESSING 状态的任务）
      */
     public List<ChatWebSocketHandler.OpenClawTask> getRoomTaskQueue(String roomId, BotTaskQueue.BotType botType) {
-        LinkedBlockingQueue<TaskWrapper> queue = getQueue(roomId, botType);
-        if (queue == null) {
-            return List.of();
+        List<ChatWebSocketHandler.OpenClawTask> result = new ArrayList<>();
+
+        // 1. 从数据库获取所有 PENDING 和 PROCESSING 状态的任务
+        List<BotTaskQueue> dbTasks = taskQueueRepository.findByRoomIdAndBotTypeOrderByPositionAsc(roomId, botType);
+
+        // 2. 获取当前正在执行的任务ID
+        String currentTaskId = getCurrentProcessingTask(roomId, botType);
+
+        // 3. 先添加正在执行的任务（如果有）
+        if (currentTaskId != null) {
+            dbTasks.stream()
+                    .filter(t -> t.getStatus() == BotTaskQueue.TaskStatus.PROCESSING)
+                    .filter(t -> t.getTaskId().equals(currentTaskId))
+                    .findFirst()
+                    .ifPresent(processingTask -> {
+                        result.add(convertToTask(processingTask));
+                    });
         }
-        return queue.stream()
-                .map(TaskWrapper::task)
-                .collect(Collectors.toList());
+
+        // 4. 添加所有待处理任务（按位置排序）
+        dbTasks.stream()
+                .filter(t -> t.getStatus() == BotTaskQueue.TaskStatus.PENDING)
+                .sorted(Comparator.comparingInt(BotTaskQueue::getPosition))
+                .forEach(t -> result.add(convertToTask(t)));
+
+        return result;
+    }
+
+    /**
+     * 获取房间中所有机器人类型的任务队列
+     */
+    public Map<String, List<ChatWebSocketHandler.OpenClawTask>> getRoomAllTaskQueues(String roomId) {
+        Map<String, List<ChatWebSocketHandler.OpenClawTask>> result = new HashMap<>();
+
+        for (BotTaskQueue.BotType botType : BotTaskQueue.BotType.values()) {
+            List<ChatWebSocketHandler.OpenClawTask> tasks = getRoomTaskQueue(roomId, botType);
+            if (!tasks.isEmpty()) {
+                result.put(botType.name(), tasks);
+            }
+        }
+
+        return result;
     }
 
     /**

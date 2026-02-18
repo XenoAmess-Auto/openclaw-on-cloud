@@ -22,6 +22,7 @@ export interface TaskQueueInfo {
     createdAt: string
     senderName: string
     content: string
+    botType: string
   }[]
 }
 

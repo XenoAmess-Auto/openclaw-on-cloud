@@ -29,11 +29,12 @@
 
     <div class="queue-list" v-if="queueInfo.tasks.length > 0">
       <div 
-        v-for="(task, index) in queueInfo.tasks" 
+        v-for="(task, index) in sortedTasks" 
         :key="task.taskId"
         class="queue-item"
         :class="{ 
           'processing': task.status === 'PROCESSING',
+          'pending': task.status === 'PENDING',
           'dragging': draggedTaskId === task.taskId,
           'drag-over': dragOverTaskId === task.taskId
         }"
@@ -47,9 +48,16 @@
         <div class="drag-handle" v-if="task.status === 'PENDING'" title="拖拽排序">
           ⋮⋮
         </div>
-        <div class="task-number">{{ index + 1 }}</div>
+        <div class="task-number" :class="{ 'processing': task.status === 'PROCESSING' }">
+          {{ task.status === 'PROCESSING' ? '▶' : index + 1 }}
+        </div>
         <div class="task-info">
-          <div class="task-sender">{{ task.senderName }}</div>
+          <div class="task-sender">
+            <span class="bot-type-badge" :class="task.botType?.toLowerCase()">
+              {{ getBotDisplayName(task.botType) }}
+            </span>
+            {{ task.senderName }}
+          </div>
           <div class="task-content">{{ task.content }}</div>
           <div class="task-meta">
             <span class="task-status" :class="task.status.toLowerCase()">
@@ -61,11 +69,12 @@
         <button 
           v-if="task.status === 'PENDING' || task.status === 'PROCESSING'"
           class="cancel-btn"
+          :class="{ 'stop-btn': task.status === 'PROCESSING' }"
           @click="cancelTask(task.taskId)"
           :title="task.status === 'PROCESSING' ? '停止当前任务' : '取消任务'"
           :disabled="cancellingTaskId === task.taskId"
         >
-          {{ cancellingTaskId === task.taskId ? '...' : '✕' }}
+          {{ cancellingTaskId === task.taskId ? '...' : (task.status === 'PROCESSING' ? '■' : '✕') }}
         </button>
       </div>
     </div>
@@ -114,6 +123,24 @@ const dragOverTaskId = ref<string | null>(null)
 const pendingCount = computed(() => queueInfo.value.tasks.filter(t => t.status === 'PENDING').length)
 const processingCount = computed(() => queueInfo.value.tasks.filter(t => t.status === 'PROCESSING').length)
 const totalCount = computed(() => queueInfo.value.tasks.length)
+
+// 排序后的任务列表：PROCESSING 在前，PENDING 在后
+const sortedTasks = computed(() => {
+  return [...queueInfo.value.tasks].sort((a, b) => {
+    if (a.status === 'PROCESSING' && b.status !== 'PROCESSING') return -1
+    if (a.status !== 'PROCESSING' && b.status === 'PROCESSING') return 1
+    return 0
+  })
+})
+
+const getBotDisplayName = (botType: string): string => {
+  const botNames: Record<string, string> = {
+    'OPENCLAW': 'OpenClaw',
+    'KIMI': 'Kimi',
+    'CLAUDE': 'Claude'
+  }
+  return botNames[botType?.toUpperCase()] || botType || 'Bot'
+}
 
 const fetchQueue = async () => {
   if (!props.roomId) return
@@ -385,6 +412,63 @@ watch(() => props.visible, (newVal) => {
 .queue-item.processing {
   background: linear-gradient(90deg, #dbeafe 0%, #bfdbfe 100%);
   border-left: 4px solid #3b82f6;
+  animation: pulse-processing 2s infinite;
+}
+
+@keyframes pulse-processing {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.4); }
+  50% { box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.2); }
+}
+
+.queue-item.pending {
+  background: #f8f9fa;
+}
+
+.bot-type-badge {
+  display: inline-block;
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin-right: 6px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.bot-type-badge.openclaw {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.bot-type-badge.kimi {
+  background: #fce7f3;
+  color: #be185d;
+}
+
+.bot-type-badge.claude {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.task-number.processing {
+  background: #3b82f6;
+  color: white;
+  animation: spin 2s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.cancel-btn.stop-btn {
+  background: #fecaca;
+  color: #dc2626;
+  font-size: 12px;
+}
+
+.cancel-btn.stop-btn:hover:not(:disabled) {
+  background: #f87171;
+  color: white;
 }
 
 .queue-item.dragging {

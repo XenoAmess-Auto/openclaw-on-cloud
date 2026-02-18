@@ -274,26 +274,41 @@ public class ChatRoomController {
 
     @GetMapping("/{roomId}/queue")
     public ResponseEntity<Map<String, Object>> getTaskQueue(@PathVariable String roomId) {
-        List<ChatWebSocketHandler.OpenClawTask> tasks = webSocketHandler.getRoomTaskQueue(roomId);
+        // 获取所有机器人类型的任务队列
+        Map<String, List<ChatWebSocketHandler.OpenClawTask>> allQueues = webSocketHandler.getRoomAllTaskQueues(roomId);
         boolean isProcessing = webSocketHandler.isRoomProcessing(roomId);
 
-        List<Map<String, Object>> taskList = tasks.stream()
-                .map(task -> {
-                    Map<String, Object> taskMap = new HashMap<>();
-                    taskMap.put("taskId", task.getTaskId());
-                    taskMap.put("status", task.getStatus().name());
-                    taskMap.put("createdAt", task.getCreatedAt());
-                    taskMap.put("senderName", task.getUserInfo() != null ? task.getUserInfo().getUserName() : "Unknown");
-                    taskMap.put("content", task.getContent() != null ?
-                            task.getContent().substring(0, Math.min(50, task.getContent().length())) + "..." : "");
-                    return taskMap;
-                })
-                .collect(Collectors.toList());
+        List<Map<String, Object>> taskList = new ArrayList<>();
+
+        // 合并所有机器人类型的任务
+        for (Map.Entry<String, List<ChatWebSocketHandler.OpenClawTask>> entry : allQueues.entrySet()) {
+            String botType = entry.getKey();
+            for (ChatWebSocketHandler.OpenClawTask task : entry.getValue()) {
+                Map<String, Object> taskMap = new HashMap<>();
+                taskMap.put("taskId", task.getTaskId());
+                taskMap.put("status", task.getStatus().name());
+                taskMap.put("createdAt", task.getCreatedAt());
+                taskMap.put("senderName", task.getUserInfo() != null ? task.getUserInfo().getUserName() : "Unknown");
+                taskMap.put("content", task.getContent() != null ?
+                        task.getContent().substring(0, Math.min(50, task.getContent().length())) + "..." : "");
+                taskMap.put("botType", botType);
+                taskList.add(taskMap);
+            }
+        }
+
+        // 按状态排序：PROCESSING 在前，然后 PENDING
+        taskList.sort((a, b) -> {
+            String statusA = (String) a.get("status");
+            String statusB = (String) b.get("status");
+            if (statusA.equals("PROCESSING") && !statusB.equals("PROCESSING")) return -1;
+            if (!statusA.equals("PROCESSING") && statusB.equals("PROCESSING")) return 1;
+            return 0;
+        });
 
         Map<String, Object> result = new HashMap<>();
         result.put("roomId", roomId);
         result.put("isProcessing", isProcessing);
-        result.put("queueSize", tasks.size());
+        result.put("queueSize", taskList.size());
         result.put("tasks", taskList);
 
         return ResponseEntity.ok(result);
