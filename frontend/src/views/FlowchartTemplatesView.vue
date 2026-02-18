@@ -49,8 +49,8 @@
           </div>
         </div>
         <div class="card-actions" @click.stop>
-          <button class="btn-icon" @click="runTemplate(template)" title="运行"></button>
-          <button class="btn-icon" @click="deleteTemplate(template)" title="删除"></button>
+          <button class="btn-icon" @click="runTemplate(template)" title="运行">▶️</button>
+          <button class="btn-icon" @click="deleteTemplate(template)" title="删除">🗑️</button>
         </div>
       </div>
     </div>
@@ -374,6 +374,25 @@ function deleteTemplate(template: any) {
 
 .template-card:hover .card-actions {
   opacity: 1;
+}
+
+.btn-icon {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  transition: background 0.2s;
+}
+
+.btn-icon:hover {
+  background: #f3f4f6;
 }
 
 .empty-state {
