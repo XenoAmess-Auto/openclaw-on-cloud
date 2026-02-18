@@ -14,6 +14,7 @@ import com.ooc.service.ClaudeCodePluginService;
 import com.ooc.service.OocSessionService;
 import com.ooc.service.UserService;
 import com.ooc.websocket.ChatWebSocketHandler;
+import com.ooc.websocket.WebSocketMessage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -502,7 +503,7 @@ public class ChatRoomController {
             chatRoomService.addMessage(roomId, streamingMsg);
 
             // 广播 stream_start 事件，通知前端显示流式消息
-            webSocketHandler.broadcastToRoom(roomId, ChatWebSocketHandler.WebSocketMessage.builder()
+            webSocketHandler.broadcastToRoom(roomId, WebSocketMessage.builder()
                     .type("stream_start")
                     .message(streamingMsg)
                     .build());
@@ -589,7 +590,7 @@ public class ChatRoomController {
         chatRoomService.updateMessage(roomId, finalMsg);
 
         // 广播 WebSocket stream_end 事件，通知前端更新消息
-        webSocketHandler.broadcastToRoom(roomId, ChatWebSocketHandler.WebSocketMessage.builder()
+        webSocketHandler.broadcastToRoom(roomId, WebSocketMessage.builder()
                 .type("stream_end")
                 .message(finalMsg)
                 .build());
@@ -663,7 +664,7 @@ public class ChatRoomController {
             chatRoomService.addMessage(roomId, streamingMsg);
             
             // 广播 stream_start 事件
-            webSocketHandler.broadcastToRoom(roomId, ChatWebSocketHandler.WebSocketMessage.builder()
+            webSocketHandler.broadcastToRoom(roomId, WebSocketMessage.builder()
                     .type("stream_start")
                     .message(streamingMsg)
                     .build());
@@ -739,7 +740,7 @@ public class ChatRoomController {
         chatRoomService.updateMessage(roomId, finalMsg);
         
         // 广播 WebSocket stream_end 事件
-        webSocketHandler.broadcastToRoom(roomId, ChatWebSocketHandler.WebSocketMessage.builder()
+        webSocketHandler.broadcastToRoom(roomId, WebSocketMessage.builder()
                 .type("stream_end")
                 .message(finalMsg)
                 .build());

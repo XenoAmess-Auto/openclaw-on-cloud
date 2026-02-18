@@ -2,6 +2,7 @@ package com.ooc.service;
 
 import com.ooc.entity.BotTaskQueue;
 import com.ooc.repository.BotTaskQueueRepository;
+import com.ooc.websocket.Attachment;
 import com.ooc.websocket.ChatWebSocketHandler;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
@@ -154,7 +155,7 @@ public class PersistentTaskQueueService {
      * 添加任务到队列
      */
     public String addTask(String roomId, String content,
-                          List<ChatWebSocketHandler.Attachment> attachments,
+                          List<Attachment> attachments,
                           ChatWebSocketHandler.WebSocketUserInfo userInfo,
                           String sourceMessageId,
                           BotTaskQueue.BotType botType) {
@@ -604,7 +605,7 @@ public class PersistentTaskQueueService {
                 .build();
     }
 
-    private List<BotTaskQueue.Attachment> convertAttachments(List<ChatWebSocketHandler.Attachment> attachments) {
+    private List<BotTaskQueue.Attachment> convertAttachments(List<Attachment> attachments) {
         if (attachments == null) return null;
         return attachments.stream()
                 .map(att -> BotTaskQueue.Attachment.builder()
@@ -616,11 +617,11 @@ public class PersistentTaskQueueService {
                 .collect(Collectors.toList());
     }
 
-    private List<ChatWebSocketHandler.Attachment> convertAttachmentsBack(List<BotTaskQueue.Attachment> attachments) {
+    private List<Attachment> convertAttachmentsBack(List<BotTaskQueue.Attachment> attachments) {
         if (attachments == null) return null;
         return attachments.stream()
                 .map(att -> {
-                    ChatWebSocketHandler.Attachment result = new ChatWebSocketHandler.Attachment();
+                    Attachment result = new Attachment();
                     result.setType(att.getType());
                     result.setMimeType(att.getMimeType());
                     result.setUrl(att.getUrl());

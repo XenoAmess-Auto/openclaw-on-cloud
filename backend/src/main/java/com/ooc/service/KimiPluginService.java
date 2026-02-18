@@ -6,6 +6,7 @@ import com.ooc.entity.BotUserConfig;
 import com.ooc.entity.ChatRoom;
 import com.ooc.entity.User;
 import com.ooc.repository.UserRepository;
+import com.ooc.websocket.Attachment;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -215,7 +216,7 @@ public class KimiPluginService {
      * 发送消息到 Kimi 并获取流式回复
      */
     public Flux<StreamEvent> sendMessageStream(String sessionId, String message,
-            List<com.ooc.websocket.ChatWebSocketHandler.Attachment> attachments,
+            List<com.ooc.websocket.Attachment> attachments,
             String userId, String userName, String roomName) {
 
         String apiKey = getApiKey();

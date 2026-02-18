@@ -24,6 +24,7 @@ public class FlowchartTaskQueueIntegration {
     private final FlowchartEngine flowchartEngine;
     private final FlowchartTemplateService templateService;
     private final FlowchartInstanceRepository instanceRepository;
+    private final com.ooc.service.FlowbotService flowbotService;
 
     /**
      * 添加流程图任务到队列（HTTP API 版本）
@@ -264,16 +265,45 @@ public class FlowchartTaskQueueIntegration {
 
         listenerHolder[0] = event -> {
             // 根据事件类型发送 WebSocket 通知
-            if (event instanceof FlowchartEngine.NodeStartedEvent startedEvent) {
+            if (event instanceof FlowchartEngine.FlowchartStartedEvent startedEvent) {
+                // 流程图开始执行，发送开始消息
+                flowbotService.sendFlowchartStarted(
+                        task.getRoomId(),
+                        startedEvent.getInstance().getTemplateName()
+                );
+            } else if (event instanceof FlowchartEngine.NodeStartedEvent startedEvent) {
                 sendNodeStartedNotification(task, startedEvent);
             } else if (event instanceof FlowchartEngine.NodeCompletedEvent completedEvent) {
                 sendNodeCompletedNotification(task, completedEvent);
             } else if (event instanceof FlowchartEngine.FlowchartCompletedEvent completedEvent) {
+                // 流程图执行完成，发送结果消息
+                FlowchartInstance instance = instanceRepository
+                        .findByInstanceId(completedEvent.getInstanceId())
+                        .orElse(null);
+                if (instance != null) {
+                    flowbotService.sendFlowchartCompleted(
+                            task.getRoomId(),
+                            instance.getTemplateName(),
+                            String.valueOf(completedEvent.getOutput()),
+                            instance.getOutputs()
+                    );
+                }
                 // 任务完成
                 taskQueueService.markTaskCompleted(task.getTaskId());
                 taskQueueService.onTaskComplete(task.getRoomId(), BotTaskQueue.BotType.OPENCLAW);
                 flowchartEngine.removeListener(completedEvent.getInstanceId(), listenerHolder[0]);
             } else if (event instanceof FlowchartEngine.FlowchartFailedEvent failedEvent) {
+                // 流程图执行失败，发送失败消息
+                FlowchartInstance instance = instanceRepository
+                        .findByInstanceId(failedEvent.getInstanceId())
+                        .orElse(null);
+                if (instance != null) {
+                    flowbotService.sendFlowchartFailed(
+                            task.getRoomId(),
+                            instance.getTemplateName(),
+                            failedEvent.getError()
+                    );
+                }
                 // 任务失败
                 taskQueueService.markTaskFailed(task.getTaskId());
                 taskQueueService.onTaskComplete(task.getRoomId(), BotTaskQueue.BotType.OPENCLAW);

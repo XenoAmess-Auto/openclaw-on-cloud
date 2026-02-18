@@ -46,6 +46,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
     private final ObjectMapper objectMapper;
     private final PersistentTaskQueueService taskQueueService;
     private final com.ooc.service.flowchart.FlowchartTaskQueueIntegration flowchartTaskQueueIntegration;
+    private final WebSocketBroadcastService broadcastService;
 
     @Lazy
     @org.springframework.beans.factory.annotation.Autowired
@@ -72,7 +73,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
         private String taskId;
         private String roomId;
         private String content;
-        private List<Attachment> attachments;
+        private List<com.ooc.websocket.Attachment> attachments;
         private WebSocketUserInfo userInfo;
         private Instant createdAt;
         private volatile TaskStatus status; // PENDING, PROCESSING, COMPLETED, FAILED
@@ -178,7 +179,11 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                     userSessions.remove(userInfo.getUserId());
                 }
             }
+            // 从广播服务移除
+            broadcastService.removeRoomSession(userInfo.getRoomId(), session);
         }
+        // 从广播服务移除会话（所有房间）
+        broadcastService.removeSession(session);
     }
 
     @Override
@@ -238,6 +243,9 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
         userInfoMap.put(session, userInfo);
         roomSessions.computeIfAbsent(roomId, k -> ConcurrentHashMap.newKeySet()).add(session);
         userSessions.computeIfAbsent(userId, k -> ConcurrentHashMap.newKeySet()).add(session);
+        
+        // 注册到广播服务
+        broadcastService.registerRoomSession(roomId, session);
 
         // 发送历史消息（只发送最新的10条）
         chatRoomService.getChatRoom(roomId).ifPresent(room -> {
@@ -336,7 +344,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
 
         String roomId = userInfo.getRoomId();
         String content = payload.getContent();
-        List<Attachment> attachments = payload.getAttachments();
+        List<com.ooc.websocket.Attachment> attachments = payload.getAttachments();
         boolean hasAttachments = attachments != null && !attachments.isEmpty();
 
         // 检查是否@OpenClaw（使用配置的机器人用户名）
@@ -2112,6 +2120,10 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
     }
 
     public void broadcastToRoom(String roomId, WebSocketMessage message, WebSocketSession... exclude) {
+        // 使用广播服务发送消息
+        broadcastService.broadcastToRoom(roomId, message, exclude);
+        
+        // 同时也更新本地 roomSessions（保持向后兼容）
         Set<WebSocketSession> excludeSet = new HashSet<>(Arrays.asList(exclude));
         Set<WebSocketSession> sessions = roomSessions.getOrDefault(roomId, Collections.emptySet());
 
@@ -2277,28 +2289,5 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
         private String userName;
         private String roomId;
         private String avatar;
-    }
-
-    @lombok.Data
-    @lombok.Builder
-    public static class WebSocketMessage {
-        private String type;
-        private String roomId;
-        private String userId;
-        private String userName;
-        private String content;
-        private ChatRoom.Message message;
-        private List<ChatRoom.Message> messages;
-        private List<Attachment> attachments; // 附件列表
-        private Boolean hasMore; // 是否还有更多历史消息
-    }
-
-    // 附件数据传输对象
-    @lombok.Data
-    public static class Attachment {
-        private String type;      // 类型，如 "image"
-        private String mimeType;  // MIME 类型，如 "image/png"
-        private String content;   // Base64 编码的内容（不含 data URL 前缀）
-        private String url;       // 文件 URL（如 /uploads/xxx.png），优先使用
     }
 }

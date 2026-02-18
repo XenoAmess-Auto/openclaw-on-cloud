@@ -8,6 +8,7 @@ import com.ooc.entity.ChatRoom;
 import com.ooc.entity.User;
 import com.ooc.repository.UserRepository;
 import com.ooc.storage.StorageProvider;
+import com.ooc.websocket.Attachment;
 import com.ooc.websocket.ChatWebSocketHandler;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -391,7 +392,7 @@ public class OpenClawPluginService {
      * 发送消息到 OpenClaw 并获取回复（支持附件）
      */
     public Mono<OpenClawResponse> sendMessage(String sessionId, String message, 
-            List<ChatWebSocketHandler.Attachment> attachments, String userId, String userName) {
+            List<Attachment> attachments, String userId, String userName) {
         
         // 转换消息中的 /uploads/ 路径为绝对路径
         String processedMessage = convertUploadsPath(message);
@@ -418,7 +419,7 @@ public class OpenClawPluginService {
         
         // 添加图片附件内容块
         if (attachments != null && !attachments.isEmpty()) {
-            for (ChatWebSocketHandler.Attachment att : attachments) {
+            for (Attachment att : attachments) {
                 if ("image".equalsIgnoreCase(att.getType())) {
                     String imageDataUrl = null;
                     
@@ -611,7 +612,7 @@ public class OpenClawPluginService {
      * 使用 WebSocket 协议连接到 OpenClaw Gateway，接收原生工具事件
      */
     private Flux<StreamEvent> sendMessageStreamInternal(String sessionId, String message,
-            List<ChatWebSocketHandler.Attachment> attachments, String userId, String userName, String roomName) {
+            List<Attachment> attachments, String userId, String userName, String roomName) {
 
         String processedMessage = convertUploadsPath(message);
 
@@ -645,7 +646,7 @@ public class OpenClawPluginService {
         // 处理图片附件
         int imageCount = 0;
         if (attachments != null && !attachments.isEmpty()) {
-            for (ChatWebSocketHandler.Attachment att : attachments) {
+            for (Attachment att : attachments) {
                 log.info("[sendMessageStream] Processing attachment: type={}, mimeType={}, url={}",
                         att.getType(), att.getMimeType(), att.getUrl());
 
@@ -821,11 +822,11 @@ public class OpenClawPluginService {
      */
     public Flux<StreamEvent> sendMessageStreamWithRoomAttachments(String sessionId, String message,
             List<ChatRoom.Message.Attachment> attachments, String userId, String userName, String roomName) {
-        // 转换为 ChatWebSocketHandler.Attachment
-        List<ChatWebSocketHandler.Attachment> convertedAttachments = new ArrayList<>();
+        // 转换为 Attachment
+        List<Attachment> convertedAttachments = new ArrayList<>();
         if (attachments != null && !attachments.isEmpty()) {
             for (ChatRoom.Message.Attachment att : attachments) {
-                ChatWebSocketHandler.Attachment converted = new ChatWebSocketHandler.Attachment();
+                Attachment converted = new Attachment();
                 converted.setType(att.getType());
                 converted.setMimeType(att.getContentType());
                 converted.setUrl(att.getUrl());
@@ -840,7 +841,7 @@ public class OpenClawPluginService {
      * 发送消息到 OpenClaw 并获取流式回复
      */
     public Flux<StreamEvent> sendMessageStream(String sessionId, String message,
-            List<ChatWebSocketHandler.Attachment> attachments, String userId, String userName, String roomName) {
+            List<Attachment> attachments, String userId, String userName, String roomName) {
         return sendMessageStreamInternal(sessionId, message, attachments, userId, userName, roomName);
     }
 }
