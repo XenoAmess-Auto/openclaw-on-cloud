@@ -50,6 +50,7 @@
         </div>
         <div class="card-actions" @click.stop>
           <button class="btn-icon" @click="runTemplate(template)" title="运行">▶️</button>
+          <button class="btn-icon" @click="openEditor(template)" title="编辑">✏️</button>
           <button class="btn-icon" @click="deleteTemplate(template)" title="删除">🗑️</button>
         </div>
       </div>
