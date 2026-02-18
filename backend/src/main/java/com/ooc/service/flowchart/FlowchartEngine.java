@@ -343,12 +343,20 @@ public class FlowchartEngine {
      * 发布事件
      */
     private void publishEvent(Object event) {
+        if (event instanceof FlowchartEvent flowchartEvent) {
+            String instanceId = flowchartEvent.getInstanceId();
+            log.info("[FlowchartEngine] Publishing event: type={}, instanceId={}", 
+                    event.getClass().getSimpleName(), instanceId);
+        }
+        
         eventPublisher.publishEvent(event);
 
         // 同时通知监听器
         if (event instanceof FlowchartEvent flowchartEvent) {
             String instanceId = flowchartEvent.getInstanceId();
             FlowchartEventListener listener = listeners.get(instanceId);
+            log.info("[FlowchartEngine] Looking for listener: instanceId={}, found={}", 
+                    instanceId, listener != null);
             if (listener != null) {
                 try {
                     listener.onEvent(flowchartEvent);
