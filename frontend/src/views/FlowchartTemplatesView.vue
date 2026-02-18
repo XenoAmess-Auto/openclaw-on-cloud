@@ -139,8 +139,13 @@
         </div>
 
         <div class="dialog-actions">
-          <button class="btn" @click="showRunDialog = false">取消</button>
-          <button class="btn btn-primary" @click="confirmRun" :disabled="!selectedRoomId">运行</button>
+          <button class="btn" @click="showRunDialog = false" :disabled="isRunning">取消</button>
+          <button class="btn btn-primary" @click="confirmRun" :disabled="!selectedRoomId || isRunning">
+            {{ isRunning ? '运行中...' : '运行' }}
+          </button>
+        </div>
+        <div v-if="runError" class="error-message">
+          {{ runError }}
         </div>
       </div>
     </div>
@@ -165,6 +170,8 @@ const selectedTemplate = ref<any>(null)
 const selectedCategory = ref('all')
 const runVariables = ref<Record<string, any>>({})
 const selectedRoomId = ref<string>('')
+const isRunning = ref(false)
+const runError = ref<string | null>(null)
 
 const newTemplate = ref({
   name: '',
@@ -248,9 +255,12 @@ function runTemplate(template: any) {
 }
 
 function confirmRun() {
-  if (!selectedTemplate.value) return
+  if (!selectedTemplate.value || !selectedRoomId.value) return
   
-  const roomId = selectedRoomId.value || 'default'
+  isRunning.value = true
+  runError.value = null
+  
+  const roomId = selectedRoomId.value
   
   store.createInstance(
     selectedTemplate.value.templateId,
@@ -258,8 +268,12 @@ function confirmRun() {
     runVariables.value
   ).then(() => {
     showRunDialog.value = false
+    isRunning.value = false
     // 跳转到任务队列或实例列表
     router.push('/')
+  }).catch((err: any) => {
+    isRunning.value = false
+    runError.value = err.response?.data?.error || err.message || '运行失败，请重试'
   })
 }
 
@@ -556,6 +570,16 @@ function deleteTemplate(template: any) {
   font-size: 12px;
   color: #ef4444;
   margin-top: 6px;
+}
+
+.error-message {
+  padding: 12px;
+  margin-top: 12px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 6px;
+  color: #dc2626;
+  font-size: 14px;
 }
 
 .loading-state,

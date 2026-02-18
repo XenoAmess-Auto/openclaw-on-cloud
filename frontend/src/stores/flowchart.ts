@@ -132,13 +132,18 @@ export const useFlowchartStore = defineStore('flowchart', () => {
   }
 
   async function createInstance(templateId: string, roomId: string, variables: Record<string, any>) {
-    const response = await apiClient.post('/flowchart-instances', {
-      templateId,
-      roomId,
-      variables
-    })
-    instances.value.unshift(response.data)
-    return response.data
+    try {
+      const response = await apiClient.post('/flowchart-instances', {
+        templateId,
+        roomId,
+        variables
+      })
+      instances.value.unshift(response.data)
+      return response.data
+    } catch (e: any) {
+      error.value = e.response?.data?.error || e.message || '创建实例失败'
+      throw e
+    }
   }
 
   async function stopInstance(instanceId: string) {
