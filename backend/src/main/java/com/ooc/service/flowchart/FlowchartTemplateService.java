@@ -33,17 +33,21 @@ public class FlowchartTemplateService {
      */
     @Transactional
     public FlowchartTemplate createTemplate(FlowchartTemplate template, String userId) {
-        // 生成业务ID
-        if (template.getTemplateId() == null) {
-            template.setTemplateId(UUID.randomUUID().toString().replace("-", "").substring(0, 12));
-        }
-
+        // 强制生成新的业务ID，忽略前端传入的值
+        template.setTemplateId(UUID.randomUUID().toString().replace("-", "").substring(0, 12));
+        
+        // 确保 id 为 null，让 MongoDB 生成新的 _id
+        template.setId(null);
+        
         template.setCreatedBy(userId);
         template.setUpdatedBy(userId);
         template.setVersion(1);
         template.setLatest(true);
 
-        return templateRepository.save(template);
+        FlowchartTemplate saved = templateRepository.save(template);
+        log.info("Created template: templateId={}, id={}", saved.getTemplateId(), saved.getId());
+        
+        return saved;
     }
 
     /**
