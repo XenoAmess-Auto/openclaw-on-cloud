@@ -12,8 +12,10 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -89,6 +91,9 @@ public class PersistentTaskQueueService {
 
         log.info("Found {} pending tasks to restore", pendingTasks.size());
 
+        // 收集需要触发处理的所有房间和机器人类型组合
+        Set<String> roomBotPairs = new HashSet<>();
+
         // 将处理中的任务重置为待处理状态（因为服务重启，需要重新处理）
         for (BotTaskQueue dbTask : pendingTasks) {
             if (dbTask.getStatus() == BotTaskQueue.TaskStatus.PROCESSING) {
@@ -101,9 +106,26 @@ public class PersistentTaskQueueService {
 
             // 恢复任务到内存队列
             restoreTaskToQueue(dbTask);
+
+            // 记录房间和机器人类型组合
+            roomBotPairs.add(dbTask.getRoomId() + "#" + dbTask.getBotType());
         }
 
-        log.info("Task queues restored successfully");
+        log.info("Task queues restored successfully, triggering processing for {} room-bot pairs", roomBotPairs.size());
+
+        // 为每个房间-机器人类型组合触发队列处理
+        // 延迟执行，确保所有处理器已注册
+        Executors.newSingleThreadScheduledExecutor().schedule(() -> {
+            for (String pair : roomBotPairs) {
+                String[] parts = pair.split("#");
+                if (parts.length == 2) {
+                    String roomId = parts[0];
+                    BotTaskQueue.BotType botType = BotTaskQueue.BotType.valueOf(parts[1]);
+                    log.info("Triggering queue processing for room {} bot {}", roomId, botType);
+                    tryProcessNext(roomId, botType);
+                }
+            }
+        }, 5, TimeUnit.SECONDS);
     }
 
     /**

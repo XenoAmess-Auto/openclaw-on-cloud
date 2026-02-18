@@ -136,6 +136,9 @@ public class FlowchartTaskQueueIntegration {
         log.info("Flowchart task {} added to queue for room {} (position={}, instanceId={})",
                 taskId, roomId, position, instance.getInstanceId());
 
+        // 触发队列处理
+        taskQueueService.tryProcessNext(roomId, BotTaskQueue.BotType.OPENCLAW);
+
         return taskId;
     }
 
@@ -186,6 +189,9 @@ public class FlowchartTaskQueueIntegration {
 
         log.info("Flowchart task {} added to queue for room {} (position={}, instanceId={})",
                 taskId, roomId, position, instance.getInstanceId());
+
+        // 触发队列处理
+        taskQueueService.tryProcessNext(roomId, BotTaskQueue.BotType.OPENCLAW);
 
         return taskId;
     }

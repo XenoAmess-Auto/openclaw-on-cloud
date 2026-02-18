@@ -8,7 +8,10 @@ import com.ooc.service.flowchart.NodeResult;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 
+import java.time.Duration;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -64,11 +67,13 @@ public class OpenClawNodeHandler implements NodeHandler {
         String tempUserId = "flowchart-" + sessionId;
         String tempUserName = "Flowchart";
 
-        // 调用 OpenClaw（同步等待结果）
+        // 调用 OpenClaw（同步等待结果）- 使用 boundedElastic 调度器避免阻塞问题
         try {
-            OpenClawPluginService.OpenClawResponse response = openClawPluginService
-                    .sendMessage(sessionId, fullPrompt.toString(), null, tempUserId, tempUserName)
-                    .block();
+            OpenClawPluginService.OpenClawResponse response = Mono.from(
+                openClawPluginService.sendMessage(sessionId, fullPrompt.toString(), null, tempUserId, tempUserName)
+            )
+            .subscribeOn(Schedulers.boundedElastic())
+            .block(Duration.ofSeconds(300)); // 5分钟超时
 
             if (response == null) {
                 return NodeResult.failure("OpenClaw 返回空响应");

@@ -1,11 +1,15 @@
 package com.ooc.service.flowchart.handler;
 
+import com.ooc.entity.flowchart.FlowchartInstance;
 import com.ooc.entity.flowchart.FlowchartTemplate;
 import com.ooc.service.flowchart.ExecutionContext;
 import com.ooc.service.flowchart.NodeResult;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.time.Instant;
 import java.util.HashMap;
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -13,6 +17,25 @@ import static org.junit.jupiter.api.Assertions.*;
  * 节点处理器单元测试
  */
 class NodeHandlersTest {
+
+    private FlowchartInstance mockInstance;
+
+    @BeforeEach
+    void setUp() {
+        // 创建 mock 流程图实例，供所有测试用例使用
+        mockInstance = new FlowchartInstance();
+        mockInstance.setInstanceId(UUID.randomUUID().toString());
+        mockInstance.setTemplateId("test-template");
+        mockInstance.setRoomId("test-room");
+        mockInstance.setStartedAt(Instant.now());
+    }
+
+    private ExecutionContext createContext() {
+        return ExecutionContext.builder()
+                .instance(mockInstance)
+                .variables(new HashMap<>())
+                .build();
+    }
 
     @Test
     void testStartNodeHandler() {
@@ -22,9 +45,7 @@ class NodeHandlersTest {
                 .label("Start")
                 .build();
 
-        ExecutionContext ctx = ExecutionContext.builder()
-                .variables(new HashMap<>())
-                .build();
+        ExecutionContext ctx = createContext();
 
         NodeResult result = handler.execute(data, ctx);
 
@@ -38,9 +59,7 @@ class NodeHandlersTest {
         VariableNodeHandler handler = new VariableNodeHandler();
 
         // 设置上下文变量
-        ExecutionContext ctx = ExecutionContext.builder()
-                .variables(new HashMap<>())
-                .build();
+        ExecutionContext ctx = createContext();
         ctx.setVariable("name", "World");
 
         // 测试模板渲染
@@ -59,9 +78,7 @@ class NodeHandlersTest {
     void testConditionNodeHandler_TrueBranch() {
         ConditionNodeHandler handler = new ConditionNodeHandler();
 
-        ExecutionContext ctx = ExecutionContext.builder()
-                .variables(new HashMap<>())
-                .build();
+        ExecutionContext ctx = createContext();
         ctx.setVariable("score", 80);
 
         FlowchartTemplate.NodeData data = FlowchartTemplate.NodeData.builder()
@@ -81,9 +98,7 @@ class NodeHandlersTest {
     void testConditionNodeHandler_FalseBranch() {
         ConditionNodeHandler handler = new ConditionNodeHandler();
 
-        ExecutionContext ctx = ExecutionContext.builder()
-                .variables(new HashMap<>())
-                .build();
+        ExecutionContext ctx = createContext();
         ctx.setVariable("score", 40);
 
         FlowchartTemplate.NodeData data = FlowchartTemplate.NodeData.builder()
@@ -103,7 +118,7 @@ class NodeHandlersTest {
     void testWaitNodeHandler() {
         WaitNodeHandler handler = new WaitNodeHandler();
 
-        ExecutionContext ctx = ExecutionContext.builder().build();
+        ExecutionContext ctx = createContext();
 
         FlowchartTemplate.NodeData data = FlowchartTemplate.NodeData.builder()
                 .waitSeconds(1)  // 等待1秒
@@ -121,9 +136,7 @@ class NodeHandlersTest {
     void testEndNodeHandler() {
         EndNodeHandler handler = new EndNodeHandler();
 
-        ExecutionContext ctx = ExecutionContext.builder()
-                .variables(new HashMap<>())
-                .build();
+        ExecutionContext ctx = createContext();
         ctx.setVariable("result", "Success");
 
         FlowchartTemplate.NodeData data = FlowchartTemplate.NodeData.builder()

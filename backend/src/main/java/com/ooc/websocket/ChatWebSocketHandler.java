@@ -77,7 +77,11 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
         private Instant createdAt;
         private volatile TaskStatus status; // PENDING, PROCESSING, COMPLETED, FAILED
         private String sourceMessageId; // 原始用户消息ID，用于replyTo
-        private TaskType taskType; // CHAT 或 FLOWCHART
+
+        @com.fasterxml.jackson.annotation.JsonProperty("taskType")
+        @lombok.Builder.Default
+        private TaskType taskType = TaskType.CHAT; // CHAT 或 FLOWCHART
+
         private String flowchartInstanceId; // 流程图实例ID（当 taskType 为 FLOWCHART 时有效）
 
         public enum TaskStatus {

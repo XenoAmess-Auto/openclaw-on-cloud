@@ -187,7 +187,12 @@ public class FlowchartEngine {
                                    ExecutionContext ctx) {
         NodeHandler handler = handlers.get(node.getType());
         if (handler == null) {
-            throw new UnsupportedOperationException("Unknown node type: " + node.getType());
+            log.error("[Flowchart:{}] Unknown node type: {}. Available handlers: {}",
+                    instance.getInstanceId(),
+                    node.getType(),
+                    handlers.keySet());
+            throw new UnsupportedOperationException("Unknown node type: " + node.getType() +
+                    ". Available: " + handlers.keySet());
         }
 
         // 更新当前节点
