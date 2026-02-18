@@ -238,7 +238,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, watch, onMounted, onUnmounted } from 'vue'
 import { VueFlow, useVueFlow, Handle, Position } from '@vue-flow/core'
 import { Controls } from '@vue-flow/controls'
 import { Background } from '@vue-flow/background'
@@ -259,7 +259,7 @@ const emit = defineEmits<{
   save: [value: { nodes: any[]; edges: any[] }]
 }>()
 
-const { addNodes, addEdges, removeNodes, findNode } = useVueFlow()
+const { addNodes, addEdges, removeNodes, removeEdges, findNode, getSelectedNodes, getSelectedEdges } = useVueFlow()
 
 const elements = ref<any[]>([])
 const selectedNode = ref<any>(null)
@@ -288,6 +288,40 @@ watch(() => props.modelValue, (newValue) => {
     isInitialized.value = true
   }
 }, { deep: true })
+
+// 键盘事件处理
+function handleKeyDown(event: KeyboardEvent) {
+  // Delete 或 Backspace 键删除选中元素
+  if (event.key === 'Delete' || event.key === 'Backspace') {
+    // 避免在输入框中触发
+    if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) {
+      return
+    }
+
+    const selectedNodes = getSelectedNodes.value
+    const selectedEdges = getSelectedEdges.value
+
+    if (selectedNodes.length > 0) {
+      removeNodes(selectedNodes.map(n => n.id))
+      // 如果删除的是当前选中的节点，清空配置面板
+      if (selectedNode.value && selectedNodes.some(n => n.id === selectedNode.value.id)) {
+        selectedNode.value = null
+      }
+    }
+
+    if (selectedEdges.length > 0) {
+      removeEdges(selectedEdges.map(e => e.id))
+    }
+  }
+}
+
+onMounted(() => {
+  window.addEventListener('keydown', handleKeyDown)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', handleKeyDown)
+})
 
 // 生成唯一ID
 function generateId() {
