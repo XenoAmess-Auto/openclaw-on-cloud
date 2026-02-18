@@ -37,7 +37,6 @@
         v-for="template in filteredTemplates"
         :key="template.id"
         class="template-card"
-        @click="openEditor(template)"
       >
         <div class="card-icon">{{ template.icon || '=' }}</div>
         <div class="card-content">
