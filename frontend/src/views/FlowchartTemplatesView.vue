@@ -2,11 +2,22 @@
   <div class="flowchart-templates-view">
     <!-- 页面头部 -->
     <header class="page-header">
-      <h1></h1> 流程图模板
+      <h1>流程图模板</h1>
       <button class="btn btn-primary" @click="showCreateDialog = true">
         + 新建模板
       </button>
     </header>
+
+    <!-- 加载状态 -->
+    <div v-if="store.loading" class="loading-state">
+      <p>加载中...</p>
+    </div>
+
+    <!-- 错误状态 -->
+    <div v-else-if="store.error" class="error-state">
+      <p>加载失败: {{ store.error }}</p>
+      <button class="btn" @click="store.fetchTemplates()">重试</button>
+    </div>
 
     <!-- 分类筛选 -->
     <div class="filter-bar">
@@ -478,5 +489,20 @@ function deleteTemplate(template: any) {
   color: #6b7280;
   background: #f9fafb;
   border-radius: 8px;
+}
+
+.loading-state,
+.error-state {
+  padding: 48px;
+  text-align: center;
+  color: #6b7280;
+}
+
+.error-state {
+  color: #ef4444;
+}
+
+.error-state .btn {
+  margin-top: 16px;
 }
 </style>
