@@ -9,6 +9,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.*;
@@ -350,6 +351,23 @@ public class PersistentTaskQueueService {
         return flag != null && flag.get();
     }
 
+    // ========== 新增：流程图任务支持 ==========
+
+    /**
+     * 保存任务到数据库（用于外部直接保存）
+     */
+    public void saveTask(BotTaskQueue dbTask) {
+        taskQueueRepository.save(dbTask);
+    }
+
+    /**
+     * 添加任务包装器到内存队列（用于外部直接添加）
+     */
+    public void addTaskToMemoryQueue(String roomId, BotTaskQueue.BotType botType, TaskWrapper wrapper) {
+        LinkedBlockingQueue<TaskWrapper> queue = getOrCreateQueue(roomId, botType);
+        queue.offer(wrapper);
+    }
+
     // ========== 私有辅助方法 ==========
 
     private LinkedBlockingQueue<TaskWrapper> getOrCreateQueue(String roomId, BotTaskQueue.BotType botType) {
@@ -412,12 +430,14 @@ public class PersistentTaskQueueService {
     private List<ChatWebSocketHandler.Attachment> convertAttachmentsBack(List<BotTaskQueue.Attachment> attachments) {
         if (attachments == null) return null;
         return attachments.stream()
-                .map(att -> ChatWebSocketHandler.Attachment.builder()
-                        .type(att.getType())
-                        .mimeType(att.getMimeType())
-                        .url(att.getUrl())
-                        .content(att.getContent())
-                        .build())
+                .map(att -> {
+                    ChatWebSocketHandler.Attachment result = new ChatWebSocketHandler.Attachment();
+                    result.setType(att.getType());
+                    result.setMimeType(att.getMimeType());
+                    result.setUrl(att.getUrl());
+                    result.setContent(att.getContent());
+                    return result;
+                })
                 .collect(Collectors.toList());
     }
 

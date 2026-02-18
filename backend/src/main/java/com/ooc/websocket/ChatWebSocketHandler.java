@@ -866,7 +866,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
         } catch (Exception e) {
             log.error("Failed to initialize Claude streaming message for task {}: {}", taskId, e.getMessage(), e);
             task.setStatus(OpenClawTask.TaskStatus.FAILED);
-            onClaudeTaskComplete(roomId);
+            taskQueueService.onTaskComplete(roomId, BotTaskQueue.BotType.CLAUDE);
             return;
         }
 

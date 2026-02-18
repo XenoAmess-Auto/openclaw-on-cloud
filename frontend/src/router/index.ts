@@ -39,6 +39,18 @@ const router = createRouter({
       name: 'Settings',
       component: () => import('@/views/SettingsView.vue'),
       meta: { requiresAuth: true }
+    },
+    {
+      path: '/flowchart/templates',
+      name: 'FlowchartTemplates',
+      component: () => import('@/views/FlowchartTemplatesView.vue'),
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/flowchart/editor/:id',
+      name: 'FlowchartEditor',
+      component: () => import('@/views/FlowchartEditorView.vue'),
+      meta: { requiresAuth: true }
     }
   ]
 })

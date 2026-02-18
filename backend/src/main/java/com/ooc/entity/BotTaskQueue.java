@@ -59,6 +59,13 @@ public class BotTaskQueue {
     @Builder.Default
     private TaskStatus status = TaskStatus.PENDING;
 
+    @JsonProperty("taskType")
+    @Builder.Default
+    private TaskType taskType = TaskType.CHAT;
+
+    @JsonProperty("flowchartInstanceId")
+    private String flowchartInstanceId;
+
     @JsonProperty("position")
     private Integer position;
 
@@ -88,6 +95,14 @@ public class BotTaskQueue {
         COMPLETED,    // 已完成
         FAILED,       // 失败
         CANCELLED     // 已取消
+    }
+
+    /**
+     * 任务类型
+     */
+    public enum TaskType {
+        CHAT,         // 对话任务
+        FLOWCHART     // 流程图任务
     }
 
     /**
