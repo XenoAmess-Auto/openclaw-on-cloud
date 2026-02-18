@@ -102,6 +102,19 @@
       <div class="dialog">
         <h2>运行: {{ selectedTemplate?.name }}</h2>
         
+        <!-- 群选择 -->
+        <div class="form-group">
+          <label>选择群 *</label>
+          <select v-model="selectedRoomId" class="room-select">
+            <option v-for="room in chatStore.rooms" :key="room.id" :value="room.id">
+              {{ room.name }}
+            </option>
+          </select>
+          <p v-if="chatStore.rooms.length === 0" class="hint-text">
+            暂无可用群，请先创建或加入群
+          </p>
+        </div>
+        
         <div v-if="selectedTemplate?.variables?.length" class="variables-form">
           <h4>变量</h4>
           <div
@@ -127,7 +140,7 @@
 
         <div class="dialog-actions">
           <button class="btn" @click="showRunDialog = false">取消</button>
-          <button class="btn btn-primary" @click="confirmRun">运行</button>
+          <button class="btn btn-primary" @click="confirmRun" :disabled="!selectedRoomId">运行</button>
         </div>
       </div>
     </div>
@@ -138,17 +151,20 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useFlowchartStore } from '@/stores/flowchart'
+import { useChatStore } from '@/stores/chat'
 import { useRoute } from 'vue-router'
 
 const router = useRouter()
 const route = useRoute()
 const store = useFlowchartStore()
+const chatStore = useChatStore()
 
 const showCreateDialog = ref(false)
 const showRunDialog = ref(false)
 const selectedTemplate = ref<any>(null)
 const selectedCategory = ref('all')
 const runVariables = ref<Record<string, any>>({})
+const selectedRoomId = ref<string>('')
 
 const newTemplate = ref({
   name: '',
@@ -171,6 +187,7 @@ const filteredTemplates = computed(() => {
 
 onMounted(() => {
   store.fetchTemplates()
+  chatStore.fetchRooms()
 })
 
 function createTemplate() {
@@ -208,6 +225,16 @@ function runTemplate(template: any) {
   selectedTemplate.value = template
   runVariables.value = {}
   
+  // 默认选中当前群或第一个群
+  const currentRoomId = route.query.roomId as string
+  if (currentRoomId && chatStore.rooms.some(r => r.id === currentRoomId)) {
+    selectedRoomId.value = currentRoomId
+  } else if (chatStore.rooms.length > 0) {
+    selectedRoomId.value = chatStore.rooms[0].id
+  } else {
+    selectedRoomId.value = ''
+  }
+  
   // 填充默认值
   if (template.variables) {
     for (const v of template.variables) {
@@ -223,7 +250,7 @@ function runTemplate(template: any) {
 function confirmRun() {
   if (!selectedTemplate.value) return
   
-  const roomId = route.query.roomId as string || 'default'
+  const roomId = selectedRoomId.value || 'default'
   
   store.createInstance(
     selectedTemplate.value.templateId,
@@ -508,6 +535,27 @@ function deleteTemplate(template: any) {
   color: #6b7280;
   background: #f9fafb;
   border-radius: 8px;
+}
+
+.room-select {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #d0d0d0;
+  border-radius: 8px;
+  font-size: 14px;
+  background: white;
+  cursor: pointer;
+}
+
+.room-select:focus {
+  outline: none;
+  border-color: #4f46e5;
+}
+
+.hint-text {
+  font-size: 12px;
+  color: #ef4444;
+  margin-top: 6px;
 }
 
 .loading-state,
