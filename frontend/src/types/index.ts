@@ -137,7 +137,7 @@ export interface Attachment {
   id: string
   url: string
   name: string
-  type: 'IMAGE' | 'PDF' | 'TEXT' | 'FILE' | 'image' | 'pdf' | 'text' | 'file'
+  type: 'IMAGE' | 'PDF' | 'TEXT' | 'FILE' | 'image' | 'pdf' | 'text' | 'file' | 'FLOWCHART_VARIABLES'
   contentType: string
   size: number
 }

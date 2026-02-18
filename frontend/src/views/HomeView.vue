@@ -88,9 +88,51 @@
                 <span>{{ formatDateSeparator(msg.timestamp) }}</span>
               </div>
               
-              <!-- 系统消息 -->
-              <div v-if="msg.isSystem" class="system-message">
+              <!-- 系统消息（排除 Flowbot 消息） -->
+              <div v-if="!!msg.isSystem && msg.senderName !== 'Flowbot'" class="system-message">
                 <span class="system-text">{{ msg.content }}</span>
+              </div>
+              
+              <!-- Flowbot 结果消息（带变量展开/折叠） -->
+              <div v-else-if="isFlowbotResultMessage(msg)" :id="'msg-' + msg.id" class="message flowbot-message">
+                <div class="message-avatar">
+                  <div class="avatar-placeholder">{{ msg.senderAvatar || '🤖' }}</div>
+                </div>
+                <div class="message-body flowbot-body">
+                  <div class="message-header">
+                    <span class="sender flowbot-sender">{{ msg.senderName }}</span>
+                    <span class="time">{{ formatTime(msg.timestamp) }}</span>
+                  </div>
+                  <div class="message-content flowbot-content" v-html="renderContent(msg)"></div>
+                  
+                  <!-- 展开/折叠按钮 -->
+                  <button class="flowbot-toggle-btn" @click="toggleFlowbotVariables(msg.id)">
+                    {{ expandedFlowbotMessages.has(msg.id) ? '🔽 隐藏变量' : '🔼 查看变量' }}
+                  </button>
+                  
+                  <!-- 变量列表（展开时显示） -->
+                  <div v-if="expandedFlowbotMessages.has(msg.id)" class="flowbot-variables">
+                    <div class="flowbot-variables-title">流程图变量：</div>
+                    <div v-for="(value, key) in decodeFlowbotVariables(msg)" :key="key" class="flowbot-variable">
+                      <span class="var-name">{{ key }}:</span>
+                      <pre class="var-value">{{ formatVariableValue(value) }}</pre>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              <!-- Flowbot 普通消息 -->
+              <div v-else-if="msg.senderName === 'Flowbot'" :id="'msg-' + msg.id" class="message flowbot-message">
+                <div class="message-avatar">
+                  <div class="avatar-placeholder">{{ msg.senderAvatar || '🤖' }}</div>
+                </div>
+                <div class="message-body flowbot-body">
+                  <div class="message-header">
+                    <span class="sender flowbot-sender">{{ msg.senderName }}</span>
+                    <span class="time">{{ formatTime(msg.timestamp) }}</span>
+                  </div>
+                  <div class="message-content flowbot-content">{{ msg.content }}</div>
+                </div>
               </div>
               
               <!-- OpenClaw 消息（包含工具调用） -->
@@ -411,6 +453,50 @@ const mentionListRef = ref<HTMLDivElement>()
 const fileInputRef = ref<HTMLInputElement>()
 const attachments = ref<Array<FileUploadResponse & { previewUrl?: string }>>([])
 const isUploading = ref(false)
+
+// Flowbot 消息展开状态管理
+const expandedFlowbotMessages = ref<Set<string>>(new Set())
+
+// 检查消息是否是 Flowbot 结果消息
+function isFlowbotResultMessage(msg: Message): boolean {
+  return msg.senderName === 'Flowbot' && 
+         !!(msg.attachments?.some(att => att.type === 'FLOWCHART_VARIABLES'))
+}
+
+// 切换 Flowbot 消息展开状态
+function toggleFlowbotVariables(messageId: string) {
+  if (expandedFlowbotMessages.value.has(messageId)) {
+    expandedFlowbotMessages.value.delete(messageId)
+  } else {
+    expandedFlowbotMessages.value.add(messageId)
+  }
+}
+
+// 解码 Flowbot 变量数据
+function decodeFlowbotVariables(msg: Message): Record<string, any> | null {
+  const varsAttachment = msg.attachments?.find(att => att.type === 'FLOWCHART_VARIABLES')
+  if (!varsAttachment?.url) return null
+  
+  try {
+    // 从 data:application/json;base64,xxx 格式中提取 base64 数据
+    const base64Match = varsAttachment.url.match(/base64,(.+)/)
+    if (!base64Match) return null
+    
+    const jsonStr = atob(base64Match[1])
+    return JSON.parse(jsonStr)
+  } catch (e) {
+    console.error('Failed to decode flowbot variables:', e)
+    return null
+  }
+}
+
+// 格式化变量值为字符串
+function formatVariableValue(value: any): string {
+  if (value === null) return 'null'
+  if (value === undefined) return 'undefined'
+  if (typeof value === 'object') return JSON.stringify(value, null, 2)
+  return String(value)
+}
 
 // 是否为当前聊天室群主
 const isCreator = computed(() => {
@@ -2006,6 +2092,97 @@ function isSameDay(d1: Date, d2: Date): boolean {
   display: block;
   margin-top: 0.5rem;
   font-size: 0.875rem;
+}
+
+/* Flowbot 消息样式 */
+.flowbot-message {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border-radius: 12px;
+  padding: 0.75rem 1rem;
+  margin: 0.5rem 0;
+  max-width: 85%;
+  align-self: flex-start;
+}
+
+.flowbot-body {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  padding: 0.75rem;
+}
+
+.flowbot-sender {
+  color: #fff !important;
+  font-weight: 600;
+}
+
+.flowbot-content {
+  color: #fff;
+  white-space: pre-wrap;
+}
+
+.flowbot-content :deep(p) {
+  color: #fff;
+  margin: 0.5rem 0;
+}
+
+.flowbot-content :deep(strong) {
+  color: #ffd700;
+}
+
+.flowbot-toggle-btn {
+  margin-top: 0.75rem;
+  padding: 0.375rem 0.75rem;
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 6px;
+  color: #fff;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.flowbot-toggle-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.flowbot-variables {
+  margin-top: 0.75rem;
+  padding: 0.75rem;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 8px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.flowbot-variables-title {
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+  color: #ffd700;
+}
+
+.flowbot-variable {
+  margin: 0.5rem 0;
+  padding: 0.5rem;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+}
+
+.var-name {
+  font-weight: 600;
+  color: #90caf9;
+}
+
+.var-value {
+  margin: 0.25rem 0 0 0;
+  padding: 0.5rem;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 4px;
+  font-size: 0.8rem;
+  color: #e0e0e0;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 /* 系统消息 */
