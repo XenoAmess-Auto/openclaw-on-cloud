@@ -40,7 +40,7 @@ if [ -f "../backend.pid" ]; then
     fi
 fi
 
-nohup java -jar target/ooc-backend-1.0.0.jar > ../backend.log 2>&1 &
+nohup java -jar target/ooc-backend-0.1.1.jar > ../backend.log 2>&1 &
 NEW_PID=$!
 echo $NEW_PID > ../backend.pid
 
