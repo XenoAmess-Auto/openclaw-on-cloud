@@ -1,7 +1,9 @@
 // stores/flowchart.ts
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import axios from 'axios'
+import { initApiClient } from '@/api/client'
+
+const apiClient = initApiClient()
 
 export interface FlowchartNode {
   id: string
@@ -80,7 +82,7 @@ export const useFlowchartStore = defineStore('flowchart', () => {
     loading.value = true
     try {
       const params = category ? `?category=${category}` : ''
-      const response = await axios.get(`/api/flowchart-templates${params}`)
+      const response = await apiClient.get(`/api/flowchart-templates${params}`)
       templates.value = response.data.templates
     } catch (e: any) {
       error.value = e.message
@@ -92,7 +94,7 @@ export const useFlowchartStore = defineStore('flowchart', () => {
   async function fetchTemplate(templateId: string) {
     loading.value = true
     try {
-      const response = await axios.get(`/api/flowchart-templates/${templateId}`)
+      const response = await apiClient.get(`/api/flowchart-templates/${templateId}`)
       currentTemplate.value = response.data
       return response.data
     } catch (e: any) {
@@ -104,13 +106,13 @@ export const useFlowchartStore = defineStore('flowchart', () => {
   }
 
   async function createTemplate(template: Partial<FlowchartTemplate>) {
-    const response = await axios.post('/api/flowchart-templates', template)
+    const response = await apiClient.post('/api/flowchart-templates', template)
     templates.value.unshift(response.data)
     return response.data
   }
 
   async function updateTemplate(templateId: string, updates: Partial<FlowchartTemplate>) {
-    const response = await axios.put(`/api/flowchart-templates/${templateId}`, updates)
+    const response = await apiClient.put(`/api/flowchart-templates/${templateId}`, updates)
     const index = templates.value.findIndex(t => t.templateId === templateId)
     if (index !== -1) {
       templates.value[index] = response.data
@@ -119,18 +121,18 @@ export const useFlowchartStore = defineStore('flowchart', () => {
   }
 
   async function deleteTemplate(templateId: string) {
-    await axios.delete(`/api/flowchart-templates/${templateId}`)
+    await apiClient.delete(`/api/flowchart-templates/${templateId}`)
     templates.value = templates.value.filter(t => t.templateId !== templateId)
   }
 
   async function fetchInstances(roomId: string) {
-    const response = await axios.get(`/api/flowchart-instances?roomId=${roomId}`)
+    const response = await apiClient.get(`/api/flowchart-instances?roomId=${roomId}`)
     instances.value = response.data.instances
     return response.data
   }
 
   async function createInstance(templateId: string, roomId: string, variables: Record<string, any>) {
-    const response = await axios.post('/api/flowchart-instances', {
+    const response = await apiClient.post('/api/flowchart-instances', {
       templateId,
       roomId,
       variables
@@ -140,7 +142,7 @@ export const useFlowchartStore = defineStore('flowchart', () => {
   }
 
   async function stopInstance(instanceId: string) {
-    await axios.post(`/api/flowchart-instances/${instanceId}/stop`)
+    await apiClient.post(`/api/flowchart-instances/${instanceId}/stop`)
     const instance = instances.value.find(i => i.instanceId === instanceId)
     if (instance) {
       instance.status = 'CANCELLED'
