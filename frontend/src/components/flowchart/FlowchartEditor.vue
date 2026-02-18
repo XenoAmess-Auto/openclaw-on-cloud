@@ -583,4 +583,47 @@ defineExpose({
   font-size: 11px;
   color: #6b7280;
 }
+
+/* Handle 连接点样式 */
+:deep(.vue-flow__handle) {
+  width: 10px;
+  height: 10px;
+  background: #4f46e5;
+  border: 2px solid white;
+  border-radius: 50%;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+:deep(.vue-flow__handle:hover) {
+  background: #4338ca;
+  transform: scale(1.2);
+}
+
+:deep(.vue-flow__handle-top) {
+  top: -5px;
+}
+
+:deep(.vue-flow__handle-bottom) {
+  bottom: -5px;
+}
+
+/* 连接线和动画 */
+:deep(.vue-flow__edge-path) {
+  stroke: #4f46e5;
+  stroke-width: 2;
+}
+
+:deep(.vue-flow__edge.animated .vue-flow__edge-path) {
+  stroke-dasharray: 5;
+  animation: dashdraw 0.5s linear infinite;
+}
+
+@keyframes dashdraw {
+  from {
+    stroke-dashoffset: 10;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
 </style>
