@@ -2,6 +2,7 @@ package com.ooc.controller;
 
 import com.ooc.entity.User;
 import com.ooc.entity.flowchart.FlowchartInstance;
+import com.ooc.service.UserService;
 import com.ooc.service.flowchart.FlowchartInstanceService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -24,6 +25,7 @@ import java.util.Map;
 public class FlowchartInstanceController {
 
     private final FlowchartInstanceService instanceService;
+    private final UserService userService;
 
     /**
      * 创建并启动实例
@@ -32,7 +34,8 @@ public class FlowchartInstanceController {
     public ResponseEntity<?> createAndStart(@RequestBody CreateInstanceRequest request,
                                            Authentication authentication) {
         try {
-            User user = (User) authentication.getPrincipal();
+            String username = authentication.getName();
+            User user = userService.getUserByUsername(username);
             FlowchartInstance instance = instanceService.createAndStart(
                     request.getTemplateId(),
                     request.getRoomId(),

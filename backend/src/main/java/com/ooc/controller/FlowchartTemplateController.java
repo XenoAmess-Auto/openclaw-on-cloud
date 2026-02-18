@@ -2,6 +2,7 @@ package com.ooc.controller;
 
 import com.ooc.entity.User;
 import com.ooc.entity.flowchart.FlowchartTemplate;
+import com.ooc.service.UserService;
 import com.ooc.service.flowchart.FlowchartTemplateService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -25,6 +26,7 @@ import java.util.Map;
 public class FlowchartTemplateController {
 
     private final FlowchartTemplateService templateService;
+    private final UserService userService;
 
     /**
      * 创建模板
@@ -33,7 +35,8 @@ public class FlowchartTemplateController {
     public ResponseEntity<?> createTemplate(@RequestBody FlowchartTemplate template,
                                            Authentication authentication) {
         try {
-            User user = (User) authentication.getPrincipal();
+            String username = authentication.getName();
+            User user = userService.getUserByUsername(username);
             FlowchartTemplate created = templateService.createTemplate(template, user.getId());
             return ResponseEntity.ok(created);
         } catch (Exception e) {
@@ -96,7 +99,8 @@ public class FlowchartTemplateController {
                                            @RequestBody FlowchartTemplate updates,
                                            Authentication authentication) {
         try {
-            User user = (User) authentication.getPrincipal();
+            String username = authentication.getName();
+            User user = userService.getUserByUsername(username);
             FlowchartTemplate updated = templateService.updateTemplate(templateId, updates, user.getId());
             return ResponseEntity.ok(updated);
         } catch (Exception e) {
