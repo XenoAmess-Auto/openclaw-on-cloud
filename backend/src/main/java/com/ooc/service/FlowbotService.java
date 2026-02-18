@@ -74,6 +74,7 @@ public class FlowbotService {
      */
     public ChatRoom.Message sendFlowchartStarted(String roomId, String templateName) {
         User bot = getOrCreateFlowbotUser();
+        log.info("[FlowbotService] Sending flowchart started message to room {}: {}", roomId, templateName);
 
         ChatRoom.Message message = ChatRoom.Message.builder()
                 .id(UUID.randomUUID().toString())
@@ -90,7 +91,7 @@ public class FlowbotService {
         // 广播到 WebSocket
         broadcastService.broadcastChatMessage(roomId, message);
         
-        log.info("[Flowbot] Sent flowchart started message to room {}: {}", roomId, templateName);
+        log.info("[FlowbotService] Sent flowchart started message to room {}: {}", roomId, templateName);
 
         return message;
     }

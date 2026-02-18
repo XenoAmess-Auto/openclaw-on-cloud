@@ -264,8 +264,12 @@ public class FlowchartTaskQueueIntegration {
         final FlowchartEngine.FlowchartEventListener[] listenerHolder = new FlowchartEngine.FlowchartEventListener[1];
 
         listenerHolder[0] = event -> {
+            log.info("[Flowchart Listener] Received event: type={}, instanceId={}",
+                    event.getClass().getSimpleName(),
+                    ((FlowchartEngine.FlowchartEvent) event).getInstanceId());
             // 根据事件类型发送 WebSocket 通知
             if (event instanceof FlowchartEngine.FlowchartStartedEvent startedEvent) {
+                log.info("[Flowchart Listener] FlowchartStartedEvent received, sending Flowbot message");
                 // 流程图开始执行，发送开始消息
                 flowbotService.sendFlowchartStarted(
                         task.getRoomId(),
@@ -276,17 +280,21 @@ public class FlowchartTaskQueueIntegration {
             } else if (event instanceof FlowchartEngine.NodeCompletedEvent completedEvent) {
                 sendNodeCompletedNotification(task, completedEvent);
             } else if (event instanceof FlowchartEngine.FlowchartCompletedEvent completedEvent) {
+                log.info("[Flowchart Listener] FlowchartCompletedEvent received, instanceId={}", completedEvent.getInstanceId());
                 // 流程图执行完成，发送结果消息
                 FlowchartInstance instance = instanceRepository
                         .findByInstanceId(completedEvent.getInstanceId())
                         .orElse(null);
                 if (instance != null) {
+                    log.info("[Flowchart Listener] Sending Flowbot completed message, output={}", completedEvent.getOutput());
                     flowbotService.sendFlowchartCompleted(
                             task.getRoomId(),
                             instance.getTemplateName(),
                             String.valueOf(completedEvent.getOutput()),
                             instance.getOutputs()
                     );
+                } else {
+                    log.warn("[Flowchart Listener] Instance not found for completed event: {}", completedEvent.getInstanceId());
                 }
                 // 任务完成
                 taskQueueService.markTaskCompleted(task.getTaskId());
