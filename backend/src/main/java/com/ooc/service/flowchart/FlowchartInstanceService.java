@@ -22,15 +22,19 @@ public class FlowchartInstanceService {
     private final FlowchartInstanceRepository instanceRepository;
     private final FlowchartTemplateService templateService;
     private final FlowchartEngine flowchartEngine;
+    private final FlowchartTaskQueueIntegration taskQueueIntegration;
 
     /**
-     * 创建并启动实例
+     * 创建并启动实例（加入任务队列）
      */
     public FlowchartInstance createAndStart(String templateId, String roomId,
-                                            String userId, Map<String, Object> variables) {
-        FlowchartInstance instance = templateService.createInstance(templateId, roomId, userId, variables);
-        flowchartEngine.startExecution(instance.getInstanceId());
-        return instanceRepository.findByInstanceId(instance.getInstanceId()).orElseThrow();
+                                            String userId, String userName,
+                                            Map<String, Object> variables) {
+        // 通过任务队列集成创建实例并排队
+        String instanceId = taskQueueIntegration.enqueueFlowchart(
+                roomId, templateId, variables, userId, userName
+        );
+        return instanceRepository.findByInstanceId(instanceId).orElseThrow();
     }
 
     /**

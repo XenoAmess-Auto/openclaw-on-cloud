@@ -40,6 +40,7 @@ public class FlowchartInstanceController {
                     request.getTemplateId(),
                     request.getRoomId(),
                     user.getId(),
+                    user.getUsername(),
                     request.getVariables()
             );
             return ResponseEntity.ok(instance);

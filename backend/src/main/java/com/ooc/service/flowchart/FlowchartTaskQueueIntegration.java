@@ -26,7 +26,34 @@ public class FlowchartTaskQueueIntegration {
     private final FlowchartInstanceRepository instanceRepository;
 
     /**
-     * 添加流程图任务到队列
+     * 添加流程图任务到队列（HTTP API 版本）
+     *
+     * @param roomId 房间ID
+     * @param templateId 模板ID
+     * @param variables 变量值
+     * @param userId 用户ID
+     * @param userName 用户名
+     * @return 实例ID
+     */
+    public String enqueueFlowchart(String roomId, String templateId,
+                                   Map<String, Object> variables,
+                                   String userId, String userName) {
+        // 1. 创建流程图实例
+        FlowchartInstance instance = templateService.createInstance(
+                templateId, roomId, userId, variables
+        );
+
+        // 2. 添加到任务队列
+        String taskId = addFlowchartTaskToQueue(roomId, instance, userId, userName);
+
+        log.info("Flowchart task enqueued: taskId={}, instanceId={}, templateId={}",
+                taskId, instance.getInstanceId(), templateId);
+
+        return instance.getInstanceId();
+    }
+
+    /**
+     * 添加流程图任务到队列（WebSocket 版本）
      *
      * @param roomId 房间ID
      * @param templateId 模板ID
@@ -49,6 +76,63 @@ public class FlowchartTaskQueueIntegration {
 
         log.info("Flowchart task enqueued: taskId={}, instanceId={}, templateId={}",
                 taskId, instance.getInstanceId(), templateId);
+
+        return taskId;
+    }
+
+    /**
+     * 添加流程图任务到队列（HTTP API 版本，内部方法）
+     */
+    private String addFlowchartTaskToQueue(String roomId, FlowchartInstance instance,
+                                           String userId, String userName) {
+        String taskId = java.util.UUID.randomUUID().toString();
+
+        // 计算队列位置
+        int position = taskQueueService.getQueueSize(roomId, BotTaskQueue.BotType.OPENCLAW);
+
+        // 创建用户信息
+        BotTaskQueue.UserInfo userInfo = BotTaskQueue.UserInfo.builder()
+                .userId(userId)
+                .userName(userName)
+                .roomId(roomId)
+                .build();
+
+        // 创建数据库记录
+        BotTaskQueue dbTask = BotTaskQueue.builder()
+                .taskId(taskId)
+                .roomId(roomId)
+                .botType(BotTaskQueue.BotType.OPENCLAW)
+                .taskType(BotTaskQueue.TaskType.FLOWCHART)
+                .content("流程图: " + instance.getTemplateName())
+                .flowchartInstanceId(instance.getInstanceId())
+                .userInfo(userInfo)
+                .status(BotTaskQueue.TaskStatus.PENDING)
+                .position(position)
+                .build();
+
+        // 保存到数据库
+        taskQueueService.saveTask(dbTask);
+
+        // 创建内存任务包装器
+        ChatWebSocketHandler.OpenClawTask task = ChatWebSocketHandler.OpenClawTask.builder()
+                .taskId(taskId)
+                .roomId(roomId)
+                .content(instance.getTemplateName())
+                .userInfo(ChatWebSocketHandler.WebSocketUserInfo.builder()
+                        .userId(userId)
+                        .userName(userName)
+                        .roomId(roomId)
+                        .build())
+                .createdAt(java.time.Instant.now())
+                .status(ChatWebSocketHandler.OpenClawTask.TaskStatus.PENDING)
+                .build();
+
+        // 添加到内存队列
+        taskQueueService.addTaskToMemoryQueue(roomId, BotTaskQueue.BotType.OPENCLAW,
+                new PersistentTaskQueueService.TaskWrapper(taskId, task, BotTaskQueue.BotType.OPENCLAW));
+
+        log.info("Flowchart task {} added to queue for room {} (position={}, instanceId={})",
+                taskId, roomId, position, instance.getInstanceId());
 
         return taskId;
     }
