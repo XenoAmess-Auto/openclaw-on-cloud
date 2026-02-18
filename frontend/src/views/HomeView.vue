@@ -4,6 +4,7 @@
       <div class="logo">OOC</div>
       <div class="user-info">
         <router-link v-if="authStore.user?.roles?.includes('ROLE_ADMIN')" to="/admin" class="admin-link">管理</router-link>
+        <router-link to="/flowchart/templates" class="flowchart-link">流程图</router-link>
         <router-link to="/settings" class="settings-link">设置</router-link>
         <span>{{ authStore.user?.nickname || authStore.user?.username }}</span>
         <button @click="logout">退出</button>
@@ -1424,6 +1425,21 @@ function isSameDay(d1: Date, d2: Date): boolean {
   font-size: 0.875rem;
 }
 
+.flowchart-link {
+  padding: 0.5rem 1rem;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  text-decoration: none;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  border: 1px solid var(--border-color);
+  transition: background 0.2s;
+}
+
+.flowchart-link:hover {
+  background: var(--border-color);
+}
+
 .settings-link {
   padding: 0.5rem 1rem;
   background: var(--bg-tertiary);
@@ -2779,6 +2795,11 @@ textarea:focus {
   }
 
   .admin-link {
+    padding: 0.375rem 0.75rem;
+    font-size: 0.8125rem;
+  }
+
+  .flowchart-link {
     padding: 0.375rem 0.75rem;
     font-size: 0.8125rem;
   }
