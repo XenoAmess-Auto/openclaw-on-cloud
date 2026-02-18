@@ -575,6 +575,10 @@ public class PersistentTaskQueueService {
                 .sourceMessageId(dbTask.getSourceMessageId())
                 .createdAt(dbTask.getCreatedAt())
                 .status(ChatWebSocketHandler.OpenClawTask.TaskStatus.valueOf(dbTask.getStatus().name()))
+                .taskType(dbTask.getTaskType() != null 
+                    ? ChatWebSocketHandler.OpenClawTask.TaskType.valueOf(dbTask.getTaskType().name()) 
+                    : ChatWebSocketHandler.OpenClawTask.TaskType.CHAT)
+                .flowchartInstanceId(dbTask.getFlowchartInstanceId())
                 .build();
     }
 

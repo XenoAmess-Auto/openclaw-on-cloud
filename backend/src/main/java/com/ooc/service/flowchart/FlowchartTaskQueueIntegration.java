@@ -125,6 +125,8 @@ public class FlowchartTaskQueueIntegration {
                         .build())
                 .createdAt(java.time.Instant.now())
                 .status(ChatWebSocketHandler.OpenClawTask.TaskStatus.PENDING)
+                .taskType(ChatWebSocketHandler.OpenClawTask.TaskType.FLOWCHART)
+                .flowchartInstanceId(instance.getInstanceId())
                 .build();
 
         // 添加到内存队列
@@ -174,6 +176,8 @@ public class FlowchartTaskQueueIntegration {
                 .sourceMessageId(sourceMessageId)
                 .createdAt(java.time.Instant.now())
                 .status(ChatWebSocketHandler.OpenClawTask.TaskStatus.PENDING)
+                .taskType(ChatWebSocketHandler.OpenClawTask.TaskType.FLOWCHART)
+                .flowchartInstanceId(instance.getInstanceId())
                 .build();
 
         // 添加到内存队列
@@ -184,6 +188,30 @@ public class FlowchartTaskQueueIntegration {
                 taskId, roomId, position, instance.getInstanceId());
 
         return taskId;
+    }
+
+    /**
+     * 处理流程图任务（通过 instanceId）
+     *
+     * @param task 任务
+     */
+    public void executeFlowchartTask(ChatWebSocketHandler.OpenClawTask task) {
+        if (task.getFlowchartInstanceId() == null) {
+            log.error("Flowchart task {} has no instanceId", task.getTaskId());
+            taskQueueService.markTaskFailed(task.getTaskId());
+            taskQueueService.onTaskComplete(task.getRoomId(), BotTaskQueue.BotType.OPENCLAW);
+            return;
+        }
+
+        instanceRepository.findByInstanceId(task.getFlowchartInstanceId())
+                .ifPresentOrElse(
+                        instance -> executeFlowchartTask(task, instance),
+                        () -> {
+                            log.error("Flowchart instance not found: {}", task.getFlowchartInstanceId());
+                            taskQueueService.markTaskFailed(task.getTaskId());
+                            taskQueueService.onTaskComplete(task.getRoomId(), BotTaskQueue.BotType.OPENCLAW);
+                        }
+                );
     }
 
     /**

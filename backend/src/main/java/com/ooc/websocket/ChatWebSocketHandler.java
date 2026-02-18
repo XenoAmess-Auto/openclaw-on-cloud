@@ -45,6 +45,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
     private final AvatarCacheService avatarCacheService;
     private final ObjectMapper objectMapper;
     private final PersistentTaskQueueService taskQueueService;
+    private final com.ooc.service.flowchart.FlowchartTaskQueueIntegration flowchartTaskQueueIntegration;
 
     @Lazy
     @org.springframework.beans.factory.annotation.Autowired
@@ -76,9 +77,16 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
         private Instant createdAt;
         private volatile TaskStatus status; // PENDING, PROCESSING, COMPLETED, FAILED
         private String sourceMessageId; // 原始用户消息ID，用于replyTo
+        private TaskType taskType; // CHAT 或 FLOWCHART
+        private String flowchartInstanceId; // 流程图实例ID（当 taskType 为 FLOWCHART 时有效）
 
         public enum TaskStatus {
             PENDING, PROCESSING, COMPLETED, FAILED
+        }
+
+        public enum TaskType {
+            CHAT,      // 普通对话任务
+            FLOWCHART  // 流程图任务
         }
     }
 
@@ -1182,6 +1190,15 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
     private void executeOpenClawTask(OpenClawTask task) {
         String roomId = task.getRoomId();
         String taskId = task.getTaskId();
+        
+        // 检查是否是流程图任务
+        if (task.getTaskType() == OpenClawTask.TaskType.FLOWCHART) {
+            log.info("Delegating flowchart task {} to FlowchartTaskQueueIntegration (instanceId={})", 
+                    taskId, task.getFlowchartInstanceId());
+            flowchartTaskQueueIntegration.executeFlowchartTask(task);
+            return;
+        }
+        
         log.info("Executing OpenClaw task {} for room {} (streaming)", taskId, roomId);
 
         task.setStatus(OpenClawTask.TaskStatus.PROCESSING);
