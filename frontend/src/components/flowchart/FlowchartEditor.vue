@@ -265,16 +265,29 @@ const elements = ref<any[]>([])
 const selectedNode = ref<any>(null)
 const nodeConfig = ref<Record<string, any>>({})
 const saving = ref(false)
+const isInitialized = ref(false)
 
 const viewport = ref({ x: 0, y: 0, zoom: 1 })
 
-// 初始化
-if (props.modelValue) {
+// 初始化 - 同步初始化（用于非异步场景）
+if (props.modelValue?.nodes?.length || props.modelValue?.edges?.length) {
   elements.value = [
     ...props.modelValue.nodes,
     ...props.modelValue.edges
   ]
+  isInitialized.value = true
 }
+
+// 监听 modelValue 变化（用于异步加载场景）
+watch(() => props.modelValue, (newValue) => {
+  if (!isInitialized.value && newValue?.nodes?.length || newValue?.edges?.length) {
+    elements.value = [
+      ...newValue.nodes,
+      ...newValue.edges
+    ]
+    isInitialized.value = true
+  }
+}, { deep: true })
 
 // 生成唯一ID
 function generateId() {

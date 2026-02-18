@@ -62,8 +62,9 @@ public class FlowchartTemplateService {
         existing.setLatest(false);
         templateRepository.save(existing);
 
-        // 创建新版本
+        // 创建新版本 - 必须将 id 设为 null，确保 MongoDB 插入新文档而非更新
         FlowchartTemplate newVersion = FlowchartTemplate.builder()
+                .id(null)
                 .templateId(templateId)
                 .name(updates.getName() != null ? updates.getName() : existing.getName())
                 .description(updates.getDescription() != null ? updates.getDescription() : existing.getDescription())
