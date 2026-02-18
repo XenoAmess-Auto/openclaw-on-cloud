@@ -585,7 +585,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
             if (finalSessionId == null) {
                 // 创建新会话并发送流式消息
                 log.info("Creating new Kimi session for room: {}", roomId);
-                oocSessionService.getOrCreateSession(roomId, room.getName())
+                reactor.core.Disposable subscription = oocSessionService.getOrCreateSession(roomId, room.getName())
                         .flatMap(oocSession -> {
                             if (oocSession.getMessages().size() > 30) {
                                 return oocSessionService.summarizeAndCompact(oocSession)
@@ -626,10 +626,11 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                                     taskQueueService.onTaskComplete(roomId, BotTaskQueue.BotType.KIMI, taskId);
                                 }
                         );
+                taskQueueService.registerTaskSubscription(taskId, subscription);
             } else {
                 // 使用现有会话发送流式消息
                 log.info("Using existing Kimi session: {}", finalSessionId);
-                kimiPluginService.sendMessageStream(
+                reactor.core.Disposable subscription = kimiPluginService.sendMessageStream(
                                 finalSessionId,
                                 task.getContent(),
                                 task.getAttachments(),
@@ -653,6 +654,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                                     taskQueueService.onTaskComplete(roomId, BotTaskQueue.BotType.KIMI, taskId);
                                 }
                         );
+                taskQueueService.registerTaskSubscription(taskId, subscription);
             }
             } catch (Exception e) {
                 log.error("Error in Kimi task execution for task {}: {}", taskId, e.getMessage(), e);
@@ -922,7 +924,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                 log.info("Creating new Claude session for room: {}", roomId);
 
                 // 使用 oocSessionService 获取或创建会话并构建上下文
-                oocSessionService.getOrCreateSession("ooc-" + roomId, roomId)
+                reactor.core.Disposable subscription = oocSessionService.getOrCreateSession("ooc-" + roomId, roomId)
                         .flatMap(oocSession -> {
                             if (oocSession.getMessages().size() > 30) {
                                 return oocSessionService.summarizeAndCompact(oocSession)
@@ -964,10 +966,11 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                                     taskQueueService.onTaskComplete(roomId, BotTaskQueue.BotType.CLAUDE, taskId);
                                 }
                         );
+                taskQueueService.registerTaskSubscription(taskId, subscription);
             } else {
                 // 使用现有会话
                 log.info("Using existing Claude session: {}", finalSessionId);
-                claudeCodePluginService.sendMessageStream(
+                reactor.core.Disposable subscription = claudeCodePluginService.sendMessageStream(
                                 finalSessionId,
                                 task.getContent(),
                                 task.getAttachments(),
@@ -992,6 +995,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                                     taskQueueService.onTaskComplete(roomId, BotTaskQueue.BotType.CLAUDE, taskId);
                                 }
                         );
+                taskQueueService.registerTaskSubscription(taskId, subscription);
             }
         } catch (Exception e) {
             log.error("Error executing Claude task {}", taskId, e);
@@ -1246,7 +1250,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
             if (finalSessionId == null) {
                 // 创建新会话并发送流式消息
                 log.info("Creating new OpenClaw session for room: {}", roomId);
-                oocSessionService.getOrCreateSession(roomId, room.getName())
+                reactor.core.Disposable subscription = oocSessionService.getOrCreateSession(roomId, room.getName())
                         .flatMap(oocSession -> {
                             if (oocSession.getMessages().size() > 30) {
                                 return oocSessionService.summarizeAndCompact(oocSession)
@@ -1304,10 +1308,12 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                                     taskQueueService.onTaskComplete(roomId, BotTaskQueue.BotType.OPENCLAW, taskId);
                                 }
                         );
+                // 注册订阅以便后续取消
+                taskQueueService.registerTaskSubscription(taskId, subscription);
             } else {
                 // 使用现有会话发送流式消息
                 log.info("Using existing OpenClaw session: {}", finalSessionId);
-                openClawPluginService.sendMessageStream(
+                reactor.core.Disposable subscription = openClawPluginService.sendMessageStream(
                                 finalSessionId,
                                 task.getContent(),
                                 task.getAttachments(),
@@ -1331,6 +1337,8 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                                     taskQueueService.onTaskComplete(roomId, BotTaskQueue.BotType.OPENCLAW, taskId);
                                 }
                         );
+                // 注册订阅以便后续取消
+                taskQueueService.registerTaskSubscription(taskId, subscription);
             }
             } catch (Exception e) {
                 log.error("Error in OpenClaw task execution for task {}: {}", taskId, e.getMessage(), e);

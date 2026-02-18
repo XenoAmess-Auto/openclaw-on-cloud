@@ -50,6 +50,9 @@ public class PersistentTaskQueueService {
     // 当前正在执行的任务ID (roomId_botType -> taskId)
     private final ConcurrentHashMap<String, String> currentProcessingTasks = new ConcurrentHashMap<>();
 
+    // 正在执行的任务流订阅 (taskId -> Disposable) - 用于取消流式响应
+    private final ConcurrentHashMap<String, reactor.core.Disposable> taskSubscriptions = new ConcurrentHashMap<>();
+
     /**
      * 任务包装器，关联内存队列和数据库记录
      */
@@ -257,12 +260,14 @@ public class PersistentTaskQueueService {
         if (taskId != null) {
             currentProcessingTasks.remove(processingKey, taskId);
             taskCancellationFlags.remove(taskId);
+            taskSubscriptions.remove(taskId); // 清理订阅
         } else {
             // 如果没有指定taskId，清除该房间的所有记录
             String currentTask = currentProcessingTasks.get(processingKey);
             if (currentTask != null) {
                 currentProcessingTasks.remove(processingKey);
                 taskCancellationFlags.remove(currentTask);
+                taskSubscriptions.remove(currentTask); // 清理订阅
             }
         }
 
@@ -306,6 +311,9 @@ public class PersistentTaskQueueService {
             AtomicBoolean cancelFlag = taskCancellationFlags.computeIfAbsent(taskId, k -> new AtomicBoolean(true));
             cancelFlag.set(true);
 
+            // 取消流订阅 - 这会中断正在进行的流式响应
+            cancelTaskSubscription(taskId);
+
             // 更新数据库状态
             updateTaskStatus(taskId, BotTaskQueue.TaskStatus.CANCELLED);
             log.info("Processing task {} marked for cancellation in room {}", taskId, roomId);
@@ -319,10 +327,10 @@ public class PersistentTaskQueueService {
                 isProcessing.set(false);
             }
 
-            // 延迟后触发下一个任务
+            // 延迟后触发下一个任务 - 给一点时间让流完全停止
             Executors.newSingleThreadScheduledExecutor().schedule(() -> {
                 tryProcessNext(roomId, botType);
-            }, 100, TimeUnit.MILLISECONDS);
+            }, 500, TimeUnit.MILLISECONDS);
 
             return true;
         }
@@ -366,6 +374,36 @@ public class PersistentTaskQueueService {
      */
     public String getCurrentProcessingTask(String roomId, BotTaskQueue.BotType botType) {
         return currentProcessingTasks.get(roomId + "_" + botType.name());
+    }
+
+    /**
+     * 注册任务的流订阅，用于后续取消
+     */
+    public void registerTaskSubscription(String taskId, reactor.core.Disposable subscription) {
+        reactor.core.Disposable existing = taskSubscriptions.put(taskId, subscription);
+        if (existing != null && !existing.isDisposed()) {
+            existing.dispose();
+            log.warn("Replaced existing subscription for task {}", taskId);
+        }
+        log.debug("Registered subscription for task {}", taskId);
+    }
+
+    /**
+     * 取消任务的流订阅
+     */
+    public void cancelTaskSubscription(String taskId) {
+        reactor.core.Disposable subscription = taskSubscriptions.remove(taskId);
+        if (subscription != null && !subscription.isDisposed()) {
+            subscription.dispose();
+            log.info("Cancelled subscription for task {}", taskId);
+        }
+    }
+
+    /**
+     * 清理任务的订阅
+     */
+    public void clearTaskSubscription(String taskId) {
+        taskSubscriptions.remove(taskId);
     }
 
     /**
