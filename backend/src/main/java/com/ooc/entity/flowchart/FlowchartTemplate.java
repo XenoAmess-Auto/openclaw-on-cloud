@@ -57,6 +57,7 @@ public class FlowchartTemplate {
     private String parentVersionId; // 父版本ID（用于版本追溯）
 
     @JsonProperty("isLatest")
+    @org.springframework.data.mongodb.core.mapping.Field("isLatest")
     @Builder.Default
     private boolean isLatest = true;    // 是否最新版本
 
