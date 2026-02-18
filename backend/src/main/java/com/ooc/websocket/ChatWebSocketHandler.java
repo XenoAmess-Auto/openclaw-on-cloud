@@ -547,7 +547,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
             log.error("Failed to initialize Kimi streaming message for task {}: {}", taskId, e.getMessage(), e);
             task.setStatus(OpenClawTask.TaskStatus.FAILED);
             taskQueueService.markTaskFailed(taskId);
-            taskQueueService.onTaskComplete(roomId, BotTaskQueue.BotType.KIMI);
+            taskQueueService.onTaskComplete(roomId, BotTaskQueue.BotType.KIMI, taskId);
             return;
         }
 
@@ -602,14 +602,14 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                                     task.setStatus(OpenClawTask.TaskStatus.FAILED);
                                     taskQueueService.markTaskFailed(taskId);
                                     handleKimiStreamError(roomId, streamingMessageId, contentBuilder.get().toString(), error.getMessage(), task);
-                                    taskQueueService.onTaskComplete(roomId, BotTaskQueue.BotType.KIMI);
+                                    taskQueueService.onTaskComplete(roomId, BotTaskQueue.BotType.KIMI, taskId);
                                 },
                                 () -> {
                                     log.info("Kimi streaming completed for task {}", taskId);
                                     task.setStatus(OpenClawTask.TaskStatus.COMPLETED);
                                     taskQueueService.markTaskCompleted(taskId);
                                     finalizeKimiStreamMessage(roomId, streamingMessageId, contentBuilder.get().toString(), task);
-                                    taskQueueService.onTaskComplete(roomId, BotTaskQueue.BotType.KIMI);
+                                    taskQueueService.onTaskComplete(roomId, BotTaskQueue.BotType.KIMI, taskId);
                                 }
                         );
             } else {
@@ -629,14 +629,14 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                                     task.setStatus(OpenClawTask.TaskStatus.FAILED);
                                     taskQueueService.markTaskFailed(taskId);
                                     handleKimiStreamError(roomId, streamingMessageId, contentBuilder.get().toString(), error.getMessage(), task);
-                                    taskQueueService.onTaskComplete(roomId, BotTaskQueue.BotType.KIMI);
+                                    taskQueueService.onTaskComplete(roomId, BotTaskQueue.BotType.KIMI, taskId);
                                 },
                                 () -> {
                                     log.info("Kimi streaming completed for task {}", taskId);
                                     task.setStatus(OpenClawTask.TaskStatus.COMPLETED);
                                     taskQueueService.markTaskCompleted(taskId);
                                     finalizeKimiStreamMessage(roomId, streamingMessageId, contentBuilder.get().toString(), task);
-                                    taskQueueService.onTaskComplete(roomId, BotTaskQueue.BotType.KIMI);
+                                    taskQueueService.onTaskComplete(roomId, BotTaskQueue.BotType.KIMI, taskId);
                                 }
                         );
             }
@@ -645,13 +645,13 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                 task.setStatus(OpenClawTask.TaskStatus.FAILED);
                 taskQueueService.markTaskFailed(taskId);
                 handleKimiStreamError(roomId, streamingMessageId, contentBuilder.get().toString(), e.getMessage(), task);
-                taskQueueService.onTaskComplete(roomId, BotTaskQueue.BotType.KIMI);
+                taskQueueService.onTaskComplete(roomId, BotTaskQueue.BotType.KIMI, taskId);
             }
         }, () -> {
             log.error("Chat room not found: {}", roomId);
             task.setStatus(OpenClawTask.TaskStatus.FAILED);
             taskQueueService.markTaskFailed(taskId);
-            taskQueueService.onTaskComplete(roomId, BotTaskQueue.BotType.KIMI);
+            taskQueueService.onTaskComplete(roomId, BotTaskQueue.BotType.KIMI, taskId);
         });
     }
 
@@ -866,7 +866,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
         } catch (Exception e) {
             log.error("Failed to initialize Claude streaming message for task {}: {}", taskId, e.getMessage(), e);
             task.setStatus(OpenClawTask.TaskStatus.FAILED);
-            taskQueueService.onTaskComplete(roomId, BotTaskQueue.BotType.CLAUDE);
+            taskQueueService.onTaskComplete(roomId, BotTaskQueue.BotType.CLAUDE, taskId);
             return;
         }
 
@@ -940,14 +940,14 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                                     task.setStatus(OpenClawTask.TaskStatus.FAILED);
                                     taskQueueService.markTaskFailed(taskId);
                                     handleClaudeStreamError(roomId, streamingMessageId, contentBuilder.get().toString(), error.getMessage(), task);
-                                    taskQueueService.onTaskComplete(roomId, BotTaskQueue.BotType.CLAUDE);
+                                    taskQueueService.onTaskComplete(roomId, BotTaskQueue.BotType.CLAUDE, taskId);
                                 },
                                 () -> {
                                     log.info("Claude streaming completed for task {}", taskId);
                                     task.setStatus(OpenClawTask.TaskStatus.COMPLETED);
                                     taskQueueService.markTaskCompleted(taskId);
                                     finalizeClaudeStreamMessage(roomId, streamingMessageId, contentBuilder.get().toString(), task);
-                                    taskQueueService.onTaskComplete(roomId, BotTaskQueue.BotType.CLAUDE);
+                                    taskQueueService.onTaskComplete(roomId, BotTaskQueue.BotType.CLAUDE, taskId);
                                 }
                         );
             } else {
@@ -968,14 +968,14 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                                     task.setStatus(OpenClawTask.TaskStatus.FAILED);
                                     taskQueueService.markTaskFailed(taskId);
                                     handleClaudeStreamError(roomId, streamingMessageId, contentBuilder.get().toString(), error.getMessage(), task);
-                                    taskQueueService.onTaskComplete(roomId, BotTaskQueue.BotType.CLAUDE);
+                                    taskQueueService.onTaskComplete(roomId, BotTaskQueue.BotType.CLAUDE, taskId);
                                 },
                                 () -> {
                                     log.info("Claude streaming completed for task {}", taskId);
                                     task.setStatus(OpenClawTask.TaskStatus.COMPLETED);
                                     taskQueueService.markTaskCompleted(taskId);
                                     finalizeClaudeStreamMessage(roomId, streamingMessageId, contentBuilder.get().toString(), task);
-                                    taskQueueService.onTaskComplete(roomId, BotTaskQueue.BotType.CLAUDE);
+                                    taskQueueService.onTaskComplete(roomId, BotTaskQueue.BotType.CLAUDE, taskId);
                                 }
                         );
             }
@@ -983,7 +983,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
             log.error("Error executing Claude task {}", taskId, e);
             task.setStatus(OpenClawTask.TaskStatus.FAILED);
             taskQueueService.markTaskFailed(taskId);
-            taskQueueService.onTaskComplete(roomId, BotTaskQueue.BotType.CLAUDE);
+            taskQueueService.onTaskComplete(roomId, BotTaskQueue.BotType.CLAUDE, taskId);
         }
     }
 
@@ -1208,7 +1208,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
             log.error("Failed to initialize streaming message for task {}: {}", taskId, e.getMessage(), e);
             task.setStatus(OpenClawTask.TaskStatus.FAILED);
             taskQueueService.markTaskFailed(taskId);
-            taskQueueService.onTaskComplete(roomId, BotTaskQueue.BotType.OPENCLAW);
+            taskQueueService.onTaskComplete(roomId, BotTaskQueue.BotType.OPENCLAW, taskId);
             return;
         }
 
@@ -1274,12 +1274,12 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                                         } catch (InterruptedException e) {
                                             Thread.currentThread().interrupt();
                                         }
-                                        taskQueueService.onTaskComplete(roomId, BotTaskQueue.BotType.OPENCLAW);
+                                        taskQueueService.onTaskComplete(roomId, BotTaskQueue.BotType.OPENCLAW, taskId);
                                     } else {
                                         task.setStatus(OpenClawTask.TaskStatus.FAILED);
                                         taskQueueService.markTaskFailed(taskId);
                                         handleOpenClawStreamError(roomId, streamingMessageId, contentBuilder.get().toString(), error.getMessage(), task);
-                                        taskQueueService.onTaskComplete(roomId, BotTaskQueue.BotType.OPENCLAW);
+                                        taskQueueService.onTaskComplete(roomId, BotTaskQueue.BotType.OPENCLAW, taskId);
                                     }
                                 },
                                 () -> {
@@ -1287,7 +1287,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                                     task.setStatus(OpenClawTask.TaskStatus.COMPLETED);
                                     taskQueueService.markTaskCompleted(taskId);
                                     finalizeOpenClawStreamMessage(roomId, streamingMessageId, contentBuilder.get().toString(), task, streamingMessage.get().getToolCalls());
-                                    taskQueueService.onTaskComplete(roomId, BotTaskQueue.BotType.OPENCLAW);
+                                    taskQueueService.onTaskComplete(roomId, BotTaskQueue.BotType.OPENCLAW, taskId);
                                 }
                         );
             } else {
@@ -1307,14 +1307,14 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                                     task.setStatus(OpenClawTask.TaskStatus.FAILED);
                                     taskQueueService.markTaskFailed(taskId);
                                     handleOpenClawStreamError(roomId, streamingMessageId, contentBuilder.get().toString(), error.getMessage(), task);
-                                    taskQueueService.onTaskComplete(roomId, BotTaskQueue.BotType.OPENCLAW);
+                                    taskQueueService.onTaskComplete(roomId, BotTaskQueue.BotType.OPENCLAW, taskId);
                                 },
                                 () -> {
                                     log.info("OpenClaw streaming completed for task {}", taskId);
                                     task.setStatus(OpenClawTask.TaskStatus.COMPLETED);
                                     taskQueueService.markTaskCompleted(taskId);
                                     finalizeOpenClawStreamMessage(roomId, streamingMessageId, contentBuilder.get().toString(), task, streamingMessage.get().getToolCalls());
-                                    taskQueueService.onTaskComplete(roomId, BotTaskQueue.BotType.OPENCLAW);
+                                    taskQueueService.onTaskComplete(roomId, BotTaskQueue.BotType.OPENCLAW, taskId);
                                 }
                         );
             }
@@ -1323,13 +1323,13 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                 task.setStatus(OpenClawTask.TaskStatus.FAILED);
                 taskQueueService.markTaskFailed(taskId);
                 handleOpenClawStreamError(roomId, streamingMessageId, contentBuilder.get().toString(), e.getMessage(), task);
-                taskQueueService.onTaskComplete(roomId, BotTaskQueue.BotType.OPENCLAW);
+                taskQueueService.onTaskComplete(roomId, BotTaskQueue.BotType.OPENCLAW, taskId);
             }
         }, () -> {
             log.error("Chat room not found: {}", roomId);
             task.setStatus(OpenClawTask.TaskStatus.FAILED);
             taskQueueService.markTaskFailed(taskId);
-            taskQueueService.onTaskComplete(roomId, BotTaskQueue.BotType.OPENCLAW);
+            taskQueueService.onTaskComplete(roomId, BotTaskQueue.BotType.OPENCLAW, taskId);
         });
     }
 
@@ -1341,6 +1341,12 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
             AtomicReference<ChatRoom.Message> streamingMessage,
             OpenClawPluginService.StreamEvent event,
             OpenClawTask task) {
+
+        // 检查任务是否被取消
+        if (taskQueueService.isTaskCancelled(task.getTaskId())) {
+            log.info("Task {} has been cancelled, stopping stream processing", task.getTaskId());
+            return;
+        }
 
         log.info("OpenClaw stream event for task {}: type={}, contentLength={}, toolName={}, totalBuilderLength={}",
                 task.getTaskId(),

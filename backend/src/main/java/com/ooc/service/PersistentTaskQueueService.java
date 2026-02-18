@@ -41,6 +41,12 @@ public class PersistentTaskQueueService {
     // 任务处理器回调
     private final ConcurrentHashMap<String, TaskProcessor> taskProcessors = new ConcurrentHashMap<>();
 
+    // 正在执行的任务取消标志 (taskId -> AtomicBoolean)
+    private final ConcurrentHashMap<String, AtomicBoolean> taskCancellationFlags = new ConcurrentHashMap<>();
+
+    // 当前正在执行的任务ID (roomId_botType -> taskId)
+    private final ConcurrentHashMap<String, String> currentProcessingTasks = new ConcurrentHashMap<>();
+
     /**
      * 任务包装器，关联内存队列和数据库记录
      */
@@ -206,6 +212,12 @@ public class PersistentTaskQueueService {
         // 更新内存任务状态
         wrapper.task().setStatus(ChatWebSocketHandler.OpenClawTask.TaskStatus.PROCESSING);
 
+        // 记录当前正在执行的任务
+        currentProcessingTasks.put(roomId + "_" + botType.name(), wrapper.taskId());
+
+        // 清理之前的取消标志（如果有）
+        taskCancellationFlags.remove(wrapper.taskId());
+
         // 调用处理器
         TaskProcessor processor = taskProcessors.get(botType.name());
         if (processor != null) {
@@ -228,7 +240,29 @@ public class PersistentTaskQueueService {
      * 任务完成回调
      */
     public void onTaskComplete(String roomId, BotTaskQueue.BotType botType) {
-        log.info("Task completed for room {}, checking {} queue for next task", roomId, botType);
+        onTaskComplete(roomId, botType, null);
+    }
+
+    /**
+     * 任务完成回调（带任务ID）
+     */
+    public void onTaskComplete(String roomId, BotTaskQueue.BotType botType, String taskId) {
+        log.info("Task {} completed for room {}, checking {} queue for next task", taskId, roomId, botType);
+
+        // 清理当前任务标记
+        String processingKey = roomId + "_" + botType.name();
+        if (taskId != null) {
+            currentProcessingTasks.remove(processingKey, taskId);
+            taskCancellationFlags.remove(taskId);
+        } else {
+            // 如果没有指定taskId，清除该房间的所有记录
+            String currentTask = currentProcessingTasks.get(processingKey);
+            if (currentTask != null) {
+                currentProcessingTasks.remove(processingKey);
+                taskCancellationFlags.remove(currentTask);
+            }
+        }
+
         AtomicBoolean isProcessing = getProcessingFlag(roomId, botType);
         if (isProcessing != null) {
             isProcessing.set(false);
@@ -257,9 +291,40 @@ public class PersistentTaskQueueService {
     }
 
     /**
-     * 取消任务
+     * 取消任务（支持取消正在执行的任务）
      */
     public boolean cancelTask(String roomId, String taskId, BotTaskQueue.BotType botType) {
+        String processingKey = roomId + "_" + botType.name();
+        String currentTaskId = currentProcessingTasks.get(processingKey);
+
+        // 检查是否是当前正在执行的任务
+        if (taskId.equals(currentTaskId)) {
+            // 设置取消标志
+            AtomicBoolean cancelFlag = taskCancellationFlags.computeIfAbsent(taskId, k -> new AtomicBoolean(true));
+            cancelFlag.set(true);
+
+            // 更新数据库状态
+            updateTaskStatus(taskId, BotTaskQueue.TaskStatus.CANCELLED);
+            log.info("Processing task {} marked for cancellation in room {}", taskId, roomId);
+
+            // 清理当前任务标记（让 onTaskComplete 能正确处理下一个任务）
+            currentProcessingTasks.remove(processingKey);
+
+            // 重置处理标志并触发下一个任务
+            AtomicBoolean isProcessing = getProcessingFlag(roomId, botType);
+            if (isProcessing != null) {
+                isProcessing.set(false);
+            }
+
+            // 延迟后触发下一个任务
+            Executors.newSingleThreadScheduledExecutor().schedule(() -> {
+                tryProcessNext(roomId, botType);
+            }, 100, TimeUnit.MILLISECONDS);
+
+            return true;
+        }
+
+        // 否则尝试从队列中移除
         LinkedBlockingQueue<TaskWrapper> queue = getQueue(roomId, botType);
         if (queue == null) {
             return false;
@@ -271,11 +336,33 @@ public class PersistentTaskQueueService {
         if (removed) {
             // 更新数据库状态
             updateTaskStatus(taskId, BotTaskQueue.TaskStatus.CANCELLED);
-            log.info("Task {} cancelled in room {}", taskId, roomId);
+            log.info("Pending task {} cancelled in room {}", taskId, roomId);
             return true;
         }
 
         return false;
+    }
+
+    /**
+     * 检查任务是否被取消
+     */
+    public boolean isTaskCancelled(String taskId) {
+        AtomicBoolean flag = taskCancellationFlags.get(taskId);
+        return flag != null && flag.get();
+    }
+
+    /**
+     * 清理任务的取消标志
+     */
+    public void clearCancellationFlag(String taskId) {
+        taskCancellationFlags.remove(taskId);
+    }
+
+    /**
+     * 获取当前正在执行的任务ID
+     */
+    public String getCurrentProcessingTask(String roomId, BotTaskQueue.BotType botType) {
+        return currentProcessingTasks.get(roomId + "_" + botType.name());
     }
 
     /**

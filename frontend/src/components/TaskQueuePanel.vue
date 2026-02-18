@@ -12,14 +12,18 @@
     
     <div class="queue-stats">
       <div class="stat-item">
-        <span class="stat-value">{{ queueInfo.queueSize }}</span>
+        <span class="stat-value">{{ pendingCount }}</span>
         <span class="stat-label">待处理</span>
       </div>
       <div class="stat-item">
-        <span class="stat-value" :class="{ 'active': queueInfo.isProcessing }">
-          {{ queueInfo.isProcessing ? '是' : '否' }}
+        <span class="stat-value" :class="{ 'active': processingCount > 0 }">
+          {{ processingCount }}
         </span>
-        <span class="stat-label">处理中</span>
+        <span class="stat-label">执行中</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-value">{{ totalCount }}</span>
+        <span class="stat-label">总计</span>
       </div>
     </div>
 
@@ -55,10 +59,10 @@
           </div>
         </div>
         <button 
-          v-if="task.status === 'PENDING'"
+          v-if="task.status === 'PENDING' || task.status === 'PROCESSING'"
           class="cancel-btn"
           @click="cancelTask(task.taskId)"
-          title="取消任务"
+          :title="task.status === 'PROCESSING' ? '停止当前任务' : '取消任务'"
           :disabled="cancellingTaskId === task.taskId"
         >
           {{ cancellingTaskId === task.taskId ? '...' : '✕' }}
@@ -79,7 +83,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { ref, onMounted, onUnmounted, watch, computed } from 'vue'
 import { chatRoomApi, type TaskQueueInfo } from '@/api/chatRoom'
 
 interface Props {
@@ -105,6 +109,11 @@ const refreshInterval = ref<number | null>(null)
 const draggedTaskId = ref<string | null>(null)
 const draggedIndex = ref<number>(-1)
 const dragOverTaskId = ref<string | null>(null)
+
+// 计算属性
+const pendingCount = computed(() => queueInfo.value.tasks.filter(t => t.status === 'PENDING').length)
+const processingCount = computed(() => queueInfo.value.tasks.filter(t => t.status === 'PROCESSING').length)
+const totalCount = computed(() => queueInfo.value.tasks.length)
 
 const fetchQueue = async () => {
   if (!props.roomId) return
