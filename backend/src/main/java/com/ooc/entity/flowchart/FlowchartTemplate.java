@@ -8,6 +8,7 @@ import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.mongodb.core.index.CompoundIndex;
 import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 
@@ -25,6 +26,7 @@ import java.util.Map;
 @NoArgsConstructor
 @AllArgsConstructor
 @Document(collection = "flowchart_templates")
+@CompoundIndex(name = "template_version_unique", def = "{'templateId': 1, 'version': 1}", unique = true)
 public class FlowchartTemplate {
 
     @JsonProperty("id")
@@ -32,7 +34,7 @@ public class FlowchartTemplate {
     private String id;
 
     @JsonProperty("templateId")
-    @Indexed(unique = true)
+    @Indexed
     private String templateId;      // 业务ID: "daily-report", "data-sync"
 
     @JsonProperty("name")
