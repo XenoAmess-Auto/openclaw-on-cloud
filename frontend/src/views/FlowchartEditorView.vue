@@ -127,7 +127,7 @@
               </tr>
               <tr>
                 <td><span class="node-badge condition">条件</span></td>
-                <td>分支判断，支持真/假两个分支</td>
+                <td>支持布尔判断(真/假)和多分支判断</td>
               </tr>
               <tr>
                 <td><span class="node-badge variable">变量</span></td>
@@ -142,6 +142,18 @@
                 <td>流程出口，可指定输出变量</td>
               </tr>
             </table>
+          </section>
+
+          <section class="help-section">
+            <h3>🔀 条件节点 - 两种模式</h3>
+            <p><strong>布尔模式</strong>：简单的真/假二分支</p>
+            <div class="code-block">score > 0.5  →  真分支/假分支</div>
+            
+            <p><strong>分支模式</strong>：根据变量值匹配多个条件</p>
+            <div class="code-block">status 等于 "success"  →  分支1
+status 包含 "error"   →  分支2
+status 大于 100       →  分支3</div>
+            <p>支持的操作符：等于、不等于、大于、大于等于、小于、小于等于、包含、正则匹配</p>
           </section>
 
           <section class="help-section">
