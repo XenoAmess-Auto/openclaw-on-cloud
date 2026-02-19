@@ -352,11 +352,6 @@ function deleteTemplate(template: any) {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  opacity: 0;
-  transition: opacity 0.2s;
-}
-
-.template-card:hover .card-actions {
   opacity: 1;
 }
 
