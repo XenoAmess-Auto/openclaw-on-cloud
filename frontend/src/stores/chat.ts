@@ -264,6 +264,14 @@ export const useChatStore = defineStore('chat', () => {
         hasMoreMessages.value = data.hasMore || false
         break
       case 'message':
+        // 检查是否已存在相同ID的消息，避免重复添加
+        {
+          const existingIndex = messages.value.findIndex(m => m.id === data.message.id)
+          if (existingIndex !== -1) {
+            console.warn('[WebSocket] message - message already exists, skipping:', data.message.id)
+            break
+          }
+        }
         messages.value.push(data.message)
         // 收到消息时清除该用户的 typing 状态
         if (data.message.senderId) {
@@ -278,6 +286,14 @@ export const useChatStore = defineStore('chat', () => {
         }
         console.log('[WebSocket] stream_start:', data.message)
         console.log('[WebSocket] stream_start replyToMessageId:', data.message?.replyToMessageId)
+        // 检查是否已存在相同ID的消息，避免重复添加
+        {
+          const existingIndex = messages.value.findIndex(m => m.id === data.message.id)
+          if (existingIndex !== -1) {
+            console.warn('[WebSocket] stream_start - message already exists, skipping:', data.message.id)
+            break
+          }
+        }
         messages.value.push(data.message)
         break
       case 'stream_delta':

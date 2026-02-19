@@ -2120,27 +2120,8 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
     }
 
     public void broadcastToRoom(String roomId, WebSocketMessage message, WebSocketSession... exclude) {
-        // 使用广播服务发送消息
+        // 统一使用广播服务发送消息
         broadcastService.broadcastToRoom(roomId, message, exclude);
-        
-        // 同时也更新本地 roomSessions（保持向后兼容）
-        Set<WebSocketSession> excludeSet = new HashSet<>(Arrays.asList(exclude));
-        Set<WebSocketSession> sessions = roomSessions.getOrDefault(roomId, Collections.emptySet());
-
-        try {
-            String payload = objectMapper.writeValueAsString(message);
-            for (WebSocketSession s : sessions) {
-                if (!excludeSet.contains(s) && s.isOpen()) {
-                    try {
-                        s.sendMessage(new TextMessage(payload));
-                    } catch (IOException e) {
-                        log.error("Failed to send message", e);
-                    }
-                }
-            }
-        } catch (Exception e) {
-            log.error("Failed to serialize message", e);
-        }
     }
 
     /**
