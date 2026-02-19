@@ -12,6 +12,9 @@
         <button class="btn" @click="addNode('condition')" title="条件节点">
           <span class="icon"></span> 条件
         </button>
+        <button class="btn" @click="addNode('code')" title="代码节点">
+          <span class="icon"></span> 代码
+        </button>
         <button class="btn" @click="addNode('variable')" title="变量节点">
           <span class="icon"></span> 变量
         </button>
@@ -140,6 +143,26 @@
           </div>
         </template>
 
+        <template #node-code="{ data, id }">
+          <div
+            class="node node-code"
+            @touchstart="onTouchStart($event, id)"
+            @touchend="onTouchEnd"
+            @touchmove="onTouchMove"
+          >
+            <Handle type="target" :position="Position.Top" />
+            <div class="node-content">
+              <span class="node-icon">💻</span>
+              <div class="node-info">
+                <div class="node-title">{{ data?.label || '代码' }}</div>
+                <div class="node-subtitle">{{ data?.language || 'groovy' }}</div>
+              </div>
+            </div>
+            
+            <Handle type="source" :position="Position.Bottom" />
+          </div>
+        </template>
+
         <template #node-variable="{ data, id }">
           <div
             class="node node-variable"
@@ -149,7 +172,7 @@
           >
             <Handle type="target" :position="Position.Top" />
             <div class="node-content">
-              <span class="node-icon"></span>
+              <span class="node-icon">🔧</span>
               <div class="node-info">
                 <div class="node-title">{{ data?.label || '变量' }}</div>
                 <div class="node-subtitle" v-if="data?.varName">{{ data.varName }} = ...</div>
@@ -374,6 +397,27 @@
           </template>
         </template>
 
+        <!-- 代码节点配置 -->
+        <template v-if="selectedNode.type === 'code'">
+          <div class="form-group">
+            <label>编程语言</label>
+            <select v-model="nodeConfig.language">
+              <option value="groovy">Groovy</option>
+              <option value="java">Java</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label>代码</label>
+            <textarea v-model="nodeConfig.code" rows="8" placeholder="// 可直接访问流程变量&#10;// 示例：将 JSON 字符串解析并提取字段&#10;import groovy.json.JsonSlurper&#10;def json = new JsonSlurper().parseText(llmResponse)&#10;return json.completed"></textarea>
+          </div>
+
+          <div class="form-group">
+            <label>输出变量（可选）</label>
+            <input v-model="nodeConfig.outputVar" type="text" placeholder="将代码返回值存入此变量" />
+          </div>
+        </template>
+
         <!-- 变量节点配置 -->
         <template v-if="selectedNode.type === 'variable'">
           <div class="form-group">
@@ -573,6 +617,10 @@ function addNode(type: string) {
     case 'condition':
       nodeData.conditionExpr = ''
       break
+    case 'code':
+      nodeData.language = 'groovy'
+      nodeData.code = '// 访问流程变量\n// 示例：return variables.myVar'
+      break
     case 'variable':
       nodeData.varName = ''
       nodeData.varValue = ''
@@ -594,6 +642,7 @@ function getDefaultLabel(type: string): string {
     start: '开始',
     llm: 'AI 调用',
     condition: '条件判断',
+    code: '代码执行',
     variable: '设置变量',
     wait: '等待',
     end: '结束'
@@ -1121,6 +1170,11 @@ defineExpose({
 :deep(.node-variable) {
   border-color: #8b5cf6;
   background: #f5f3ff;
+}
+
+:deep(.node-code) {
+  border-color: #0ea5e9;
+  background: #f0f9ff;
 }
 
 :deep(.node-wait) {
