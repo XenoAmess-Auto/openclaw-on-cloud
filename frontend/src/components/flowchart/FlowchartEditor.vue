@@ -94,15 +94,34 @@
             <Handle type="target" :position="Position.Top" />
             <div class="node-content">
               <span class="node-icon"></span>
-              <span>{{ data?.label || '条件' }}</span>
+              <div class="node-info">
+                <div class="node-title">{{ data?.label || '条件' }}</div>
+                <div class="node-subtitle">{{ (data?.branches?.length || 0) + 1 }} 个分支</div>
+              </div>
             </div>
-            
-            <Handle type="source" :position="Position.Bottom" id="true" :style="{ left: '25%' }">
-              <span class="handle-label">真</span>
-            </Handle>
-            <Handle type="source" :position="Position.Bottom" id="false" :style="{ left: '75%' }">
-              <span class="handle-label">假</span>
-            </Handle>
+
+            <!-- 动态分支输出端口 -->
+            <template v-if="data?.branches?.length > 0">
+              <Handle
+                v-for="(branch, index) in data.branches"
+                :key="index"
+                type="source"
+                :position="Position.Bottom"
+                :id="'branch_' + index"
+                :style="{ left: getBranchPosition(index, data.branches.length) }"
+              >
+                <span class="handle-label">{{ branch.label || index + 1 }}</span>
+              </Handle>
+            </template>
+            <!-- 默认两分支 -->
+            <template v-else>
+              <Handle type="source" :position="Position.Bottom" id="true" :style="{ left: '25%' }">
+                <span class="handle-label">真</span>
+              </Handle>
+              <Handle type="source" :position="Position.Bottom" id="false" :style="{ left: '75%' }">
+                <span class="handle-label">假</span>
+              </Handle>
+            </template>
           </div>
         </template>
 
@@ -230,19 +249,66 @@
         <!-- 条件节点配置 -->
         <template v-if="selectedNode.type === 'condition'">
           <div class="form-group">
-            <label>条件表达式 (如: score > 0.5)</label>
-            <input v-model="nodeConfig.conditionExpr" type="text" placeholder="输入条件" />
+            <label>判断模式</label>
+            <select v-model="nodeConfig.conditionMode">
+              <option value="boolean">布尔判断（真/假）</option>
+              <option value="switch">分支判断（多条件）</option>
+            </select>
           </div>
 
-          <div class="form-group">
-            <label>真分支目标节点ID</label>
-            <input v-model="nodeConfig.trueTarget" type="text" placeholder="节点ID" />
-          </div>
+          <!-- 布尔模式 -->
+          <template v-if="nodeConfig.conditionMode !== 'switch'">
+            <div class="form-group">
+              <label>条件表达式 (如: score > 0.5)</label>
+              <input v-model="nodeConfig.conditionExpr" type="text" placeholder="输入条件" />
+            </div>
 
-          <div class="form-group">
-            <label>假分支目标节点ID</label>
-            <input v-model="nodeConfig.falseTarget" type="text" placeholder="节点ID" />
-          </div>
+            <div class="form-group">
+              <label>真分支目标节点ID</label>
+              <input v-model="nodeConfig.trueTarget" type="text" placeholder="节点ID" />
+            </div>
+
+            <div class="form-group">
+              <label>假分支目标节点ID</label>
+              <input v-model="nodeConfig.falseTarget" type="text" placeholder="节点ID" />
+            </div>
+          </template>
+
+          <!-- 分支模式 -->
+          <template v-else>
+            <div class="form-group">
+              <label>判断变量</label>
+              <input v-model="nodeConfig.switchVar" type="text" placeholder="如: score, status" />
+            </div>
+
+            <div class="branches-section">
+              <div class="section-header">
+                <label>分支列表</label>
+                <button class="btn-sm" @click="addBranch">+ 添加分支</button>
+              </div>
+
+              <div v-for="(branch, index) in nodeConfig.branches" :key="index" class="branch-item">
+                <div class="branch-header">
+                  <span class="branch-index">{{ index + 1 }}</span>
+                  <button class="btn-icon-sm" @click="removeBranch(index)">🗑️</button>
+                </div>
+                <div class="branch-fields">
+                  <input v-model="branch.label" type="text" placeholder="分支标签" class="branch-input" />
+                  <select v-model="branch.operator" class="branch-select">
+                    <option value="eq">等于</option>
+                    <option value="ne">不等于</option>
+                    <option value="gt">大于</option>
+                    <option value="gte">大于等于</option>
+                    <option value="lt">小于</option>
+                    <option value="lte">小于等于</option>
+                    <option value="contains">包含</option>
+                    <option value="regex">正则匹配</option>
+                  </select>
+                  <input v-model="branch.value" type="text" placeholder="比较值" class="branch-input" />
+                </div>
+              </div>
+            </div>
+          </template>
         </template>
 
         <!-- 变量节点配置 -->
@@ -472,7 +538,41 @@ function getDefaultLabel(type: string): string {
   return labels[type] || type
 }
 
-// 连接节点
+// 获取分支位置百分比
+function getBranchPosition(index: number, total: number): string {
+  if (total === 1) return '50%'
+  const step = 100 / (total + 1)
+  return `${step * (index + 1)}%`
+}
+
+// 添加分支
+function addBranch() {
+  if (!nodeConfig.value.branches) {
+    nodeConfig.value.branches = []
+  }
+  nodeConfig.value.branches.push({
+    label: `分支${nodeConfig.value.branches.length + 1}`,
+    operator: 'eq',
+    value: ''
+  })
+}
+
+// 删除分支
+function removeBranch(index: number) {
+  if (nodeConfig.value.branches) {
+    nodeConfig.value.branches.splice(index, 1)
+  }
+}
+
+// 监听节点选中，初始化分支数据
+watch(selectedNode, (newNode) => {
+  if (newNode && newNode.type === 'condition') {
+    // 确保 branches 字段存在
+    if (!nodeConfig.value.branches) {
+      nodeConfig.value.branches = []
+    }
+  }
+})
 function onConnect(params: any) {
   const edge = {
     id: `e_${params.source}_${params.target}`,
@@ -738,6 +838,109 @@ defineExpose({
 .form-group input:focus,
 .form-group select:focus,
 .form-group textarea:focus {
+  outline: none;
+  border-color: #4f46e5;
+}
+
+/* 分支配置样式 */
+.branches-section {
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 12px;
+  margin-top: 8px;
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.section-header label {
+  font-size: 13px;
+  font-weight: 500;
+  color: #374151;
+  margin: 0;
+}
+
+.btn-sm {
+  padding: 4px 10px;
+  border: 1px solid #d0d0d0;
+  border-radius: 4px;
+  background: white;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.2s;
+}
+
+.btn-sm:hover {
+  background: #f0f0f0;
+  border-color: #b0b0b0;
+}
+
+.branch-item {
+  background: #f9fafb;
+  border-radius: 6px;
+  padding: 10px;
+  margin-bottom: 10px;
+}
+
+.branch-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.branch-index {
+  font-size: 12px;
+  font-weight: 600;
+  color: #6b7280;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #e5e7eb;
+  border-radius: 4px;
+}
+
+.btn-icon-sm {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+}
+
+.btn-icon-sm:hover {
+  background: #fee2e2;
+}
+
+.branch-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.branch-input,
+.branch-select {
+  padding: 6px 10px;
+  border: 1px solid #d0d0d0;
+  border-radius: 4px;
+  font-size: 13px;
+  box-sizing: border-box;
+}
+
+.branch-input:focus,
+.branch-select:focus {
   outline: none;
   border-color: #4f46e5;
 }

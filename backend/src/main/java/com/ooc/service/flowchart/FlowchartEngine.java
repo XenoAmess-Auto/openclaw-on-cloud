@@ -197,6 +197,7 @@ public class FlowchartEngine {
 
         // 更新当前节点
         instance.setCurrentNodeId(node.getId());
+        ctx.setCurrentNodeId(node.getId());
         instanceRepository.save(instance);
 
         // 创建节点执行记录

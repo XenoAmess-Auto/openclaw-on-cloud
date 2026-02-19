@@ -187,6 +187,16 @@ public class FlowchartTemplate {
         @JsonProperty("falseTarget")
         private String falseTarget;
 
+        // Condition 节点 - 多分支模式
+        @JsonProperty("conditionMode")
+        private String conditionMode;  // "boolean" 或 "switch"
+
+        @JsonProperty("switchVar")
+        private String switchVar;  // 判断变量
+
+        @JsonProperty("branches")
+        private List<Map<String, Object>> branches;  // 分支列表
+
         // API 节点
         @JsonProperty("httpMethod")
         private String httpMethod;

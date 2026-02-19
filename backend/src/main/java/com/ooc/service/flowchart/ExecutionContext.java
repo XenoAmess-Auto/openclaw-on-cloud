@@ -58,6 +58,11 @@ public class ExecutionContext {
     private Map<String, Boolean> breakpoints = new HashMap<>();
 
     /**
+     * 当前正在执行的节点ID
+     */
+    private String currentNodeId;
+
+    /**
      * 获取变量值
      */
     @SuppressWarnings("unchecked")
@@ -93,6 +98,20 @@ public class ExecutionContext {
      */
     public void removeVariable(String name) {
         variables.remove(name);
+    }
+
+    /**
+     * 获取当前节点ID
+     */
+    public String getCurrentNodeId() {
+        return currentNodeId;
+    }
+
+    /**
+     * 设置当前节点ID
+     */
+    public void setCurrentNodeId(String nodeId) {
+        this.currentNodeId = nodeId;
     }
 
     /**
