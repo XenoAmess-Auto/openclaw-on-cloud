@@ -8,7 +8,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -194,5 +196,116 @@ class NodeHandlersTest {
                 .build();
 
         assertTrue(handler.validate(validData).isValid());
+    }
+
+    @Test
+    void testConditionNodeHandler_RangeMode_MultipleBranches() {
+        ConditionNodeHandler handler = new ConditionNodeHandler();
+
+        // 测试多个范围分支（5个区间）：不及格、及格、中等、良好、优秀
+        List<FlowchartTemplate.RangeBranch> rangeBranches = new ArrayList<>();
+        rangeBranches.add(FlowchartTemplate.RangeBranch.builder()
+                .label("优秀")
+                .min(90.0)
+                .max(100.0)
+                .minInclusive(true)
+                .maxInclusive(true)
+                .handleId("range_0")
+                .build());
+        rangeBranches.add(FlowchartTemplate.RangeBranch.builder()
+                .label("良好")
+                .min(80.0)
+                .max(90.0)
+                .minInclusive(true)
+                .maxInclusive(false)
+                .handleId("range_1")
+                .build());
+        rangeBranches.add(FlowchartTemplate.RangeBranch.builder()
+                .label("中等")
+                .min(70.0)
+                .max(80.0)
+                .minInclusive(true)
+                .maxInclusive(false)
+                .handleId("range_2")
+                .build());
+        rangeBranches.add(FlowchartTemplate.RangeBranch.builder()
+                .label("及格")
+                .min(60.0)
+                .max(70.0)
+                .minInclusive(true)
+                .maxInclusive(false)
+                .handleId("range_3")
+                .build());
+        rangeBranches.add(FlowchartTemplate.RangeBranch.builder()
+                .label("不及格")
+                .max(60.0)
+                .minInclusive(false)
+                .maxInclusive(false)
+                .handleId("range_4")
+                .build());
+
+        // 测试优秀 (95分)
+        ExecutionContext ctx1 = createContext();
+        ctx1.setVariable("score", 95);
+        FlowchartTemplate.NodeData data1 = FlowchartTemplate.NodeData.builder()
+                .conditionMode("range")
+                .rangeVar("score")
+                .rangeBranches(rangeBranches)
+                .build();
+        NodeResult result1 = handler.execute(data1, ctx1);
+        assertTrue(result1.isSuccess());
+        assertEquals(0, result1.getOutput()); // 第一个分支（优秀）
+
+        // 测试良好 (85分)
+        ExecutionContext ctx2 = createContext();
+        ctx2.setVariable("score", 85);
+        NodeResult result2 = handler.execute(data2WithSameBranches(), ctx2);
+        assertTrue(result2.isSuccess());
+        assertEquals(1, result2.getOutput()); // 第二个分支（良好）
+
+        // 测试中等 (75分)
+        ExecutionContext ctx3 = createContext();
+        ctx3.setVariable("score", 75);
+        NodeResult result3 = handler.execute(data3WithSameBranches(), ctx3);
+        assertTrue(result3.isSuccess());
+        assertEquals(2, result3.getOutput()); // 第三个分支（中等）
+
+        // 测试不及格 (55分)
+        ExecutionContext ctx4 = createContext();
+        ctx4.setVariable("score", 55);
+        NodeResult result4 = handler.execute(data4WithSameBranches(), ctx4);
+        assertTrue(result4.isSuccess());
+        assertEquals(4, result4.getOutput()); // 第五个分支（不及格）
+    }
+
+    private FlowchartTemplate.NodeData data2WithSameBranches() {
+        return createRangeNodeData();
+    }
+
+    private FlowchartTemplate.NodeData data3WithSameBranches() {
+        return createRangeNodeData();
+    }
+
+    private FlowchartTemplate.NodeData data4WithSameBranches() {
+        return createRangeNodeData();
+    }
+
+    private FlowchartTemplate.NodeData createRangeNodeData() {
+        List<FlowchartTemplate.RangeBranch> rangeBranches = new ArrayList<>();
+        rangeBranches.add(FlowchartTemplate.RangeBranch.builder()
+                .label("优秀").min(90.0).max(100.0).minInclusive(true).maxInclusive(true).handleId("range_0").build());
+        rangeBranches.add(FlowchartTemplate.RangeBranch.builder()
+                .label("良好").min(80.0).max(90.0).minInclusive(true).maxInclusive(false).handleId("range_1").build());
+        rangeBranches.add(FlowchartTemplate.RangeBranch.builder()
+                .label("中等").min(70.0).max(80.0).minInclusive(true).maxInclusive(false).handleId("range_2").build());
+        rangeBranches.add(FlowchartTemplate.RangeBranch.builder()
+                .label("及格").min(60.0).max(70.0).minInclusive(true).maxInclusive(false).handleId("range_3").build());
+        rangeBranches.add(FlowchartTemplate.RangeBranch.builder()
+                .label("不及格").max(60.0).minInclusive(false).maxInclusive(false).handleId("range_4").build());
+        return FlowchartTemplate.NodeData.builder()
+                .conditionMode("range")
+                .rangeVar("score")
+                .rangeBranches(rangeBranches)
+                .build();
     }
 }
