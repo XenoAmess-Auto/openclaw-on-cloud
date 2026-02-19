@@ -273,7 +273,7 @@
           </div>
 
           <!-- 布尔模式 -->
-          <template v-if="nodeConfig.conditionMode !== 'switch'">
+          <template v-if="nodeConfig.conditionMode === 'boolean' || !nodeConfig.conditionMode">
             <div class="form-group">
               <label>条件表达式 (如: score > 0.5)</label>
               <input v-model="nodeConfig.conditionExpr" type="text" placeholder="输入条件" />
