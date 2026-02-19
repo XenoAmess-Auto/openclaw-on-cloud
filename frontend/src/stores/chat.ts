@@ -3,7 +3,6 @@ import { ref, computed } from 'vue'
 import type { ChatRoom, Message } from '@/types'
 import { chatRoomApi } from '@/api/chatRoom'
 import { useAuthStore } from './auth'
-import { getWsBaseUrl } from '@/utils/config'
 
 // 附件类型定义
 export interface Attachment {
@@ -135,9 +134,10 @@ export const useChatStore = defineStore('chat', () => {
     }
     
     // 构建 WebSocket URL
-    // 使用配置的后端地址（如果没有配置则使用默认的当前域名:8081）
-    const wsBaseUrl = getWsBaseUrl()
-    const wsUrl = `${wsBaseUrl}/ws/chat`
+    // 使用相对路径 /ws/chat 通过前端代理连接后端，与 API 请求保持一致
+    // 避免直接连接后端 8081 端口可能导致的防火墙/CORS问题
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    const wsUrl = `${protocol}//${window.location.host}/ws/chat`
     const socket = new WebSocket(wsUrl)
     
     socket.onopen = () => {
