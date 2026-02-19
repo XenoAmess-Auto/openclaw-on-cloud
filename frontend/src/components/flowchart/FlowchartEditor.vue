@@ -41,6 +41,7 @@
         :multi-selection-key-code="null"
         @node-click="onNodeClick"
         @node-context-menu="onNodeContextMenu"
+        @edge-context-menu="onEdgeContextMenu"
         @connect="onConnect"
         @pane-click="onPaneClick"
         fit-view-on-init
@@ -320,7 +321,9 @@ const contextMenu = ref({
   visible: false,
   x: 0,
   y: 0,
-  nodeId: null as string | null
+  type: null as 'node' | 'edge' | null,
+  nodeId: null as string | null,
+  edgeId: null as string | null
 })
 
 const viewport = ref({ x: 0, y: 0, zoom: 1 })
@@ -391,7 +394,9 @@ function onTouchStart(event: TouchEvent, nodeId: string) {
       visible: true,
       x: touch.clientX,
       y: touch.clientY,
-      nodeId: nodeId
+      type: 'node',
+      nodeId: nodeId,
+      edgeId: null
     }
     longPressTimer = null
   }, LONG_PRESS_DURATION)
@@ -495,29 +500,54 @@ function onNodeContextMenu(event: any) {
     visible: true,
     x: event.event.clientX,
     y: event.event.clientY,
-    nodeId: node.id
+    type: 'node',
+    nodeId: node.id,
+    edgeId: null
+  }
+}
+
+// 右键/长按连接线 - 显示上下文菜单
+function onEdgeContextMenu(event: any) {
+  event.event.preventDefault()
+  const edge = event.edge
+  contextMenu.value = {
+    visible: true,
+    x: event.event.clientX,
+    y: event.event.clientY,
+    type: 'edge',
+    nodeId: null,
+    edgeId: edge.id
   }
 }
 
 // 上下文菜单 - 查看详情
 function onContextMenuDetail() {
-  if (contextMenu.value.nodeId) {
+  if (contextMenu.value.type === 'node' && contextMenu.value.nodeId) {
     const node = findNode(contextMenu.value.nodeId)
     if (node) {
       selectedNode.value = node
       nodeConfig.value = { ...node.data }
     }
+  } else if (contextMenu.value.type === 'edge' && contextMenu.value.edgeId) {
+    // 对于连接线，可以选中它（Vue Flow 会高亮显示）
+    // 或者可以显示一个 toast/alert 显示连接信息
+    const edge = elements.value.find(e => e.id === contextMenu.value.edgeId && e.source)
+    if (edge) {
+      alert(`连接线详情:\n从: ${edge.source}\n到: ${edge.target}${edge.sourceHandle ? '\n源句柄: ' + edge.sourceHandle : ''}`)
+    }
   }
   contextMenu.value.visible = false
 }
 
-// 上下文菜单 - 删除节点
+// 上下文菜单 - 删除
 function onContextMenuDelete() {
-  if (contextMenu.value.nodeId) {
+  if (contextMenu.value.type === 'node' && contextMenu.value.nodeId) {
     removeNodes([contextMenu.value.nodeId])
     if (selectedNode.value?.id === contextMenu.value.nodeId) {
       selectedNode.value = null
     }
+  } else if (contextMenu.value.type === 'edge' && contextMenu.value.edgeId) {
+    removeEdges([contextMenu.value.edgeId])
   }
   contextMenu.value.visible = false
 }
