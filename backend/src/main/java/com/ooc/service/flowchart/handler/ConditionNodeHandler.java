@@ -65,8 +65,8 @@ public class ConditionNodeHandler implements NodeHandler {
             log.info("[Flowchart:{}] Condition evaluated: {} = {}",
                     ctx.getInstance().getInstanceId(), conditionExpr, result);
 
-            // 确定下一个节点 - 从边连接中获取
-            String nextNodeId = findNextNodeId(ctx, result ? "true" : "false");
+            // 确定下一个节点 - 从边连接中获取（或使用 trueTarget/falseTarget 回退）
+            String nextNodeId = findNextNodeId(ctx, result ? "true" : "false", nodeData);
 
             return NodeResult.builder()
                     .success(true)
@@ -260,15 +260,33 @@ public class ConditionNodeHandler implements NodeHandler {
     }
     
     /**
-     * 查找下一个节点ID - 根据 sourceHandle 匹配边
+     * 查找下一个节点ID - 根据 sourceHandle 匹配边（回退方法，不带 nodeData）
      */
     private String findNextNodeId(ExecutionContext ctx, String sourceHandle) {
+        return findNextNodeId(ctx, sourceHandle, null);
+    }
+
+    /**
+     * 查找下一个节点ID - 根据 sourceHandle 匹配边，若找不到且为布尔模式则回退到 trueTarget/falseTarget
+     */
+    private String findNextNodeId(ExecutionContext ctx, String sourceHandle, FlowchartTemplate.NodeData nodeData) {
         var edges = ctx.findOutgoingEdges(ctx.getCurrentNodeId());
-        return edges.stream()
+        String nextNodeId = edges.stream()
                 .filter(e -> sourceHandle.equals(e.getSourceHandle()))
                 .findFirst()
                 .map(FlowchartTemplate.Edge::getTarget)
                 .orElse(null);
+
+        // 如果边查找失败，且是布尔模式的 true/false 句柄，回退到 trueTarget/falseTarget
+        if (nextNodeId == null && nodeData != null) {
+            if ("true".equals(sourceHandle)) {
+                nextNodeId = nodeData.getTrueTarget();
+            } else if ("false".equals(sourceHandle)) {
+                nextNodeId = nodeData.getFalseTarget();
+            }
+        }
+
+        return nextNodeId;
     }
     
     /**
