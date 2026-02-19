@@ -253,7 +253,7 @@
                 @keydown="handleKeydown"
                 @input="handleInput"
                 @paste="handlePaste"
-                :placeholder="isUploading ? '上传中...' : '输入消息... 使用 @ 提及他人'"
+                :placeholder="isUploading ? '上传中...' : '输入消息... 使用 @ 提及他人 (Enter发送, Ctrl+Enter换行)'"
                 rows="1"
                 ref="inputRef"
                 :disabled="isUploading"
@@ -903,9 +903,24 @@ function handleKeydown(event: KeyboardEvent) {
     }
   }
   
-  if (event.key === 'Enter' && !event.shiftKey) {
-    event.preventDefault()
-    sendMessage()
+  // Enter 发送消息，Ctrl+Enter/Meta+Enter 插入换行
+  if (event.key === 'Enter') {
+    if (event.ctrlKey || event.metaKey) {
+      // Ctrl+Enter: 手动插入换行
+      event.preventDefault()
+      const target = event.target as HTMLTextAreaElement
+      const start = target.selectionStart
+      const end = target.selectionEnd
+      const value = target.value
+      inputMessage.value = value.substring(0, start) + '\n' + value.substring(end)
+      nextTick(() => {
+        target.selectionStart = target.selectionEnd = start + 1
+      })
+    } else {
+      // Enter: 发送消息
+      event.preventDefault()
+      sendMessage()
+    }
   }
 }
 
@@ -989,7 +1004,7 @@ function insertMentionHere() {
 function adjustTextareaHeight() {
   if (inputRef.value) {
     inputRef.value.style.height = 'auto'
-    inputRef.value.style.height = Math.min(inputRef.value.scrollHeight, 120) + 'px'
+    inputRef.value.style.height = Math.min(inputRef.value.scrollHeight, 200) + 'px'
   }
 }
 
@@ -2681,7 +2696,9 @@ textarea {
   font-size: 1rem;
   font-family: inherit;
   min-height: 44px;
-  max-height: 120px;
+  max-height: 200px;
+  overflow-y: auto;
+  line-height: 1.5;
 }
 
 textarea:disabled {
