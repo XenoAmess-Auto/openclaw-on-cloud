@@ -70,49 +70,16 @@
     </div>
 
     <!-- 运行对话框 -->
-    <div v-if="showRunDialog" class="dialog-overlay" @click.self="showRunDialog = false">
-      <div class="dialog">
-        <h2>运行模板</h2>
-        
-        <!-- 群选择 -->
-        <div class="form-group">
-          <label>选择群 *</label>
-          <select v-model="selectedRoomId" class="room-select" :disabled="isLoadingRooms">
-            <option v-for="room in chatStore.rooms" :key="room.id" :value="room.id">
-              {{ room.name }}
-            </option>
-          </select>
-          <p v-if="chatStore.rooms.length === 0 && !isLoadingRooms" class="hint-text">
-            暂无可用群，请先创建或加入群
-          </p>
-        </div>
-        
-        <div v-if="variables.length" class="variables-form">
-          <div
-            v-for="variable in variables"
-            :key="variable.name"
-            class="form-group"
-          >
-            <label>
-              {{ variable.name }}
-              <span v-if="variable.required" class="required">*</span>
-            </label>
-            <input
-              v-model="runVariables[variable.name]"
-              :type="variable.type === 'number' ? 'number' : 'text'"
-              :placeholder="variable.description || variable.defaultValue"
-            />
-          </div>
-        </div>
-
-        <div class="dialog-actions">
-          <button class="btn" @click="showRunDialog = false" :disabled="running">取消</button>
-          <button class="btn btn-primary" @click="confirmRun" :disabled="!selectedRoomId || running">
-            {{ running ? '运行中...' : '运行' }}
-          </button>
-        </div>
-      </div>
-    </div>
+    <FlowchartRunDialog
+      :visible="showRunDialog"
+      :title="'运行模板'"
+      :predefined-variables="variables"
+      :initial-room-id="(route.query.roomId as string) || ''"
+      :is-running="running"
+      :is-loading-rooms="isLoadingRooms"
+      @cancel="showRunDialog = false"
+      @confirm="handleConfirmRun"
+    />
   </div>
 </template>
 
@@ -120,6 +87,7 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import FlowchartEditor from '@/components/flowchart/FlowchartEditor.vue'
+import FlowchartRunDialog from '@/components/flowchart/FlowchartRunDialog.vue'
 import { useFlowchartStore } from '@/stores/flowchart'
 import { useChatStore } from '@/stores/chat'
 
@@ -140,9 +108,7 @@ const saving = ref(false)
 
 const showVariablesPanel = ref(false)
 const showRunDialog = ref(false)
-const runVariables = ref<Record<string, any>>({})
 const running = ref(false)
-const selectedRoomId = ref('')
 const isLoadingRooms = ref(false)
 
 onMounted(async () => {
@@ -202,43 +168,23 @@ function removeVariable(index: number) {
 }
 
 function runTemplate() {
-  runVariables.value = {}
-  selectedRoomId.value = ''
-  
-  // 填充默认值
-  for (const v of variables.value) {
-    if (v.defaultValue) {
-      runVariables.value[v.name] = v.defaultValue
-    }
-  }
-  
-  // 加载群列表并设置默认选中
+  // 加载群列表
   isLoadingRooms.value = true
   chatStore.fetchRooms().then(() => {
-    const currentRoomId = route.query.roomId as string
-    if (currentRoomId && chatStore.rooms.some(r => r.id === currentRoomId)) {
-      selectedRoomId.value = currentRoomId
-    } else if (chatStore.rooms.length > 0) {
-      selectedRoomId.value = chatStore.rooms[0].id
-    }
     isLoadingRooms.value = false
   })
   
   showRunDialog.value = true
 }
 
-async function confirmRun() {
-  if (!selectedRoomId.value) return
-  
+async function handleConfirmRun(roomId: string, runVariables: Record<string, any>) {
   running.value = true
   
   try {
-    const roomId = selectedRoomId.value
-    
     await store.createInstance(
       templateId.value,
       roomId,
-      runVariables.value
+      runVariables
     )
     
     showRunDialog.value = false
@@ -460,94 +406,5 @@ async function confirmRun() {
 .btn-add:hover {
   border-color: #4f46e5;
   color: #4f46e5;
-}
-
-/* 对话框 */
-.dialog-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 100;
-}
-
-.dialog {
-  background: white;
-  padding: 24px;
-  border-radius: 12px;
-  width: 100%;
-  max-width: 400px;
-}
-
-.dialog h2 {
-  margin: 0 0 20px 0;
-  font-size: 18px;
-}
-
-.form-group {
-  margin-bottom: 16px;
-}
-
-.form-group label {
-  display: block;
-  margin-bottom: 6px;
-  font-size: 13px;
-  font-weight: 500;
-}
-
-.required {
-  color: #ef4444;
-}
-
-.form-group input {
-  width: 100%;
-  padding: 10px 12px;
-  border: 1px solid #d0d0d0;
-  border-radius: 8px;
-  font-size: 14px;
-  box-sizing: border-box;
-}
-
-.form-group input:focus {
-  outline: none;
-  border-color: #4f46e5;
-}
-
-.dialog-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-  margin-top: 24px;
-}
-
-.room-select {
-  width: 100%;
-  padding: 10px 12px;
-  border: 1px solid #d0d0d0;
-  border-radius: 8px;
-  font-size: 14px;
-  background: white;
-  cursor: pointer;
-}
-
-.room-select:focus {
-  outline: none;
-  border-color: #4f46e5;
-}
-
-.room-select:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.hint-text {
-  font-size: 12px;
-  color: #ef4444;
-  margin-top: 6px;
 }
 </style>
