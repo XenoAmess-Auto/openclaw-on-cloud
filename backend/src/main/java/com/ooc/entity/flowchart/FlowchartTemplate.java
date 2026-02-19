@@ -189,13 +189,23 @@ public class FlowchartTemplate {
 
         // Condition 节点 - 多分支模式
         @JsonProperty("conditionMode")
-        private String conditionMode;  // "boolean" 或 "switch"
+        private String conditionMode;  // "boolean" 或 "switch" 或 "range"
 
         @JsonProperty("switchVar")
         private String switchVar;  // 判断变量
 
         @JsonProperty("branches")
         private List<Map<String, Object>> branches;  // 分支列表
+
+        // Condition 节点 - 范围模式
+        @JsonProperty("rangeVar")
+        private String rangeVar;  // 范围判断变量
+
+        @JsonProperty("rangeBranches")
+        private List<RangeBranch> rangeBranches;  // 范围分支列表
+
+        @JsonProperty("rangeDefaultBranch")
+        private String rangeDefaultBranch;  // 默认分支标签（没有匹配时）
 
         // API 节点
         @JsonProperty("httpMethod")
@@ -342,5 +352,34 @@ public class FlowchartTemplate {
         @JsonProperty("options")
         @Builder.Default
         private List<String> options = new ArrayList<>();
+    }
+
+    /**
+     * 范围分支定义 - 用于条件节点的范围判断模式
+     */
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class RangeBranch {
+        @JsonProperty("label")
+        private String label;       // 分支标签，用于显示
+
+        @JsonProperty("min")
+        private Double min;         // 最小值（包含）
+
+        @JsonProperty("max")
+        private Double max;         // 最大值（包含）
+
+        @JsonProperty("minInclusive")
+        @Builder.Default
+        private boolean minInclusive = true;  // 是否包含最小值
+
+        @JsonProperty("maxInclusive")
+        @Builder.Default
+        private boolean maxInclusive = true;  // 是否包含最大值
+
+        @JsonProperty("handleId")
+        private String handleId;    // 出边句柄ID，如 "range_0", "range_1"
     }
 }

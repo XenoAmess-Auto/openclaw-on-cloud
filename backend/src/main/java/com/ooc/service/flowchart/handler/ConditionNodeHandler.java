@@ -37,6 +37,11 @@ public class ConditionNodeHandler implements NodeHandler {
             return executeBooleanMode(nodeData, ctx);
         }
         
+        // 范围模式
+        if ("range".equals(conditionMode)) {
+            return executeRangeMode(nodeData, ctx);
+        }
+        
         // 分支模式（switch/case 风格）
         return executeSwitchMode(nodeData, ctx);
     }
@@ -74,6 +79,105 @@ public class ConditionNodeHandler implements NodeHandler {
                     ctx.getInstance().getInstanceId(), conditionExpr, e);
             return NodeResult.failure("条件表达式执行失败: " + e.getMessage());
         }
+    }
+    
+    /**
+     * 范围模式：根据数值范围匹配多个分支
+     * 例如：score = 75，分支1: [0,60)，分支2: [60,80)，分支3: [80,100] → 匹配分支2
+     */
+    private NodeResult executeRangeMode(FlowchartTemplate.NodeData nodeData, ExecutionContext ctx) {
+        String rangeVar = nodeData.getRangeVar();
+        List<FlowchartTemplate.RangeBranch> rangeBranches = nodeData.getRangeBranches();
+        
+        if (rangeVar == null || rangeVar.isEmpty()) {
+            return NodeResult.failure("范围判断变量不能为空");
+        }
+        
+        if (rangeBranches == null || rangeBranches.isEmpty()) {
+            return NodeResult.failure("范围分支列表不能为空");
+        }
+        
+        // 获取变量值
+        Object varValue = ctx.getVariable(rangeVar);
+        if (varValue == null) {
+            return NodeResult.failure("变量 '" + rangeVar + "' 未定义或为空");
+        }
+        
+        // 解析为数值
+        double value;
+        try {
+            value = Double.parseDouble(varValue.toString());
+        } catch (NumberFormatException e) {
+            return NodeResult.failure("变量 '" + rangeVar + "' 的值 '" + varValue + "' 不是有效数字");
+        }
+        
+        log.info("[Flowchart:{}] Range mode: variable {} = {}",
+                ctx.getInstance().getInstanceId(), rangeVar, value);
+        
+        // 依次匹配每个范围分支
+        for (int i = 0; i < rangeBranches.size(); i++) {
+            FlowchartTemplate.RangeBranch branch = rangeBranches.get(i);
+            
+            if (matchesRange(value, branch)) {
+                String handleId = branch.getHandleId() != null ? branch.getHandleId() : "range_" + i;
+                log.info("[Flowchart:{}] Range branch {} matched: {} in range [{}{}, {}{}]",
+                        ctx.getInstance().getInstanceId(), i, value,
+                        branch.isMinInclusive() ? "" : "(",
+                        branch.getMin() != null ? branch.getMin() : "-∞",
+                        branch.getMax() != null ? branch.getMax() : "+∞",
+                        branch.isMaxInclusive() ? "" : ")");
+                
+                String nextNodeId = findNextNodeId(ctx, handleId);
+                
+                return NodeResult.builder()
+                        .success(true)
+                        .output(i)
+                        .nextNodeId(nextNodeId)
+                        .build();
+            }
+        }
+        
+        // 没有匹配任何范围分支，检查是否有默认分支
+        String defaultBranch = nodeData.getRangeDefaultBranch();
+        if (defaultBranch != null && !defaultBranch.isEmpty()) {
+            log.info("[Flowchart:{}] No range matched, using default branch",
+                    ctx.getInstance().getInstanceId());
+            String nextNodeId = findNextNodeId(ctx, defaultBranch);
+            return NodeResult.builder()
+                    .success(true)
+                    .output(-1)
+                    .nextNodeId(nextNodeId)
+                    .build();
+        }
+        
+        // 没有匹配任何分支，返回失败
+        return NodeResult.failure("值 " + value + " 没有匹配任何范围分支");
+    }
+    
+    /**
+     * 判断值是否在指定范围内
+     */
+    private boolean matchesRange(double value, FlowchartTemplate.RangeBranch branch) {
+        Double min = branch.getMin();
+        Double max = branch.getMax();
+        
+        // 检查最小值约束
+        if (min != null) {
+            boolean minOk = branch.isMinInclusive() ? value >= min : value > min;
+            if (!minOk) {
+                return false;
+            }
+        }
+        
+        // 检查最大值约束
+        if (max != null) {
+            boolean maxOk = branch.isMaxInclusive() ? value <= max : value < max;
+            if (!maxOk) {
+                return false;
+            }
+        }
+        
+        return true;
     }
     
     /**
@@ -195,7 +299,7 @@ public class ConditionNodeHandler implements NodeHandler {
     @Override
     public ValidationResult validate(FlowchartTemplate.NodeData nodeData) {
         String conditionMode = nodeData.getConditionMode();
-        
+
         if (conditionMode == null || "boolean".equals(conditionMode)) {
             // 布尔模式验证
             if (nodeData.getConditionExpr() == null || nodeData.getConditionExpr().isEmpty()) {
@@ -205,6 +309,24 @@ public class ConditionNodeHandler implements NodeHandler {
                 parser.parseExpression(preprocessExpression(nodeData.getConditionExpr()));
             } catch (Exception e) {
                 return ValidationResult.invalid("条件表达式语法错误: " + e.getMessage());
+            }
+        } else if ("range".equals(conditionMode)) {
+            // 范围模式验证
+            if (nodeData.getRangeVar() == null || nodeData.getRangeVar().isEmpty()) {
+                return ValidationResult.invalid("范围判断变量不能为空");
+            }
+            List<FlowchartTemplate.RangeBranch> rangeBranches = nodeData.getRangeBranches();
+            if (rangeBranches == null || rangeBranches.isEmpty()) {
+                return ValidationResult.invalid("范围分支列表不能为空");
+            }
+            // 验证每个范围分支的有效性
+            for (int i = 0; i < rangeBranches.size(); i++) {
+                FlowchartTemplate.RangeBranch branch = rangeBranches.get(i);
+                if (branch.getMin() != null && branch.getMax() != null) {
+                    if (branch.getMin() > branch.getMax()) {
+                        return ValidationResult.invalid("分支 " + (i + 1) + " 的最小值不能大于最大值");
+                    }
+                }
             }
         } else {
             // 分支模式验证
@@ -216,7 +338,7 @@ public class ConditionNodeHandler implements NodeHandler {
                 return ValidationResult.invalid("分支列表不能为空");
             }
         }
-        
+
         return ValidationResult.valid();
     }
 

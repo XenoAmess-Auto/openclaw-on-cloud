@@ -96,12 +96,27 @@
               <span class="node-icon"></span>
               <div class="node-info">
                 <div class="node-title">{{ data?.label || '条件' }}</div>
-                <div class="node-subtitle">{{ (data?.branches?.length || 0) + 1 }} 个分支</div>
+                <div class="node-subtitle" v-if="data?.conditionMode === 'range'">{{ (data?.rangeBranches?.length || 0) }} 个范围</div>
+                <div class="node-subtitle" v-else-if="data?.conditionMode === 'switch'">{{ (data?.branches?.length || 0) + 1 }} 个分支</div>
+                <div class="node-subtitle" v-else>真 / 假</div>
               </div>
             </div>
 
-            <!-- 动态分支输出端口 -->
-            <template v-if="data?.branches?.length > 0">
+            <!-- 范围模式：动态范围输出端口 -->
+            <template v-if="data?.conditionMode === 'range' && data?.rangeBranches?.length > 0">
+              <Handle
+                v-for="(branch, index) in data.rangeBranches"
+                :key="index"
+                type="source"
+                :position="Position.Bottom"
+                :id="branch.handleId || ('range_' + index)"
+                :style="{ left: getBranchPosition(index, data.rangeBranches.length) }"
+              >
+                <span class="handle-label">{{ branch.label || (index + 1) }}</span>
+              </Handle>
+            </template>
+            <!-- 分支模式：动态分支输出端口 -->
+            <template v-else-if="data?.branches?.length > 0">
               <Handle
                 v-for="(branch, index) in data.branches"
                 :key="index"
@@ -113,7 +128,7 @@
                 <span class="handle-label">{{ branch.label || index + 1 }}</span>
               </Handle>
             </template>
-            <!-- 默认两分支 -->
+            <!-- 默认布尔模式：两分支 -->
             <template v-else>
               <Handle type="source" :position="Position.Bottom" id="true" :style="{ left: '25%' }">
                 <span class="handle-label">真</span>
@@ -253,6 +268,7 @@
             <select v-model="nodeConfig.conditionMode">
               <option value="boolean">布尔判断（真/假）</option>
               <option value="switch">分支判断（多条件）</option>
+              <option value="range">范围判断（数值区间）</option>
             </select>
           </div>
 
@@ -275,7 +291,7 @@
           </template>
 
           <!-- 分支模式 -->
-          <template v-else>
+          <template v-else-if="nodeConfig.conditionMode === 'switch'">
             <div class="form-group">
               <label>判断变量</label>
               <input v-model="nodeConfig.switchVar" type="text" placeholder="如: score, status" />
@@ -307,6 +323,53 @@
                   <input v-model="branch.value" type="text" placeholder="比较值" class="branch-input" />
                 </div>
               </div>
+            </div>
+          </template>
+
+          <!-- 范围模式 -->
+          <template v-else-if="nodeConfig.conditionMode === 'range'">
+            <div class="form-group">
+              <label>判断变量（数值）</label>
+              <input v-model="nodeConfig.rangeVar" type="text" placeholder="如: score, temperature, age" />
+            </div>
+
+            <div class="branches-section">
+              <div class="section-header">
+                <label>范围分支列表</label>
+                <button class="btn-sm" @click="addRangeBranch">+ 添加范围</button>
+              </div>
+
+              <div v-for="(branch, index) in nodeConfig.rangeBranches" :key="index" class="branch-item range-branch">
+                <div class="branch-header">
+                  <span class="branch-index">{{ index + 1 }}</span>
+                  <button class="btn-icon-sm" @click="removeRangeBranch(index)">🗑️</button>
+                </div>
+                <div class="range-fields">
+                  <input v-model="branch.label" type="text" placeholder="分支标签（如：优秀）" class="branch-input full-width" />
+                  <div class="range-row">
+                    <div class="range-bound">
+                      <select v-model="branch.minInclusive" class="range-select">
+                        <option :value="true">≥</option>
+                        <option :value="false">></option>
+                      </select>
+                      <input v-model.number="branch.min" type="number" placeholder="最小值" class="range-input" />
+                    </div>
+                    <span class="range-separator">~</span>
+                    <div class="range-bound">
+                      <input v-model.number="branch.max" type="number" placeholder="最大值" class="range-input" />
+                      <select v-model="branch.maxInclusive" class="range-select">
+                        <option :value="true">≤</option>
+                        <option :value="false"><</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label>默认分支（没有匹配时）</label>
+              <input v-model="nodeConfig.rangeDefaultBranch" type="text" placeholder="如：其他、未分类" />
             </div>
           </template>
         </template>
@@ -564,12 +627,43 @@ function removeBranch(index: number) {
   }
 }
 
+// 添加范围分支
+function addRangeBranch() {
+  if (!nodeConfig.value.rangeBranches) {
+    nodeConfig.value.rangeBranches = []
+  }
+  const index = nodeConfig.value.rangeBranches.length
+  nodeConfig.value.rangeBranches.push({
+    label: `范围${index + 1}`,
+    min: null,
+    max: null,
+    minInclusive: true,
+    maxInclusive: true,
+    handleId: `range_${index}`
+  })
+}
+
+// 删除范围分支
+function removeRangeBranch(index: number) {
+  if (nodeConfig.value.rangeBranches) {
+    nodeConfig.value.rangeBranches.splice(index, 1)
+    // 重新分配 handleId
+    nodeConfig.value.rangeBranches.forEach((branch: any, i: number) => {
+      branch.handleId = `range_${i}`
+    })
+  }
+}
+
 // 监听节点选中，初始化分支数据
 watch(selectedNode, (newNode) => {
   if (newNode && newNode.type === 'condition') {
     // 确保 branches 字段存在
     if (!nodeConfig.value.branches) {
       nodeConfig.value.branches = []
+    }
+    // 确保 rangeBranches 字段存在
+    if (!nodeConfig.value.rangeBranches) {
+      nodeConfig.value.rangeBranches = []
     }
   }
 })
@@ -943,6 +1037,61 @@ defineExpose({
 .branch-select:focus {
   outline: none;
   border-color: #4f46e5;
+}
+
+/* 范围分支样式 */
+.range-branch {
+  background: #fffbeb;
+  border: 1px solid #fcd34d;
+}
+
+.range-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.range-fields .full-width {
+  width: 100%;
+}
+
+.range-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.range-bound {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+}
+
+.range-select {
+  width: 50px;
+  padding: 6px 4px;
+  border: 1px solid #d0d0d0;
+  border-radius: 4px;
+  font-size: 13px;
+  background: white;
+  text-align: center;
+}
+
+.range-input {
+  flex: 1;
+  min-width: 60px;
+  padding: 6px 8px;
+  border: 1px solid #d0d0d0;
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+.range-separator {
+  font-size: 14px;
+  color: #6b7280;
+  font-weight: 500;
+  padding: 0 2px;
 }
 
 /* 节点样式 */
