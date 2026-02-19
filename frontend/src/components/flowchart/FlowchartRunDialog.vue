@@ -29,7 +29,16 @@
             <span v-if="variable.required" class="required">*</span>
             <small v-if="variable.description" class="var-desc">({{ variable.description }})</small>
           </label>
+          <textarea
+            v-if="variable.type === 'string'"
+            v-model="runVariables[variable.name]"
+            :placeholder="variable.defaultValue || variable.description"
+            class="var-textarea"
+            rows="3"
+            @keydown="handleTextareaKeydown"
+          />
           <input
+            v-else
             v-model="runVariables[variable.name]"
             :type="variable.type === 'number' ? 'number' : 'text'"
             :placeholder="variable.defaultValue || variable.description"
@@ -57,11 +66,14 @@
             v-model="variable.name"
             placeholder="变量名"
             class="var-name-input"
+            @keydown.enter.prevent="focusValueInput(index)"
           />
-          <input
+          <textarea
             v-model="variable.value"
-            placeholder="值"
-            class="var-value-input"
+            placeholder="值 (Ctrl+Enter换行, Enter发送)"
+            class="var-value-textarea"
+            rows="2"
+            @keydown="handleTextareaKeydown"
           />
           <button class="btn-remove-var" @click="removeDynamicVariable(index)" title="删除">×</button>
         </div>
@@ -208,6 +220,38 @@ function onConfirm() {
   emit('confirm', localRoomId.value, allVariables)
 }
 
+// 处理 textarea 键盘事件：Ctrl+Enter 换行，Enter 发送
+function handleTextareaKeydown(event: KeyboardEvent) {
+  if (event.key === 'Enter') {
+    if (event.ctrlKey || event.metaKey) {
+      // Ctrl+Enter: 插入换行
+      event.preventDefault()
+      const target = event.target as HTMLTextAreaElement
+      const start = target.selectionStart
+      const end = target.selectionEnd
+      const value = target.value
+      target.value = value.substring(0, start) + '\n' + value.substring(end)
+      target.selectionStart = target.selectionEnd = start + 1
+      // 触发 input 事件更新 v-model
+      target.dispatchEvent(new Event('input'))
+    } else {
+      // Enter: 发送
+      event.preventDefault()
+      if (canRun.value && !props.isRunning) {
+        onConfirm()
+      }
+    }
+  }
+}
+
+// 聚焦到动态变量的值输入框
+function focusValueInput(index: number) {
+  const textareas = document.querySelectorAll('.var-value-textarea')
+  if (textareas[index]) {
+    (textareas[index] as HTMLTextAreaElement).focus()
+  }
+}
+
 onMounted(() => {
   if (props.visible) {
     initialize()
@@ -281,6 +325,23 @@ onMounted(() => {
 }
 
 .form-group input:focus {
+  outline: none;
+  border-color: #4f46e5;
+}
+
+.var-textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #d0d0d0;
+  border-radius: 8px;
+  font-size: 14px;
+  box-sizing: border-box;
+  resize: vertical;
+  font-family: inherit;
+  line-height: 1.5;
+}
+
+.var-textarea:focus {
   outline: none;
   border-color: #4f46e5;
 }
@@ -433,6 +494,23 @@ onMounted(() => {
 
 .var-name-input:focus,
 .var-value-input:focus {
+  outline: none;
+  border-color: #4f46e5;
+}
+
+.var-value-textarea {
+  flex: 1.5;
+  padding: 8px 10px;
+  border: 1px solid #d0d0d0;
+  border-radius: 6px;
+  font-size: 14px;
+  resize: vertical;
+  font-family: inherit;
+  line-height: 1.5;
+  min-height: 60px;
+}
+
+.var-value-textarea:focus {
   outline: none;
   border-color: #4f46e5;
 }
