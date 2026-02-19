@@ -12,6 +12,9 @@
         <button class="btn" @click="addNode('condition')" title="条件节点">
           <span class="icon"></span> 条件
         </button>
+        <button class="btn" @click="addNode('completion_check')" title="完成判断节点">
+          <span class="icon"></span> 完成判断
+        </button>
         <button class="btn" @click="addNode('code')" title="代码节点">
           <span class="icon"></span> 代码
         </button>
@@ -215,6 +218,32 @@
           </div>
         </template>
 
+        <!-- 完成判断节点 -->
+        <template #node-completion_check="{ data, id }">
+          <div
+            class="node node-completion-check"
+            @touchstart="onTouchStart($event, id)"
+            @touchend="onTouchEnd"
+            @touchmove="onTouchMove"
+          >
+            <Handle type="target" :position="Position.Top" />
+            <div class="node-content">
+              <span class="node-icon">✅</span>
+              <div class="node-info">
+                <div class="node-title">{{ data?.label || '完成判断' }}</div>
+                <div class="node-subtitle" v-if="data?.checkVar">检查: {{ data.checkVar }}</div>
+              </div>
+            </div>
+            <!-- 两个分支输出 -->
+            <Handle type="source" :position="Position.Bottom" id="completed" :style="{ left: '25%' }">
+              <span class="handle-label">完成</span>
+            </Handle>
+            <Handle type="source" :position="Position.Bottom" id="incomplete" :style="{ left: '75%' }">
+              <span class="handle-label">未完成</span>
+            </Handle>
+          </div>
+        </template>
+
         <Controls />
         <Background pattern-color="#aaa" :gap="16" />
         <MiniMap />
@@ -415,6 +444,39 @@
           <div class="form-group">
             <label>输出变量（可选）</label>
             <input v-model="nodeConfig.outputVar" type="text" placeholder="将代码返回值存入此变量" />
+          </div>
+        </template>
+
+        <!-- 完成判断节点配置 -->
+        <template v-if="selectedNode.type === 'completion_check'">
+          <div class="form-group">
+            <label>要检查的变量</label>
+            <input v-model="nodeConfig.checkVar" type="text" placeholder="输入变量名，如: taskResult" />
+            <small class="field-hint">该变量的值将被 AI 分析是否表示"已完成"</small>
+          </div>
+
+          <div class="form-group">
+            <label>自定义提示词（可选）</label>
+            <textarea v-model="nodeConfig.checkPrompt" rows="4" placeholder="可选：自定义判断逻辑提示词，留空使用默认规则"></textarea>
+          </div>
+
+          <div class="form-group">
+            <label>输出变量（可选）</label>
+            <input v-model="nodeConfig.outputVar" type="text" placeholder="将判断结果存入此变量（COMPLETED/INCOMPLETE）" />
+          </div>
+
+          <div class="form-group">
+            <label>分支说明</label>
+            <div class="branch-info">
+              <div class="branch-item">
+                <span class="branch-dot completed"></span>
+                <span>完成分支：内容表示已完成、成功、结束</span>
+              </div>
+              <div class="branch-item">
+                <span class="branch-dot incomplete"></span>
+                <span>未完成分支：内容表示进行中、失败、等待</span>
+              </div>
+            </div>
           </div>
         </template>
 
@@ -625,6 +687,10 @@ function addNode(type: string) {
       nodeData.varName = ''
       nodeData.varValue = ''
       break
+    case 'completion_check':
+      nodeData.checkVar = ''
+      nodeData.checkPrompt = ''
+      break
   }
 
   const newNode = {
@@ -645,7 +711,8 @@ function getDefaultLabel(type: string): string {
     code: '代码执行',
     variable: '设置变量',
     wait: '等待',
-    end: '结束'
+    end: '结束',
+    completion_check: '完成判断'
   }
   return labels[type] || type
 }
@@ -1187,6 +1254,11 @@ defineExpose({
   background: #fef2f2;
 }
 
+:deep(.node-completion-check) {
+  border-color: #22c55e;
+  background: #f0fdf4;
+}
+
 :deep(.node-content) {
   display: flex;
   align-items: center;
@@ -1316,5 +1388,48 @@ defineExpose({
   height: 1px;
   background: #e5e7eb;
   margin: 4px 0;
+}
+
+/* 分支说明样式 */
+.branch-info {
+  background: #f9fafb;
+  border-radius: 6px;
+  padding: 12px;
+  border: 1px solid #e5e7eb;
+}
+
+.branch-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 13px;
+  color: #4b5563;
+}
+
+.branch-item:last-child {
+  margin-bottom: 0;
+}
+
+.branch-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.branch-dot.completed {
+  background: #22c55e;
+}
+
+.branch-dot.incomplete {
+  background: #f59e0b;
+}
+
+.field-hint {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  color: #6b7280;
 }
 </style>

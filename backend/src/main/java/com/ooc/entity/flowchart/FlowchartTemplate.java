@@ -228,6 +228,13 @@ public class FlowchartTemplate {
         @JsonProperty("language")
         private String language;    // "groovy" | "javascript"
 
+        // CompletionCheck 节点
+        @JsonProperty("checkVar")
+        private String checkVar;    // 要检查的变量名
+
+        @JsonProperty("checkPrompt")
+        private String checkPrompt; // 自定义检查提示词（可选）
+
         // Wait 节点
         @JsonProperty("waitSeconds")
         private Integer waitSeconds;
