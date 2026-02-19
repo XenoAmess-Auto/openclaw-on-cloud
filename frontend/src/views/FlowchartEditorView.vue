@@ -85,14 +85,14 @@
 
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute } from 'vue-router'
 import FlowchartEditor from '@/components/flowchart/FlowchartEditor.vue'
 import FlowchartRunDialog from '@/components/flowchart/FlowchartRunDialog.vue'
 import { useFlowchartStore } from '@/stores/flowchart'
 import { useChatStore } from '@/stores/chat'
+import { showToast } from '@/utils/toast'
 
 const route = useRoute()
-const router = useRouter()
 const store = useFlowchartStore()
 const chatStore = useChatStore()
 
@@ -188,7 +188,12 @@ async function handleConfirmRun(roomId: string, runVariables: Record<string, any
     )
     
     showRunDialog.value = false
-    router.push(`/?roomId=${roomId}`)
+    
+    // 获取群名称
+    const room = chatStore.rooms.find(r => r.id === roomId)
+    const roomName = room?.name || '相应群'
+    
+    showToast(`成功启动流程，请到「${roomName}」查看`, 3000, 'success')
   } finally {
     running.value = false
   }

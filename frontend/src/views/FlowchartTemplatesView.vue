@@ -118,6 +118,7 @@ import { useFlowchartStore } from '@/stores/flowchart'
 import { useChatStore } from '@/stores/chat'
 import { useRoute } from 'vue-router'
 import FlowchartRunDialog from '@/components/flowchart/FlowchartRunDialog.vue'
+import { showToast } from '@/utils/toast'
 
 const router = useRouter()
 const route = useRoute()
@@ -206,7 +207,12 @@ async function handleConfirmRun(roomId: string, allVariables: Record<string, any
     )
     
     showRunDialog.value = false
-    router.push('/')
+    
+    // 获取群名称
+    const room = chatStore.rooms.find(r => r.id === roomId)
+    const roomName = room?.name || '相应群'
+    
+    showToast(`成功启动流程，请到「${roomName}」查看`, 3000, 'success')
   } catch (err: any) {
     runError.value = err.response?.data?.error || err.message || '运行失败，请重试'
   } finally {
