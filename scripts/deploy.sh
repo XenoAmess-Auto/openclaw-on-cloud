@@ -68,11 +68,13 @@ else
 fi
 
 echo "  [2/2] Restarting service..."
-# Kill existing vite processes
+# Kill existing frontend processes
 pkill -9 -f "vite" 2>/dev/null || true
+pkill -9 -f "http.server 3000" 2>/dev/null || true
 sleep 2
 
-nohup pnpm dev --port 3000 > frontend.log 2>&1 &
+# Use vite preview for production-like serving with SPA fallback
+nohup pnpm preview -- --port 3000 --host 0.0.0.0 > frontend.log 2>&1 &
 sleep 3
 
 if curl -s -o /dev/null -w "%{http_code}" http://localhost:3000 | grep -q "200"; then
