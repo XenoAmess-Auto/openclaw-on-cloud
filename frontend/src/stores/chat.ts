@@ -260,8 +260,24 @@ export const useChatStore = defineStore('chat', () => {
   function handleMessage(data: any) {
     switch (data.type) {
       case 'history':
-        messages.value = data.messages || []
-        hasMoreMessages.value = data.hasMore || false
+        // 合并历史消息，避免重复（特别是 WebSocket 重连时）
+        {
+          const historyMessages = data.messages || []
+          const existingIds = new Set(messages.value.map(m => m.id))
+          const newMessages = historyMessages.filter((m: Message) => !existingIds.has(m.id))
+          if (newMessages.length > 0) {
+            // 按时间戳排序后合并
+            const combined = [...messages.value, ...newMessages]
+            combined.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
+            messages.value = combined
+            console.log('[WebSocket] history - merged', newMessages.length, 'new messages, total:', messages.value.length)
+          } else {
+            console.log('[WebSocket] history - no new messages, skipped')
+          }
+          hasMoreMessages.value = data.hasMore || false
+          // 去重确保没有重复消息
+          deduplicateMessages()
+        }
         break
       case 'message':
         // 检查是否已存在相同ID的消息，避免重复添加
@@ -392,10 +408,12 @@ export const useChatStore = defineStore('chat', () => {
             messages.value.splice(index, 1, data.message)
             console.log('[WebSocket] stream_end - message replaced at index:', index)
           } else {
-            // 如果找不到消息（异常情况），直接追加
+            // 找不到消息，追加为新消息（可能是 WebSocket 重连后的新流式消息）
             messages.value.push(data.message)
-            console.log('[WebSocket] stream_end - message appended (not found in existing)')
+            console.log('[WebSocket] stream_end - message appended (not found in existing):', data.message.id)
           }
+          // 去重确保没有重复消息
+          deduplicateMessages()
         }
         break
       case 'typing':
@@ -482,6 +500,9 @@ export const useChatStore = defineStore('chat', () => {
       // 将旧消息插入到消息列表开头
       messages.value.unshift(...olderMessages)
       
+      // 去重确保没有重复消息
+      deduplicateMessages()
+      
       // 如果返回的消息少于请求的条数，说明没有更多了
       if (olderMessages.length < 10) {
         hasMoreMessages.value = false
@@ -493,6 +514,27 @@ export const useChatStore = defineStore('chat', () => {
       return false
     } finally {
       loadingMore.value = false
+    }
+  }
+
+  // 消息去重 - 确保没有重复 ID 的消息
+  function deduplicateMessages() {
+    const seen = new Set<string>()
+    const unique: Message[] = []
+    for (const msg of messages.value) {
+      if (msg.id && !seen.has(msg.id)) {
+        seen.add(msg.id)
+        unique.push(msg)
+      } else if (!msg.id) {
+        // 没有 ID 的消息（如系统消息）保留
+        unique.push(msg)
+      } else {
+        console.warn('[chatStore] Duplicate message removed:', msg.id)
+      }
+    }
+    if (unique.length !== messages.value.length) {
+      console.log('[chatStore] Deduplicated messages:', messages.value.length, '->', unique.length)
+      messages.value = unique
     }
   }
 
