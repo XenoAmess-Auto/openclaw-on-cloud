@@ -138,16 +138,19 @@ function onSave(_newDefinition: any) {
 
 async function saveTemplate() {
   if (!template.value || saving.value) return
-  
+
   saving.value = true
   try {
     const currentDef = editorRef.value?.getDefinition()
-    
-    await store.updateTemplate(templateId.value, {
+
+    const updated = await store.updateTemplate(templateId.value, {
       name: templateName.value,
       definition: currentDef || definition.value,
       variables: variables.value
     })
+
+    // 更新模板数据，包括新版本号
+    template.value = updated
   } finally {
     saving.value = false
   }
