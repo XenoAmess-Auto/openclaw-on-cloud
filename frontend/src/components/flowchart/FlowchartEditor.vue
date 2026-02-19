@@ -40,13 +40,19 @@
         :selection-key-code="null"
         :multi-selection-key-code="null"
         @node-click="onNodeClick"
+        @node-context-menu="onNodeContextMenu"
         @connect="onConnect"
         @pane-click="onPaneClick"
         fit-view-on-init
       >
         <!-- 自定义节点 -->
-        <template #node-start="{ data }">
-          <div class="node node-start">
+        <template #node-start="{ data, id }">
+          <div
+            class="node node-start"
+            @touchstart="onTouchStart($event, id)"
+            @touchend="onTouchEnd"
+            @touchmove="onTouchMove"
+          >
             <div class="node-header"></div>
             <div class="node-content">
               <span class="node-icon"></span>
@@ -56,8 +62,13 @@
           </div>
         </template>
 
-        <template #node-llm="{ data }">
-          <div class="node node-llm">
+        <template #node-llm="{ data, id }">
+          <div
+            class="node node-llm"
+            @touchstart="onTouchStart($event, id)"
+            @touchend="onTouchEnd"
+            @touchmove="onTouchMove"
+          >
             <Handle type="target" :position="Position.Top" />
             <div class="node-header"></div>
             <div class="node-content">
@@ -72,8 +83,13 @@
           </div>
         </template>
 
-        <template #node-condition="{ data }">
-          <div class="node node-condition">
+        <template #node-condition="{ data, id }">
+          <div
+            class="node node-condition"
+            @touchstart="onTouchStart($event, id)"
+            @touchend="onTouchEnd"
+            @touchmove="onTouchMove"
+          >
             <Handle type="target" :position="Position.Top" />
             <div class="node-content">
               <span class="node-icon"></span>
@@ -89,8 +105,13 @@
           </div>
         </template>
 
-        <template #node-variable="{ data }">
-          <div class="node node-variable">
+        <template #node-variable="{ data, id }">
+          <div
+            class="node node-variable"
+            @touchstart="onTouchStart($event, id)"
+            @touchend="onTouchEnd"
+            @touchmove="onTouchMove"
+          >
             <Handle type="target" :position="Position.Top" />
             <div class="node-content">
               <span class="node-icon"></span>
@@ -104,8 +125,13 @@
           </div>
         </template>
 
-        <template #node-wait="{ data }">
-          <div class="node node-wait">
+        <template #node-wait="{ data, id }">
+          <div
+            class="node node-wait"
+            @touchstart="onTouchStart($event, id)"
+            @touchend="onTouchEnd"
+            @touchmove="onTouchMove"
+          >
             <Handle type="target" :position="Position.Top" />
             <div class="node-content">
               <span class="node-icon"></span>
@@ -116,8 +142,13 @@
           </div>
         </template>
 
-        <template #node-end="{ data }">
-          <div class="node node-end">
+        <template #node-end="{ data, id }">
+          <div
+            class="node node-end"
+            @touchstart="onTouchStart($event, id)"
+            @touchend="onTouchEnd"
+            @touchmove="onTouchMove"
+          >
             <Handle type="target" :position="Position.Top" />
             <div class="node-content">
               <span class="node-icon"></span>
@@ -130,6 +161,23 @@
         <Background pattern-color="#aaa" :gap="16" />
         <MiniMap />
       </VueFlow>
+
+      <!-- 右键/长按菜单 -->
+      <div
+        v-if="contextMenu.visible"
+        class="node-context-menu"
+        :style="{ left: contextMenu.x + 'px', top: contextMenu.y + 'px' }"
+      >
+        <div class="context-menu-item" @click="onContextMenuDetail">
+          <span class="menu-icon">📋</span>
+          <span>详情</span>
+        </div>
+        <div class="context-menu-divider"></div>
+        <div class="context-menu-item delete" @click="onContextMenuDelete">
+          <span class="menu-icon">🗑️</span>
+          <span>删除</span>
+        </div>
+      </div>
     </div>
 
     <!-- 节点配置面板 -->
@@ -267,6 +315,14 @@ const nodeConfig = ref<Record<string, any>>({})
 const saving = ref(false)
 const isInitialized = ref(false)
 
+// 右键/长按菜单状态
+const contextMenu = ref({
+  visible: false,
+  x: 0,
+  y: 0,
+  nodeId: null as string | null
+})
+
 const viewport = ref({ x: 0, y: 0, zoom: 1 })
 
 // 初始化 - 同步初始化（用于非异步场景）
@@ -322,6 +378,39 @@ onMounted(() => {
 onUnmounted(() => {
   window.removeEventListener('keydown', handleKeyDown)
 })
+
+// 触摸长按事件处理
+let longPressTimer: ReturnType<typeof setTimeout> | null = null
+const LONG_PRESS_DURATION = 500 // 长按触发时间（毫秒）
+
+function onTouchStart(event: TouchEvent, nodeId: string) {
+  longPressTimer = setTimeout(() => {
+    // 长按触发，显示上下文菜单
+    const touch = event.touches[0]
+    contextMenu.value = {
+      visible: true,
+      x: touch.clientX,
+      y: touch.clientY,
+      nodeId: nodeId
+    }
+    longPressTimer = null
+  }, LONG_PRESS_DURATION)
+}
+
+function onTouchEnd() {
+  if (longPressTimer) {
+    clearTimeout(longPressTimer)
+    longPressTimer = null
+  }
+}
+
+function onTouchMove() {
+  // 移动时取消长按
+  if (longPressTimer) {
+    clearTimeout(longPressTimer)
+    longPressTimer = null
+  }
+}
 
 // 生成唯一ID
 function generateId() {
@@ -392,13 +481,51 @@ function onConnect(params: any) {
 
 // 点击节点
 function onNodeClick(event: any) {
+  // 关闭右键菜单（如果打开）
+  contextMenu.value.visible = false
   selectedNode.value = event.node
   nodeConfig.value = { ...event.node.data }
+}
+
+// 右键/长按节点 - 显示上下文菜单
+function onNodeContextMenu(event: any) {
+  event.event.preventDefault()
+  const node = event.node
+  contextMenu.value = {
+    visible: true,
+    x: event.event.clientX,
+    y: event.event.clientY,
+    nodeId: node.id
+  }
+}
+
+// 上下文菜单 - 查看详情
+function onContextMenuDetail() {
+  if (contextMenu.value.nodeId) {
+    const node = findNode(contextMenu.value.nodeId)
+    if (node) {
+      selectedNode.value = node
+      nodeConfig.value = { ...node.data }
+    }
+  }
+  contextMenu.value.visible = false
+}
+
+// 上下文菜单 - 删除节点
+function onContextMenuDelete() {
+  if (contextMenu.value.nodeId) {
+    removeNodes([contextMenu.value.nodeId])
+    if (selectedNode.value?.id === contextMenu.value.nodeId) {
+      selectedNode.value = null
+    }
+  }
+  contextMenu.value.visible = false
 }
 
 // 点击画布空白处
 function onPaneClick() {
   selectedNode.value = null
+  contextMenu.value.visible = false
 }
 
 // 删除节点
@@ -694,5 +821,64 @@ defineExpose({
   to {
     stroke-dashoffset: 0;
   }
+}
+
+/* 右键/长按上下文菜单 */
+.node-context-menu {
+  position: fixed;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15), 0 2px 4px rgba(0, 0, 0, 0.1);
+  padding: 4px;
+  min-width: 120px;
+  z-index: 1000;
+  animation: menuPopIn 0.15s ease-out;
+}
+
+@keyframes menuPopIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.context-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  color: #374151;
+  transition: all 0.15s;
+}
+
+.context-menu-item:hover {
+  background: #f3f4f6;
+}
+
+.context-menu-item.delete {
+  color: #dc2626;
+}
+
+.context-menu-item.delete:hover {
+  background: #fee2e2;
+}
+
+.menu-icon {
+  font-size: 14px;
+  width: 16px;
+  text-align: center;
+}
+
+.context-menu-divider {
+  height: 1px;
+  background: #e5e7eb;
+  margin: 4px 0;
 }
 </style>
