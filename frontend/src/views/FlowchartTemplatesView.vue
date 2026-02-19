@@ -116,7 +116,7 @@
         </div>
         
         <div v-if="selectedTemplate?.variables?.length" class="variables-form">
-          <h4>变量</h4>
+          <h4>预定义变量</h4>
           <div
             v-for="variable in selectedTemplate.variables"
             :key="variable.name"
@@ -134,8 +134,39 @@
           </div>
         </div>
 
-        <div v-else class="no-variables">
-          <p>此模板无需输入变量</p>
+        <!-- 动态变量 -->
+        <div class="dynamic-variables-section">
+          <div class="section-header">
+            <h4>动态变量</h4>
+            <button class="btn-add-var" @click="addDynamicVariable">+ 添加</button>
+          </div>
+          
+          <div v-if="dynamicVariables.length === 0" class="no-dynamic-vars">
+            <p>点击"添加"按钮添加自定义变量</p>
+          </div>
+          
+          <div
+            v-for="(variable, index) in dynamicVariables"
+            :key="index"
+            class="dynamic-variable-item"
+          >
+            <input
+              v-model="variable.name"
+              placeholder="变量名"
+              class="var-name-input"
+            />
+            <input
+              v-model="variable.value"
+              placeholder="值"
+              class="var-value-input"
+            />
+            
+            <button class="btn-remove-var" @click="removeDynamicVariable(index)" title="删除">×</button>
+          </div>
+        </div>
+
+        <div v-if="!selectedTemplate?.variables?.length && dynamicVariables.length === 0" class="no-variables">
+          <p>此模板无预定义变量，可添加动态变量</p>
         </div>
 
         <div class="dialog-actions">
@@ -169,6 +200,7 @@ const showRunDialog = ref(false)
 const selectedTemplate = ref<any>(null)
 const selectedCategory = ref('all')
 const runVariables = ref<Record<string, any>>({})
+const dynamicVariables = ref<Array<{ name: string; value: string }>>([])
 const selectedRoomId = ref<string>('')
 const isRunning = ref(false)
 const runError = ref<string | null>(null)
@@ -231,6 +263,7 @@ function openEditor(template: any) {
 function runTemplate(template: any) {
   selectedTemplate.value = template
   runVariables.value = {}
+  dynamicVariables.value = [] // 重置动态变量
   
   // 默认选中当前群或第一个群
   const currentRoomId = route.query.roomId as string
@@ -254,6 +287,14 @@ function runTemplate(template: any) {
   showRunDialog.value = true
 }
 
+function addDynamicVariable() {
+  dynamicVariables.value.push({ name: '', value: '' })
+}
+
+function removeDynamicVariable(index: number) {
+  dynamicVariables.value.splice(index, 1)
+}
+
 function confirmRun() {
   if (!selectedTemplate.value || !selectedRoomId.value) return
   
@@ -262,10 +303,20 @@ function confirmRun() {
   
   const roomId = selectedRoomId.value
   
+  // 合并预定义变量和动态变量
+  const allVariables: Record<string, any> = { ...runVariables.value }
+  
+  // 添加动态变量（过滤掉名称为空的）
+  for (const variable of dynamicVariables.value) {
+    if (variable.name.trim()) {
+      allVariables[variable.name.trim()] = variable.value
+    }
+  }
+  
   store.createInstance(
     selectedTemplate.value.templateId,
     roomId,
-    runVariables.value
+    allVariables
   ).then(() => {
     showRunDialog.value = false
     isRunning.value = false
@@ -580,6 +631,99 @@ function deleteTemplate(template: any) {
   border-radius: 6px;
   color: #dc2626;
   font-size: 14px;
+}
+
+/* 动态变量样式 */
+.dynamic-variables-section {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.section-header h4 {
+  margin: 0;
+  font-size: 14px;
+  color: #374151;
+}
+
+.btn-add-var {
+  padding: 4px 12px;
+  background: #10b981;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.btn-add-var:hover {
+  background: #059669;
+}
+
+.no-dynamic-vars {
+  padding: 16px;
+  text-align: center;
+  color: #9ca3af;
+  font-size: 13px;
+  background: #f9fafb;
+  border-radius: 8px;
+}
+
+.dynamic-variable-item {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+  align-items: center;
+}
+
+.var-name-input {
+  flex: 1;
+  padding: 8px 10px;
+  border: 1px solid #d0d0d0;
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.var-value-input {
+  flex: 1.5;
+  padding: 8px 10px;
+  border: 1px solid #d0d0d0;
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.var-name-input:focus,
+.var-value-input:focus {
+  outline: none;
+  border-color: #4f46e5;
+}
+
+.btn-remove-var {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  background: #fee2e2;
+  color: #dc2626;
+  border-radius: 6px;
+  font-size: 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
+}
+
+.btn-remove-var:hover {
+  background: #fecaca;
 }
 
 .loading-state,
