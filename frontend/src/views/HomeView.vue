@@ -112,7 +112,6 @@
                   
                   <!-- 变量列表（展开时显示） -->
                   <div v-if="expandedFlowbotMessages.has(msg.id)" class="flowbot-variables">
-                    <div class="flowbot-variables-title">流程图变量：</div>
                     <div v-for="(value, key) in decodeFlowbotVariables(msg)" :key="key" class="flowbot-variable">
                       <span class="var-name">{{ key }}:</span>
                       <pre class="var-value">{{ formatVariableValue(value) }}</pre>
@@ -2153,12 +2152,6 @@ function isSameDay(d1: Date, d2: Date): boolean {
   border-radius: 8px;
   max-height: 300px;
   overflow-y: auto;
-}
-
-.flowbot-variables-title {
-  font-weight: 600;
-  margin-bottom: 0.5rem;
-  color: #ffd700;
 }
 
 .flowbot-variable {
