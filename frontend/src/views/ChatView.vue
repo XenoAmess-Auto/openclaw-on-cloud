@@ -123,7 +123,7 @@
           <input
             ref="fileInputRef"
             type="file"
-            accept="image/*"
+            accept="*/*"
             multiple
             style="display: none"
             @change="handleFileSelect"
@@ -800,24 +800,25 @@ function handlePaste(e: ClipboardEvent) {
 
   console.log('[Paste] Clipboard items count:', items.length)
   
-  const imageItems: DataTransferItem[] = []
+  const fileItems: DataTransferItem[] = []
   for (let i = 0; i < items.length; i++) {
     const item = items[i]
     console.log(`[Paste] Item ${i}: type=${item.type}, kind=${item.kind}`)
-    if (item.type.startsWith('image/')) {
-      imageItems.push(item)
+    // 支持所有文件类型，不限于图片
+    if (item.kind === 'file') {
+      fileItems.push(item)
     }
   }
 
-  if (imageItems.length === 0) {
-    console.log('[Paste] No image items found')
+  if (fileItems.length === 0) {
+    console.log('[Paste] No file items found')
     return
   }
 
   e.preventDefault()
-  console.log('[Paste] Processing', imageItems.length, 'image(s)')
+  console.log('[Paste] Processing', fileItems.length, 'file(s)')
 
-  for (const item of imageItems) {
+  for (const item of fileItems) {
     const file = item.getAsFile()
     if (!file) {
       console.log('[Paste] Could not get file from item')
@@ -833,7 +834,7 @@ function handlePaste(e: ClipboardEvent) {
       attachments.value.push({
         id: generateAttachmentId(),
         dataUrl,
-        mimeType: file.type
+        mimeType: file.type || 'application/octet-stream'
       })
     }
     reader.onerror = (err) => {
@@ -855,15 +856,14 @@ function handleFileSelect(e: Event) {
   if (!files || files.length === 0) return
 
   for (const file of files) {
-    if (!file.type.startsWith('image/')) continue
-
+    // 支持所有文件类型
     const reader = new FileReader()
     reader.onload = () => {
       const dataUrl = reader.result as string
       attachments.value.push({
         id: generateAttachmentId(),
         dataUrl,
-        mimeType: file.type
+        mimeType: file.type || 'application/octet-stream'
       })
     }
     reader.readAsDataURL(file)

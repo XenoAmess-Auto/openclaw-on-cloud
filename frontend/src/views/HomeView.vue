@@ -729,25 +729,24 @@ async function handlePaste(event: ClipboardEvent) {
   const items = event.clipboardData?.items
   if (!items) return
 
-  const imageFiles: File[] = []
+  const files: File[] = []
   
   for (let i = 0; i < items.length; i++) {
     const item = items[i]
-    if (item.type.startsWith('image/')) {
-      const file = item.getAsFile()
-      if (file) {
-        imageFiles.push(file)
-      }
+    // 支持所有文件类型，不限于图片
+    const file = item.getAsFile()
+    if (file) {
+      files.push(file)
     }
   }
 
-  if (imageFiles.length === 0) return
+  if (files.length === 0) return
 
   event.preventDefault()
   isUploading.value = true
 
   try {
-    for (const file of imageFiles) {
+    for (const file of files) {
       // 先上传文件到服务器
       const response = await fileApi.upload(file)
       // 使用上传后返回的 URL（可能是相对路径），转换为完整 URL
@@ -759,7 +758,7 @@ async function handlePaste(event: ClipboardEvent) {
     }
   } catch (err: any) {
     console.error('Paste upload failed:', err)
-    alert('图片上传失败: ' + (err.response?.data?.message || err.message))
+    alert('文件上传失败: ' + (err.response?.data?.message || err.message))
   } finally {
     isUploading.value = false
   }
