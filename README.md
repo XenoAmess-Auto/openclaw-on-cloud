@@ -1,5 +1,7 @@
 # OpenClaw on Cloud
 
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/XenoAmess-Auto/openclaw-on-cloud)
+
 ## Android 应用下载
 
 GitHub Actions 自动构建 Android APK，**支持覆盖安装**（无需卸载旧版本）。
