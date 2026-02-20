@@ -251,6 +251,79 @@ public class OpenClawPluginService {
     }
 
     /**
+     * 通过文件名读取上传的文件并转为 data URL
+     * 支持本地存储和 S3 存储
+     * @param filename 文件名（不含路径）
+     * @param mimeType MIME类型
+     * @return data URL 或 null
+     */
+    private String readFileToDataUrlByFilename(String filename, String mimeType) {
+        try {
+            byte[] fileBytes;
+
+            // 检查存储类型
+            if ("s3".equalsIgnoreCase(storageProvider.getStorageType())) {
+                // S3 存储：使用 StorageProvider 读取文件
+                log.info("[S3] Reading file from S3: {}", filename);
+                try (InputStream inputStream = storageProvider.getInputStream(filename)) {
+                    fileBytes = inputStream.readAllBytes();
+                }
+            } else {
+                // 本地存储：使用配置的 uploadDir 作为基础路径
+                String uploadDir = fileProperties.getUploadDir();
+                java.nio.file.Path filePath = java.nio.file.Paths.get(uploadDir, filename);
+
+                // 如果找不到，尝试从工作目录查找
+                if (!java.nio.file.Files.exists(filePath)) {
+                    String oocBasePath = System.getProperty("user.dir");
+                    filePath = java.nio.file.Paths.get(oocBasePath, "uploads", filename);
+                }
+
+                // 再尝试父目录
+                if (!java.nio.file.Files.exists(filePath)) {
+                    String oocBasePath = System.getProperty("user.dir");
+                    filePath = java.nio.file.Paths.get(oocBasePath, "..", "uploads", filename).normalize();
+                }
+
+                if (!java.nio.file.Files.exists(filePath)) {
+                    log.warn("File not found: {} (tried uploadDir: {})", filename, fileProperties.getUploadDir());
+                    return null;
+                }
+
+                log.info("Reading file from: {}", filePath);
+                fileBytes = java.nio.file.Files.readAllBytes(filePath);
+            }
+
+            // 压缩图片以减少请求体大小
+            byte[] compressedBytes = compressImageIfNeeded(fileBytes, mimeType);
+            if (compressedBytes != null) {
+                fileBytes = compressedBytes;
+                log.info("Compressed image to {} bytes", fileBytes.length);
+            }
+
+            String base64 = java.util.Base64.getEncoder().encodeToString(fileBytes);
+
+            // 使用提供的 mimeType，如果没有则根据文件扩展名推断
+            String contentType = mimeType;
+            if (contentType == null || contentType.isEmpty()) {
+                contentType = "image/png"; // 默认
+                if (filename.endsWith(".jpg") || filename.endsWith(".jpeg")) {
+                    contentType = "image/jpeg";
+                } else if (filename.endsWith(".gif")) {
+                    contentType = "image/gif";
+                } else if (filename.endsWith(".webp")) {
+                    contentType = "image/webp";
+                }
+            }
+
+            return "data:" + contentType + ";base64," + base64;
+        } catch (Exception e) {
+            log.error("Failed to read file to data URL by filename: {}", filename, e);
+            return null;
+        }
+    }
+
+    /**
      * 压缩图片以限制文件大小
      * @param imageBytes 原始图片字节
      * @param mimeType MIME类型
@@ -429,9 +502,17 @@ public class OpenClawPluginService {
                         if (url.startsWith("/uploads/")) {
                             // 相对路径 /uploads/xxx.png，需要读取文件并转为 base64
                             imageDataUrl = readFileToDataUrl(url, att.getMimeType());
+                        } else if (url.startsWith("/api/files/")) {
+                            // 新上传端点返回的格式 /api/files/{filename}
+                            String filename = url.substring("/api/files/".length());
+                            imageDataUrl = readFileToDataUrlByFilename(filename, att.getMimeType());
                         } else if (url.contains("/uploads/")) {
                             // 完整路径包含 /uploads/，提取文件名并读取
                             imageDataUrl = readFileToDataUrlFromFullPath(url, att.getMimeType());
+                        } else if (url.contains("/api/files/")) {
+                            // 完整路径包含 /api/files/，提取文件名
+                            String filename = url.substring(url.lastIndexOf("/api/files/") + "/api/files/".length());
+                            imageDataUrl = readFileToDataUrlByFilename(filename, att.getMimeType());
                         } else if (url.startsWith("data:")) {
                             // 已经是 data URL，直接使用
                             imageDataUrl = url;
@@ -658,9 +739,17 @@ public class OpenClawPluginService {
                         if (url.startsWith("/uploads/")) {
                             // 读取文件并转为 base64 data URL
                             imageDataUrl = readFileToDataUrl(url, att.getMimeType());
+                        } else if (url.startsWith("/api/files/")) {
+                            // 新上传端点返回的格式 /api/files/{filename}
+                            String filename = url.substring("/api/files/".length());
+                            imageDataUrl = readFileToDataUrlByFilename(filename, att.getMimeType());
                         } else if (url.contains("/uploads/")) {
                             // 完整路径包含 /uploads/，提取文件名并读取
                             imageDataUrl = readFileToDataUrlFromFullPath(url, att.getMimeType());
+                        } else if (url.contains("/api/files/")) {
+                            // 完整路径包含 /api/files/，提取文件名
+                            String filename = url.substring(url.lastIndexOf("/api/files/") + "/api/files/".length());
+                            imageDataUrl = readFileToDataUrlByFilename(filename, att.getMimeType());
                         } else if (url.startsWith("data:")) {
                             // 已经是 data URL，直接使用
                             imageDataUrl = url;

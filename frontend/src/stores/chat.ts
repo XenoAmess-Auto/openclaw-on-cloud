@@ -320,10 +320,13 @@ export const useChatStore = defineStore('chat', () => {
             console.warn('[sendMessage] Invalid URL detected, skipping:', url.substring(0, 50))
             url = ''
           }
-          // 将完整 URL 转换为相对路径（后端期望 /uploads/xxx.png 格式）
+          // 将完整 URL 转换为相对路径（后端期望 /uploads/xxx.png 或 /api/files/xxx 格式）
           if (url?.includes('/uploads/')) {
             const uploadsIndex = url.indexOf('/uploads/')
             url = url.substring(uploadsIndex)
+          } else if (url?.includes('/api/files/')) {
+            const filesIndex = url.indexOf('/api/files/')
+            url = url.substring(filesIndex)
           }
           return {
             type: 'image',
