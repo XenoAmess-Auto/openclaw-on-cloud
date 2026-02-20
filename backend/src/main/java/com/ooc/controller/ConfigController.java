@@ -43,8 +43,8 @@ public class ConfigController {
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<Map<String, Object>> updateOpenClawConfig(@RequestBody OpenClawConfigUpdateRequest request) {
         if (request.getRequestTimeoutSeconds() != null) {
-            if (request.getRequestTimeoutSeconds() < 1) {
-                return ResponseEntity.badRequest().body(Map.of("error", "请求超时时间必须至少为 1 秒"));
+            if (request.getRequestTimeoutSeconds() < 0) {
+                return ResponseEntity.badRequest().body(Map.of("error", "请求超时时间不能为负数，设置为 0 表示无限制"));
             }
             openClawProperties.setRequestTimeoutSeconds(request.getRequestTimeoutSeconds());
             log.info("OpenClaw request timeout updated to {} seconds", request.getRequestTimeoutSeconds());

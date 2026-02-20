@@ -102,26 +102,30 @@ public class OpenClawWebSocketClient {
                         sessionId, message != null ? message.length() : 0);
                 session.sendMessage(new TextMessage(request));
 
-                // 启动超时定时器
-                int timeoutMs = properties.getRequestTimeoutSeconds() * 1000;
-                ScheduledFuture<?> timeoutTask = timeoutScheduler.schedule(() -> {
-                    log.warn("[OpenClaw WS] Request timeout for session {}, forcing lock release", sessionId);
-                    ResponseHandler timeoutHandler = responseHandlers.remove(sessionId);
-                    if (timeoutHandler != null) {
-                        try {
-                            timeoutHandler.onError("REQUEST_TIMEOUT: Request timed out after " + properties.getRequestTimeoutSeconds() + "s");
-                        } finally {
-                            AtomicBoolean timeoutLock = requestLocks.get(sessionId);
-                            if (timeoutLock != null) {
-                                timeoutLock.set(false);
-                                log.info("[OpenClaw WS] Lock released for session {} after timeout", sessionId);
+                // 启动超时定时器（仅当超时时间 > 0 时）
+                int timeoutSeconds = properties.getRequestTimeoutSeconds();
+                if (timeoutSeconds > 0) {
+                    int timeoutMs = timeoutSeconds * 1000;
+                    ScheduledFuture<?> timeoutTask = timeoutScheduler.schedule(() -> {
+                        log.warn("[OpenClaw WS] Request timeout for session {}, forcing lock release", sessionId);
+                        ResponseHandler timeoutHandler = responseHandlers.remove(sessionId);
+                        if (timeoutHandler != null) {
+                            try {
+                                timeoutHandler.onError("REQUEST_TIMEOUT: Request timed out after " + timeoutSeconds + "s");
+                            } finally {
+                                AtomicBoolean timeoutLock = requestLocks.get(sessionId);
+                                if (timeoutLock != null) {
+                                    timeoutLock.set(false);
+                                    log.info("[OpenClaw WS] Lock released for session {} after timeout", sessionId);
+                                }
                             }
                         }
-                    }
-                    requestTimeouts.remove(sessionId);
-                }, timeoutMs, TimeUnit.MILLISECONDS);
-
-                requestTimeouts.put(sessionId, timeoutTask);
+                        requestTimeouts.remove(sessionId);
+                    }, timeoutMs, TimeUnit.MILLISECONDS);
+                    requestTimeouts.put(sessionId, timeoutTask);
+                } else {
+                    log.info("[OpenClaw WS] No timeout set for session {} (timeoutSeconds=0)", sessionId);
+                }
 
             } catch (IOException e) {
                 log.error("[OpenClaw WS] Failed to send message", e);
