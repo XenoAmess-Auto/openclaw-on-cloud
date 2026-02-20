@@ -210,7 +210,7 @@
             <!-- 附件预览 -->
             <div v-if="attachments.length > 0" class="attachments-preview">
               <div v-for="(file, index) in attachments" :key="index" class="attachment-item">
-                <img v-if="file.type === 'IMAGE'" :src="file.previewUrl" class="attachment-preview-img" />
+                <img v-if="isImageFile(file)" :src="file.previewUrl" class="attachment-preview-img" />
                 <div v-else class="attachment-file">
                   <span class="file-icon">📎</span>
                   <span class="file-name">{{ file.originalName }}</span>
@@ -812,6 +812,28 @@ function removeAttachment(index: number) {
     URL.revokeObjectURL(attachment.previewUrl)
   }
   attachments.value.splice(index, 1)
+}
+
+// 判断文件是否为图片 - 使用多种检测方式
+function isImageFile(file: FileUploadResponse): boolean {
+  // 检查 type 字段（不区分大小写）
+  const typeStr = (file.type || '').toUpperCase()
+  if (typeStr === 'IMAGE') return true
+
+  // 检查 contentType 字段
+  const contentTypeStr = (file.contentType || '').toLowerCase()
+  if (contentTypeStr.startsWith('image/')) return true
+
+  // 检查文件名扩展名
+  const filename = (file.originalName || file.filename || '').toLowerCase()
+  if (/\.(png|jpg|jpeg|gif|webp|bmp|svg|ico)$/i.test(filename)) return true
+
+  // 检查 URL（如果是 data URL 或已上传的图片）
+  const urlStr = (file.url || '').toLowerCase()
+  if (urlStr.startsWith('data:image/')) return true
+  if (/\.(png|jpg|jpeg|gif|webp|bmp|svg|ico)$/i.test(urlStr)) return true
+
+  return false
 }
 
 function handleKeydown(event: KeyboardEvent) {
