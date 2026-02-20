@@ -32,6 +32,29 @@ export const useChatStore = defineStore('chat', () => {
   const MAX_RECONNECT_ATTEMPTS = 100 // 增加到100次（约8分钟），几乎无限重连
   const RECONNECT_DELAY = 5000 // 5秒后开始重连
 
+  // 心跳相关状态
+  const heartbeatTimer = ref<number | null>(null)
+  const HEARTBEAT_INTERVAL = 30000 // 30秒发送一次心跳
+
+  // 清理心跳定时器
+  function clearHeartbeatTimer() {
+    if (heartbeatTimer.value) {
+      clearInterval(heartbeatTimer.value)
+      heartbeatTimer.value = null
+    }
+  }
+
+  // 启动心跳
+  function startHeartbeat() {
+    clearHeartbeatTimer()
+    heartbeatTimer.value = window.setInterval(() => {
+      if (ws.value && ws.value.readyState === WebSocket.OPEN) {
+        ws.value.send(JSON.stringify({ type: 'ping' }))
+        console.log('[WebSocket] Heartbeat ping sent')
+      }
+    }, HEARTBEAT_INTERVAL)
+  }
+
   async function fetchRooms() {
     loading.value = true
     try {
@@ -178,6 +201,9 @@ export const useChatStore = defineStore('chat', () => {
         userId: authStore.user?.id,
         userName: authStore.user?.username
       }))
+
+      // 启动心跳
+      startHeartbeat()
     }
 
     socket.onmessage = (event) => {
@@ -193,14 +219,17 @@ export const useChatStore = defineStore('chat', () => {
       console.log('[WebSocket] Closed:', event.code, event.reason)
       isConnected.value = false
       ws.value = null
-      
+
+      // 清理心跳
+      clearHeartbeatTimer()
+
       // 如果是正常关闭（用户主动离开），不重连
       // code 1000 = 正常关闭, code 1001 = 离开页面
       if (event.code === 1000 || event.code === 1001) {
         console.log('[WebSocket] Normal close, no reconnect needed')
         return
       }
-      
+
       // 异常关闭，触发重连
       scheduleReconnect(roomId)
     }
@@ -210,8 +239,9 @@ export const useChatStore = defineStore('chat', () => {
 
   function disconnect() {
     clearReconnectTimer()
+    clearHeartbeatTimer()
     reconnectAttempts.value = 0
-    
+
     if (ws.value) {
       ws.value.close()
       ws.value = null

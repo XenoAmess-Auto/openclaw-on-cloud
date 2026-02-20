@@ -195,6 +195,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
             case "message" -> handleMessage(session, payload);
             case "typing" -> handleTyping(session, payload);
             case "leave" -> handleLeave(session, payload);
+            case "ping" -> handlePing(session, payload);
         }
     }
 
@@ -2117,6 +2118,17 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                 .userId(userInfo.getUserId())
                 .userName(userInfo.getUserName())
                 .build());
+    }
+
+    private void handlePing(WebSocketSession session, WebSocketMessage payload) {
+        // 心跳检测，回复 pong
+        try {
+            if (session.isOpen()) {
+                session.sendMessage(new TextMessage("{\"type\":\"pong\"}"));
+            }
+        } catch (IOException e) {
+            log.debug("Failed to send pong to session {}", session.getId());
+        }
     }
 
     public void broadcastToRoom(String roomId, WebSocketMessage message, WebSocketSession... exclude) {
