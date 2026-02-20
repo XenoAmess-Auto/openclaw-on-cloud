@@ -703,7 +703,7 @@ function sendMessage() {
   const chatAttachments = attachments.value.map(att => ({
     id: att.filename, // 使用文件名作为唯一标识
     dataUrl: att.previewUrl || att.url, // 使用预览URL或上传后的URL
-    mimeType: att.contentType || 'image/png'
+    mimeType: att.contentType || 'application/octet-stream'
   }))
   console.log('[sendMessage] chatAttachments:', chatAttachments)
 

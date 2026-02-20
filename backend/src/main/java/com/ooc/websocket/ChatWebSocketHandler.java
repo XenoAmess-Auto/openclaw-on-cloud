@@ -404,7 +404,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
             for (Attachment att : attachments) {
                 // 将类型转换为大写以保持一致性
                 String typeUpper = att.getType() != null ? att.getType().toUpperCase() : "FILE";
-                String mimeType = att.getMimeType() != null ? att.getMimeType() : "image/png";
+                String mimeType = att.getMimeType() != null ? att.getMimeType() : "application/octet-stream";
                 
                 String url;
                 long size;
