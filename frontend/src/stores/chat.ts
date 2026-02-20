@@ -383,8 +383,8 @@ export const useChatStore = defineStore('chat', () => {
         break
       case 'stream_start':
         // 流式消息开始 - 只处理当前房间的消息
-        // 兜底：如果 currentRoom 为 null，尝试恢复
-        if (!currentRoom.value && data.roomId) {
+        // 兜底：如果 currentRoom 为 null 或 id 缺失，尝试恢复
+        if (!currentRoom.value?.id && data.roomId) {
           const room = rooms.value.find(r => r.id === data.roomId)
           if (room) {
             currentRoom.value = room
@@ -409,8 +409,8 @@ export const useChatStore = defineStore('chat', () => {
         break
       case 'stream_delta':
         // 流式消息增量 - 只处理当前房间的消息
-        // 兜底：如果 currentRoom 为 null，尝试恢复
-        if (!currentRoom.value && data.roomId) {
+        // 兜底：如果 currentRoom 为 null 或 id 缺失，尝试恢复
+        if (!currentRoom.value?.id && data.roomId) {
           const room = rooms.value.find(r => r.id === data.roomId)
           if (room) {
             currentRoom.value = room
@@ -437,8 +437,8 @@ export const useChatStore = defineStore('chat', () => {
         break
       case 'tool_start':
         // 工具调用开始 - 只处理当前房间的消息
-        // 兜底：如果 currentRoom 为 null，尝试恢复
-        if (!currentRoom.value && data.roomId) {
+        // 兜底：如果 currentRoom 为 null 或 id 缺失，尝试恢复
+        if (!currentRoom.value?.id && data.roomId) {
           const room = rooms.value.find(r => r.id === data.roomId)
           if (room) {
             currentRoom.value = room
@@ -468,8 +468,8 @@ export const useChatStore = defineStore('chat', () => {
         break
       case 'tool_result':
         // 工具调用完成 - 只处理当前房间的消息
-        // 兜底：如果 currentRoom 为 null，尝试恢复
-        if (!currentRoom.value && data.roomId) {
+        // 兜底：如果 currentRoom 为 null 或 id 缺失，尝试恢复
+        if (!currentRoom.value?.id && data.roomId) {
           const room = rooms.value.find(r => r.id === data.roomId)
           if (room) {
             currentRoom.value = room
@@ -497,8 +497,8 @@ export const useChatStore = defineStore('chat', () => {
         break
             case 'stream_end':
         // 流式消息结束 - 只处理当前房间的消息
-        // 兜底：如果 currentRoom 为 null，尝试恢复
-        if (!currentRoom.value && data.roomId) {
+        // 兜底：如果 currentRoom 为 null 或 id 缺失，尝试恢复
+        if (!currentRoom.value?.id && data.roomId) {
           const room = rooms.value.find(r => r.id === data.roomId)
           if (room) {
             currentRoom.value = room
