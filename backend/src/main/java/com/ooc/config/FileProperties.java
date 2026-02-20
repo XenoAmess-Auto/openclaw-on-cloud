@@ -20,7 +20,7 @@ public class FileProperties {
      */
     private String uploadDir = "./uploads";
     private String[] allowedTypes = {"image/jpeg", "image/png", "image/gif", "image/webp", "application/pdf", "text/plain"};
-    private long maxSize = 10;
+    private long maxSize = 100;
     private String urlPrefix = "/uploads";
 
     /**
