@@ -490,3 +490,430 @@ defineExpose({
   focus: () => inputRef.value?.focus()
 })
 </script>
+
+<style scoped>
+.input-area {
+  border-top: 1px solid var(--border-color);
+  padding: 1rem;
+  flex-shrink: 0;
+  position: relative;
+}
+
+/* 附件预览 */
+.attachments-preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+  padding: 0.5rem;
+  background: var(--bg-color);
+  border-radius: 8px;
+}
+
+.attachment-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem 0.5rem;
+  background: var(--surface-color);
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+}
+
+.attachment-preview-img {
+  width: 48px;
+  height: 48px;
+  object-fit: cover;
+  border-radius: 4px;
+}
+
+.attachment-file {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.file-icon {
+  font-size: 1.25rem;
+}
+
+.file-name {
+  font-size: 0.75rem;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-secondary);
+}
+
+.remove-attachment {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: none;
+  background: var(--border-color);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 0.875rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 0.25rem;
+}
+
+.remove-attachment:hover {
+  background: #ef4444;
+  color: white;
+}
+
+.attach-btn {
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--surface-color);
+  cursor: pointer;
+  font-size: 1.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.attach-btn:hover:not(:disabled) {
+  background: var(--bg-color);
+  border-color: var(--primary-color);
+}
+
+.attach-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.input-wrapper {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-end;
+}
+
+textarea {
+  flex: 1;
+  padding: 0.75rem;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  resize: none;
+  font-size: 1rem;
+  font-family: inherit;
+  min-height: 44px;
+  max-height: 200px;
+  overflow-y: auto;
+  line-height: 1.5;
+}
+
+textarea:disabled {
+  background: var(--bg-color);
+  cursor: not-allowed;
+}
+
+textarea:focus {
+  outline: none;
+  border-color: var(--primary-color);
+}
+
+.input-wrapper button {
+  padding: 0.75rem 1.5rem;
+  background: var(--primary-color);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: background 0.2s;
+  height: 44px;
+}
+
+.input-wrapper button:hover:not(:disabled) {
+  background: var(--primary-hover);
+}
+
+.input-wrapper button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 发送区域 */
+.send-section {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.25rem;
+}
+
+.send-disabled-hint {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  max-width: 120px;
+  text-align: right;
+  line-height: 1.3;
+}
+
+/* @提及下拉列表 */
+.mention-list {
+  position: absolute;
+  bottom: 100%;
+  left: 1rem;
+  right: 1rem;
+  max-height: 300px;
+  background: var(--surface-color);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  box-shadow: 0 -4px 20px rgba(0,0,0,0.15);
+  margin-bottom: 0.5rem;
+  overflow-y: auto;
+  z-index: 100;
+}
+
+.mention-list-header {
+  padding: 0.75rem 1rem;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border-color);
+  background: rgba(0,0,0,0.02);
+}
+
+.mention-shortcuts {
+  background: rgba(59, 130, 246, 0.05);
+}
+
+.mention-divider {
+  height: 1px;
+  background: var(--border-color);
+  margin: 0;
+}
+
+.mention-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  cursor: pointer;
+  transition: background 0.15s;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.mention-item:last-child {
+  border-bottom: none;
+}
+
+.mention-item:hover,
+.mention-item.active {
+  background: var(--bg-color);
+}
+
+.mention-item.shortcut {
+  padding: 0.5rem 1rem;
+}
+
+.shortcut-icon {
+  font-size: 1rem;
+}
+
+.mention-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.mention-avatar-placeholder {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--primary-color);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.mention-info {
+  flex: 1;
+}
+
+.mention-name {
+  font-weight: 500;
+  font-size: 0.875rem;
+}
+
+.mention-username {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.mention-self {
+  font-size: 0.625rem;
+  color: var(--text-secondary);
+  background: var(--bg-color);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.mention-empty {
+  padding: 1rem;
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}
+
+.mention-loading {
+  padding: 1rem;
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  font-style: italic;
+}
+
+/* ============================================
+   移动端适配 - Mobile Responsive Styles
+   ============================================ */
+
+@media (max-width: 768px) {
+  .input-area {
+    padding: 0.625rem 0.75rem;
+    padding-bottom: calc(0.625rem + env(safe-area-inset-bottom, 8px));
+    border-top: 1px solid var(--border-color);
+    background: var(--surface-color);
+  }
+
+  .attachments-preview {
+    padding: 0.375rem;
+    margin-bottom: 0.5rem;
+    max-height: 80px;
+  }
+
+  .attachment-item {
+    padding: 0.25rem 0.375rem;
+  }
+
+  .attachment-preview-img {
+    width: 40px;
+    height: 40px;
+  }
+
+  .file-name {
+    max-width: 100px;
+    font-size: 0.6875rem;
+  }
+
+  .remove-attachment {
+    width: 18px;
+    height: 18px;
+    font-size: 0.75rem;
+  }
+
+  .input-wrapper {
+    gap: 0.375rem;
+  }
+
+  .attach-btn {
+    width: 40px;
+    height: 40px;
+    font-size: 1.125rem;
+  }
+
+  textarea {
+    padding: 0.625rem 0.75rem;
+    font-size: 16px;
+    min-height: 40px;
+    max-height: 100px;
+    border-radius: 10px;
+  }
+
+  .input-wrapper button {
+    padding: 0.625rem 1rem;
+    font-size: 0.8125rem;
+    height: 40px;
+    border-radius: 10px;
+  }
+
+  .send-disabled-hint {
+    font-size: 0.6875rem;
+    max-width: 100px;
+  }
+
+  .mention-list {
+    left: 0.5rem;
+    right: 0.5rem;
+    max-height: 240px;
+    border-radius: 10px;
+  }
+
+  .mention-list-header {
+    padding: 0.625rem 0.875rem;
+    font-size: 0.6875rem;
+  }
+
+  .mention-item {
+    padding: 0.625rem 0.875rem;
+  }
+
+  .mention-avatar,
+  .mention-avatar-placeholder {
+    width: 28px;
+    height: 28px;
+  }
+
+  .mention-avatar-placeholder {
+    font-size: 0.6875rem;
+  }
+
+  .mention-name {
+    font-size: 0.8125rem;
+  }
+
+  .mention-username {
+    font-size: 0.6875rem;
+  }
+
+  .mention-self {
+    font-size: 0.5625rem;
+    padding: 1px 4px;
+  }
+
+  .shortcut-icon {
+    font-size: 0.875rem;
+  }
+}
+
+/* 小屏手机额外优化 */
+@media (max-width: 380px) {
+  .attach-btn {
+    width: 36px;
+    height: 36px;
+    font-size: 1rem;
+  }
+
+  textarea {
+    padding: 0.5rem 0.625rem;
+  }
+
+  .input-wrapper button {
+    padding: 0.5rem 0.875rem;
+    height: 36px;
+  }
+
+  .send-disabled-hint {
+    display: none;
+  }
+}
+
+/* 横屏模式优化 */
+@media (max-height: 500px) and (orientation: landscape) {
+  .input-area {
+    padding: 0.5rem 0.75rem;
+  }
+}
+</style>

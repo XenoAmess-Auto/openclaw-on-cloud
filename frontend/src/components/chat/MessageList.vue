@@ -599,3 +599,795 @@ function renderSegments(msg: Message): Array<{ type: 'text' | 'tools', html: str
   return segments
 }
 </script>
+
+<style scoped>
+.message-container {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+/* 加载更多消息 */
+.load-more-container {
+  display: flex;
+  justify-content: center;
+  padding: 0.5rem 0;
+  min-height: 40px;
+}
+
+.load-more-btn {
+  padding: 0.5rem 1rem;
+  background: var(--bg-color);
+  border: 1px solid var(--border-color);
+  border-radius: 20px;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.load-more-btn:hover {
+  background: var(--surface-color);
+  border-color: var(--primary-color);
+  color: var(--primary-color);
+}
+
+.load-more-loading {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.loading-spinner {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--border-color);
+  border-top-color: var(--primary-color);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.message {
+  display: flex;
+  gap: 0.75rem;
+  max-width: 80%;
+  min-width: 0;
+  align-self: flex-start;
+}
+
+.message.from-me {
+  align-self: flex-end;
+  flex-direction: row-reverse;
+}
+
+.message.mentioned-me .message-body {
+  background: #fef3c7;
+  border: 2px solid #f59e0b;
+}
+
+.message.from-me.mentioned-me .message-body {
+  background: var(--primary-color);
+  border: 2px solid #f59e0b;
+}
+
+.message-avatar {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+}
+
+.message-avatar img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.avatar-placeholder {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: var(--primary-color);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.message-body {
+  background: var(--bg-color);
+  padding: 0.75rem 1rem;
+  border-radius: 12px;
+  min-width: 0;
+  flex: 1;
+}
+
+.message.from-me .message-body {
+  background: var(--primary-color);
+  color: white;
+}
+
+.message-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.25rem;
+  font-size: 0.75rem;
+}
+
+.message-id, .reply-to-id {
+  font-size: 0.625rem;
+  color: var(--text-secondary);
+  background: var(--bg-color);
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-family: 'SF Mono', monospace;
+  opacity: 0.7;
+  cursor: help;
+}
+
+.message-id:hover, .reply-to-id:hover {
+  opacity: 1;
+}
+
+.reply-to-id {
+  background: #e0e7ff;
+  color: #4f46e5;
+}
+
+.reply-to-id.clickable {
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.reply-to-id.clickable:hover {
+  background: #4f46e5;
+  color: white;
+  opacity: 1;
+}
+
+@keyframes message-highlight {
+  0% {
+    box-shadow: 0 0 0 0 rgba(79, 70, 229, 0.7);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(79, 70, 229, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(79, 70, 229, 0);
+  }
+}
+
+.highlight-message {
+  animation: message-highlight 1s ease-out;
+  border-radius: 12px;
+}
+
+.highlight-message .message-body {
+  background: linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%) !important;
+  transition: background 0.3s ease;
+}
+
+.highlight-message.from-me .message-body {
+  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%) !important;
+}
+
+.message.from-me .message-id {
+  background: rgba(255,255,255,0.2);
+  color: rgba(255,255,255,0.9);
+}
+
+.message.from-me .reply-to-id {
+  background: rgba(255,255,255,0.25);
+  color: rgba(255,255,255,0.95);
+}
+
+.message.from-me .message-header {
+  color: rgba(255,255,255,0.8);
+}
+
+.message:not(.from-me) .message-header {
+  color: var(--text-secondary);
+}
+
+.sender {
+  font-weight: 500;
+}
+
+.mention-tag {
+  font-size: 0.625rem;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+}
+
+.mention-tag.mention-all {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.mention-tag.mention-here {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.message.from-me .mention-tag.mention-all,
+.message.from-me .mention-tag.mention-here {
+  background: rgba(255,255,255,0.3);
+  color: white;
+}
+
+.message-content {
+  line-height: 1.5;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.message-content :deep(pre) {
+  max-width: 100%;
+  width: 100%;
+  overflow-x: auto;
+  white-space: pre-wrap !important;
+  word-wrap: break-word !important;
+  word-break: break-all !important;
+  box-sizing: border-box;
+}
+
+.message-content :deep(pre code) {
+  white-space: pre-wrap !important;
+  word-wrap: break-word !important;
+  word-break: break-all !important;
+  display: block;
+  max-width: 100%;
+}
+
+.message-content :deep(code) {
+  word-wrap: break-word;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-width: 100%;
+}
+
+.message-content :deep(*) {
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.message-content :deep(p),
+.message-content :deep(div),
+.message-content :deep(span) {
+  max-width: 100%;
+  word-break: break-word;
+}
+
+.message-content :deep(.mention) {
+  color: var(--primary-color);
+  font-weight: 500;
+  background: rgba(59, 130, 246, 0.1);
+  padding: 0 2px;
+  border-radius: 3px;
+}
+
+.message-content :deep(.mention.mention-all) {
+  color: #f59e0b;
+  background: rgba(245, 158, 11, 0.1);
+}
+
+.message-content :deep(.mention.mention-here) {
+  color: #3b82f6;
+  background: rgba(59, 130, 246, 0.1);
+}
+
+.message.from-me .message-content :deep(.mention) {
+  color: rgba(255,255,255,0.95);
+  background: rgba(255,255,255,0.2);
+}
+
+.message-content :deep(.message-image) {
+  margin-top: 0.5rem;
+  max-width: 100%;
+  max-height: 300px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: transform 0.2s;
+  object-fit: contain;
+}
+
+.message-content :deep(.message-image:hover) {
+  transform: scale(1.02);
+}
+
+.message-content :deep(.file-link) {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--bg-color);
+  border-radius: 6px;
+  color: var(--primary-color);
+  text-decoration: none;
+  font-size: 0.875rem;
+  margin-top: 0.25rem;
+}
+
+.message-content :deep(.file-link:hover) {
+  background: rgba(59, 130, 246, 0.1);
+}
+
+.message.from-me .message-content :deep(.file-link) {
+  background: rgba(255,255,255,0.2);
+  color: white;
+}
+
+.mention-notice {
+  font-size: 0.75rem;
+  color: #f59e0b;
+  margin-top: 0.5rem;
+  font-weight: 500;
+}
+
+.message.from-me .mention-notice {
+  color: rgba(255,255,255,0.9);
+}
+
+.empty-messages {
+  text-align: center;
+  color: var(--text-secondary);
+  padding: 3rem 1rem;
+}
+
+.empty-messages span {
+  display: block;
+  margin-top: 0.5rem;
+  font-size: 0.875rem;
+}
+
+/* Flowbot 消息样式 */
+.flowbot-message {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border-radius: 12px;
+  padding: 0.75rem 1rem;
+  margin: 0.5rem 0;
+  max-width: 85%;
+  align-self: flex-start;
+}
+
+.flowbot-body {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  padding: 0.75rem;
+}
+
+.flowbot-sender {
+  color: #fff !important;
+  font-weight: 600;
+}
+
+.flowbot-content {
+  color: #fff;
+  white-space: pre-wrap;
+}
+
+.flowbot-content :deep(p) {
+  color: #fff;
+  margin: 0.5rem 0;
+}
+
+.flowbot-content :deep(strong) {
+  color: #ffd700;
+}
+
+/* 系统消息 */
+.system-message {
+  text-align: center;
+  padding: 0.5rem 1rem;
+  margin: 0.5rem 0;
+}
+
+.system-text {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  background: var(--bg-color);
+  padding: 0.25rem 0.75rem;
+  border-radius: 12px;
+}
+
+/* 工具调用消息 */
+.tool-call-message {
+  background: var(--bg-color);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 1rem;
+  margin: 0.5rem 1rem;
+  max-width: 80%;
+  align-self: flex-start;
+}
+
+.tool-call-message > .tool-call-header {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+  padding-bottom: 0.375rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+:deep(.tool-call-section) {
+  margin: 0.5rem 0;
+}
+
+:deep(.tool-call-list) {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+:deep(.tool-item) {
+  background: white;
+  border-radius: 12px;
+  padding: 0;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  transition: all 0.2s ease;
+  overflow: hidden;
+}
+
+:deep(.tool-item:hover) {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  transform: translateY(-2px);
+}
+
+:deep(.tool-item.running) {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+  animation: tool-pulse 2s infinite;
+}
+
+@keyframes tool-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.3);
+  }
+}
+
+:deep(.tool-item.completed) {
+  border-color: #22c55e;
+}
+
+:deep(.tool-item.completed:hover) {
+  box-shadow: 0 4px 12px rgba(34, 197, 94, 0.2);
+}
+
+:deep(.tool-item.error) {
+  border-color: #ef4444;
+  background: #fef2f2;
+}
+
+:deep(.tool-item.error:hover) {
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.2);
+}
+
+:deep(.tool-item-header) {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  background: linear-gradient(135deg, #f8fafc, #f1f5f9);
+  border-bottom: 1px solid #e5e7eb;
+}
+
+:deep(.tool-item.running .tool-item-header) {
+  background: linear-gradient(135deg, #eff6ff, #dbeafe);
+}
+
+:deep(.tool-item.completed .tool-item-header) {
+  background: linear-gradient(135deg, #f0fdf4, #dcfce7);
+}
+
+:deep(.tool-item.error .tool-item-header) {
+  background: linear-gradient(135deg, #fef2f2, #fee2e2);
+}
+
+:deep(.tool-icon-small) {
+  font-size: 1rem;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: white;
+  border-radius: 6px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+:deep(.tool-name) {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #1f2937;
+  flex: 1;
+}
+
+:deep(.tool-name code) {
+  background: rgba(0, 0, 0, 0.08);
+  padding: 0.125rem 0.375rem;
+  border-radius: 4px;
+  font-family: 'SF Mono', monospace;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #4b5563;
+}
+
+:deep(.tool-item-body) {
+  padding: 0.75rem;
+}
+
+:deep(.tool-description) {
+  font-size: 0.8125rem;
+  color: #6b7280;
+  line-height: 1.5;
+}
+
+:deep(.tool-description .exec-command) {
+  background: #f3f4f6;
+  border-radius: 8px;
+  padding: 0.5rem 0.75rem;
+  margin-top: 0.25rem;
+}
+
+:deep(.tool-description .exec-label) {
+  font-size: 0.7rem;
+  color: #9ca3af;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 0.25rem;
+  font-weight: 600;
+}
+
+:deep(.tool-description .exec-code) {
+  font-family: 'SF Mono', 'Monaco', 'Menlo', 'Consolas', monospace;
+  font-size: 0.8rem;
+  color: #374151;
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-all;
+  line-height: 1.4;
+}
+
+:deep(.tool-result) {
+  margin-top: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background: #f9fafb;
+  border-radius: 8px;
+  border-left: 3px solid #d1d5db;
+}
+
+:deep(.tool-result pre) {
+  font-family: 'SF Mono', monospace;
+  font-size: 0.75rem;
+  color: #4b5563;
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+/* OpenClaw 消息容器样式 */
+.openclaw-message-container {
+  display: flex;
+  gap: 0.75rem;
+  max-width: 80%;
+  min-width: 0;
+  align-self: flex-start;
+}
+
+.openclaw-message-container .openclaw-body {
+  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+  border: 1px solid #bae6fd;
+  border-radius: 12px;
+  flex: 1;
+  min-width: 0;
+  padding: 0.75rem 1rem;
+}
+
+.openclaw-message-container .openclaw-body .message-content {
+  padding: 0;
+}
+
+/* 时间分隔线 */
+.date-separator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 1rem 0;
+  position: relative;
+}
+
+.date-separator::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--border-color);
+}
+
+.date-separator span {
+  position: relative;
+  background: var(--surface-color);
+  padding: 0 1rem;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  z-index: 1;
+}
+
+/* 正在输入提示 */
+.typing-indicator {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  margin-top: 0.5rem;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}
+
+.typing-dots {
+  display: flex;
+  gap: 3px;
+}
+
+.typing-dots span {
+  width: 6px;
+  height: 6px;
+  background: var(--text-secondary);
+  border-radius: 50%;
+  animation: typing-bounce 1.4s infinite ease-in-out both;
+}
+
+.typing-dots span:nth-child(1) {
+  animation-delay: -0.32s;
+}
+
+.typing-dots span:nth-child(2) {
+  animation-delay: -0.16s;
+}
+
+@keyframes typing-bounce {
+  0%, 80%, 100% {
+    transform: scale(0);
+  }
+  40% {
+    transform: scale(1);
+  }
+}
+
+.typing-text {
+  font-style: italic;
+}
+
+/* ============================================
+   移动端适配 - Mobile Responsive Styles
+   ============================================ */
+
+@media (max-width: 768px) {
+  .message-container {
+    padding: 0.75rem;
+    gap: 0.75rem;
+    padding-bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  .message {
+    max-width: 90%;
+    gap: 0.5rem;
+  }
+
+  .message-avatar {
+    width: 36px;
+    height: 36px;
+  }
+
+  .avatar-placeholder {
+    font-size: 0.8125rem;
+  }
+
+  .message-body {
+    padding: 0.625rem 0.875rem;
+    border-radius: 10px;
+  }
+
+  .message-header {
+    font-size: 0.6875rem;
+    gap: 0.375rem;
+  }
+
+  .mention-tag {
+    font-size: 0.5625rem;
+    padding: 1px 4px;
+  }
+
+  .message-content {
+    font-size: 0.9375rem;
+    line-height: 1.5;
+  }
+
+  .system-message {
+    padding: 0.375rem 0;
+  }
+
+  .system-text {
+    font-size: 0.6875rem;
+    padding: 0.25rem 0.625rem;
+  }
+
+  .tool-call-message {
+    max-width: 95%;
+    padding: 0.75rem;
+    margin: 0.375rem 0.5rem;
+  }
+
+  .date-separator {
+    margin: 0.75rem 0;
+  }
+
+  .date-separator span {
+    font-size: 0.6875rem;
+    padding: 0 0.75rem;
+  }
+
+  .typing-indicator {
+    padding: 0.375rem 0.75rem;
+    font-size: 0.8125rem;
+  }
+}
+
+/* 小屏手机额外优化 */
+@media (max-width: 380px) {
+  .message {
+    max-width: 92%;
+  }
+
+  .message-avatar {
+    width: 32px;
+    height: 32px;
+  }
+
+  .message-body {
+    padding: 0.5rem 0.75rem;
+  }
+
+  .message-content {
+    font-size: 0.875rem;
+  }
+}
+
+/* 横屏模式优化 */
+@media (max-height: 500px) and (orientation: landscape) {
+  .message-container {
+    padding: 0.5rem;
+  }
+}
+</style>
