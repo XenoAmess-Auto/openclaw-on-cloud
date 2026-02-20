@@ -304,7 +304,12 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
-  function sendMessage(content: string, attachments: Attachment[] = []) {
+  function sendMessage(content: string, attachments: Attachment[] = [], options?: {
+    mentions?: Array<{ userId: string; userName: string }>
+    mentionAll?: boolean
+    mentionHere?: boolean
+    openclawMentioned?: boolean
+  }) {
     console.log('[chatStore.sendMessage] received attachments:', attachments.length, attachments)
     if (ws.value && ws.value.readyState === WebSocket.OPEN) {
       const payload: any = {
@@ -343,6 +348,19 @@ export const useChatStore = defineStore('chat', () => {
             url: url
           }
         }).filter(att => att.url) // 过滤掉空 URL 的附件
+      }
+      // 添加 mentions 相关选项
+      if (options?.mentions?.length) {
+        payload.mentions = options.mentions
+      }
+      if (options?.mentionAll) {
+        payload.mentionAll = true
+      }
+      if (options?.mentionHere) {
+        payload.mentionHere = true
+      }
+      if (options?.openclawMentioned) {
+        payload.openclawMentioned = true
       }
       console.log('[chatStore.sendMessage] sending payload:', JSON.stringify(payload).substring(0, 500))
       ws.value.send(JSON.stringify(payload))
