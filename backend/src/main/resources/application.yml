@@ -11,8 +11,8 @@ spring:
   servlet:
     multipart:
       enabled: true
-      max-file-size: 10MB
-      max-request-size: 10MB
+      max-file-size: 100MB
+      max-request-size: 100MB
 
 server:
   port: 8081
@@ -43,7 +43,7 @@ file:
   # ===== 本地存储配置 (storage-type = local) =====
   upload-dir: ${FILE_UPLOAD_DIR:/home/xenoamess/.openclaw/workspace/openclaw-on-cloud/uploads}
   allowed-types: image/jpeg,image/png,image/gif,image/webp,application/pdf,text/plain
-  max-size: 10
+  max-size: 100
   url-prefix: /uploads
 
   # ===== S3 存储配置 (storage-type = s3) =====
