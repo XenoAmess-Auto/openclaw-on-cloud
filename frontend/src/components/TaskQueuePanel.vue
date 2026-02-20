@@ -282,7 +282,10 @@ const formatTime = (timestamp: string): string => {
 
 // 自动刷新
 onMounted(() => {
-  fetchQueue()
+  // 如果队列为空，立即查询一次，然后开始定时刷新
+  if (queueInfo.value.tasks.length === 0) {
+    fetchQueue()
+  }
   refreshInterval.value = window.setInterval(fetchQueue, 3000) // 每3秒刷新
 })
 
