@@ -890,21 +890,47 @@ watch(nodeConfig, (newConfig) => {
 async function saveTemplate() {
   saving.value = true
 
-  const data = {
-    nodes: elements.value.filter((e: any) => !e.source),
-    edges: elements.value.filter((e: any) => e.source)
-  }
-
+  const data = getDefinition()
   emit('save', data)
 
   saving.value = false
 }
 
+// 清理节点数据，只保留必要字段
+function cleanNode(node: any): any {
+  return {
+    id: node.id,
+    type: node.type,
+    position: node.position,
+    data: node.data,
+    style: node.style,
+    sourcePosition: node.sourcePosition,
+    targetPosition: node.targetPosition
+  }
+}
+
+// 清理边数据，只保留必要字段
+function cleanEdge(edge: any): any {
+  return {
+    id: edge.id,
+    source: edge.source,
+    target: edge.target,
+    sourceHandle: edge.sourceHandle,
+    targetHandle: edge.targetHandle,
+    label: edge.label,
+    animated: edge.animated,
+    style: edge.style
+  }
+}
+
 // 获取当前定义
 function getDefinition() {
-  const nodes = elements.value.filter(e => !e.source)
-  const edges = elements.value.filter(e => e.source)
-  return { nodes, edges }
+  const rawNodes = elements.value.filter(e => !e.source)
+  const rawEdges = elements.value.filter(e => e.source)
+  return {
+    nodes: rawNodes.map(cleanNode),
+    edges: rawEdges.map(cleanEdge)
+  }
 }
 
 defineExpose({

@@ -123,6 +123,7 @@ public class FlowchartTemplate {
     @Builder
     @NoArgsConstructor
     @AllArgsConstructor
+    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
     public static class Node {
         @JsonProperty("id")
         private String id;
@@ -270,6 +271,7 @@ public class FlowchartTemplate {
     @Builder
     @NoArgsConstructor
     @AllArgsConstructor
+    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
     public static class Edge {
         @JsonProperty("id")
         private String id;
