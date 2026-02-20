@@ -80,6 +80,11 @@ docker compose up -d
 
 ## 界面截图
 
+### 移动端运行截图
+
+**Android 客户端**
+![移动端运行截图](docs/screenshot-mobile.png)
+
 ### 聊天界面
 
 **OpenClaw 工具调用**
