@@ -170,11 +170,10 @@
             <input 
               v-model.number="openclawConfig.requestTimeoutSeconds" 
               type="number" 
-              min="60" 
-              max="3600" 
+              min="1" 
               placeholder="1800"
             />
-            <span class="hint">单个请求的最大等待时间，范围 60-3600 秒，默认 1800 秒（30 分钟）</span>
+            <span class="hint">单个请求的最大等待时间（秒），最小 1 秒，无上限，默认 1800 秒（30 分钟）</span>
           </div>
           
           <div class="config-actions">
