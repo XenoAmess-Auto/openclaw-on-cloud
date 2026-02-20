@@ -109,10 +109,6 @@ onMounted(() => {
   loadSessions()
 })
 
-const currentRoomSessions = computed(() => {
-  return sessions.value.filter(s => s.chatRoomId === props.roomId)
-})
-
 function isActive(session: Session): boolean {
   return !session.archived && session.chatRoomId === props.roomId && activeSessionId.value === session.id
 }

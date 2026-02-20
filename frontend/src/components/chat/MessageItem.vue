@@ -84,7 +84,7 @@
                 <img
                   :src="attachment.url"
                   :alt="attachment.name"
-                  @click="previewImage(attachment.url)"
+                  @click="previewImage(attachment.url!)"
                   @load="onImageLoad"
                   @error="onImageError"
                 />
