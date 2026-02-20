@@ -1,5 +1,6 @@
 package com.ooc.service.flowchart.handler;
 
+import com.ooc.openclaw.OpenClawProperties;
 import com.ooc.entity.flowchart.FlowchartTemplate;
 import com.ooc.openclaw.OpenClawPluginService;
 import com.ooc.service.flowchart.ExecutionContext;
@@ -25,6 +26,7 @@ import java.util.regex.Pattern;
 public class OpenClawNodeHandler implements NodeHandler {
 
     private final OpenClawPluginService openClawPluginService;
+    private final OpenClawProperties openClawProperties;
 
     // 模板变量正则: {{variableName}}
     private static final Pattern TEMPLATE_PATTERN = Pattern.compile("\\{\\{(\\w+)\\}\\}");
@@ -68,12 +70,18 @@ public class OpenClawNodeHandler implements NodeHandler {
         String tempUserName = "Flowchart";
 
         // 调用 OpenClaw（同步等待结果）- 使用 boundedElastic 调度器避免阻塞问题
+        // 使用系统配置的超时时间（秒），如果配置为 0 则使用默认 300 秒
+        int timeoutSeconds = openClawProperties.getRequestTimeoutSeconds() > 0
+                ? openClawProperties.getRequestTimeoutSeconds()
+                : 300;
+        log.info("[Flowchart:{}] OpenClaw timeout: {}s", ctx.getInstance().getInstanceId(), timeoutSeconds);
+
         try {
             OpenClawPluginService.OpenClawResponse response = Mono.from(
                 openClawPluginService.sendMessage(sessionId, fullPrompt.toString(), null, tempUserId, tempUserName)
             )
             .subscribeOn(Schedulers.boundedElastic())
-            .block(Duration.ofSeconds(300)); // 5分钟超时
+            .block(Duration.ofSeconds(timeoutSeconds));
 
             if (response == null) {
                 return NodeResult.failure("OpenClaw 返回空响应");
