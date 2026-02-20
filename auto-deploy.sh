@@ -72,8 +72,8 @@ if lsof -Pi :8081 -sTCP:LISTEN -t >/dev/null 2>&1; then
     exit 1
 fi
 
-# 启动新的后端 screen 会话
-screen -dmS ooc-backend java -jar backend/target/ooc-backend-0.1.1.jar --server.port=8081
+# 启动新的后端 screen 会话 (使用正确的 S3 端点)
+screen -dmS ooc-backend bash -c 'export S3_ENDPOINT=http://23.94.174.102:32000; export S3_CDN_URL=http://23.94.174.102:32000; java -jar backend/target/ooc-backend-0.1.1.jar --server.port=8081'
 echo -e "${GREEN}Backend deployed in screen session 'ooc-backend'${NC}"
 
 # 5. 部署前端
