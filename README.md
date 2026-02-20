@@ -58,6 +58,9 @@ docker compose up -d
 
 ### 移动端运行截图
 
+**Android 客户端使用样例 - OOC 平台聊天界面**
+![移动端使用样例](docs/screenshots/mobile-usage-example.png)
+
 **Android 客户端**
 ![移动端运行截图](docs/screenshot-mobile.png)
 
