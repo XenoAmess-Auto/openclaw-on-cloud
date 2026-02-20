@@ -51,9 +51,27 @@ cd ..
 
 # 4. 部署后端
 echo -e "${YELLOW}[4/5] Deploying backend...${NC}"
+
+# 检查端口 8081 是否被占用
+PORT_8081_PID=$(lsof -ti :8081 2>/dev/null || echo "")
+if [ -n "$PORT_8081_PID" ]; then
+    echo "Warning: Port 8081 is already in use by PID(s): $PORT_8081_PID"
+    echo "Killing existing processes..."
+    kill -9 $PORT_8081_PID 2>/dev/null || true
+    sleep 2
+fi
+
 # 停止旧的后端 screen 会话
 screen -S ooc-backend -X quit 2>/dev/null || true
 sleep 1
+
+# 确认端口已释放
+if lsof -Pi :8081 -sTCP:LISTEN -t >/dev/null 2>&1; then
+    echo -e "${RED}Error: Port 8081 is still in use after cleanup${NC}"
+    echo "Manual intervention required: sudo fuser -k 8081/tcp"
+    exit 1
+fi
+
 # 启动新的后端 screen 会话
 screen -dmS ooc-backend java -jar backend/target/ooc-backend-0.1.1.jar --server.port=8081
 echo -e "${GREEN}Backend deployed in screen session 'ooc-backend'${NC}"
