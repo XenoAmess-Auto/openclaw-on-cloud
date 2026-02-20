@@ -1,4 +1,4 @@
-基于对项目的全面分析，以下是 OpenClaw on Cloud (OOC) 的欠缺评估和发展计划。
+以下是 OpenClaw on Cloud (OOC) 的欠缺评估和发展计划。
 
 ## 📊 项目现状概览
 
@@ -45,40 +45,14 @@
     E2E 测试自动化
 ```
 
-### 3. 安全与生产就绪
-
-| ⚠️ 问题 | 当前配置 | 风险等级 |
-|---------|----------|----------|
-| CORS 过于宽松 | `allowedOriginPatterns: *` | 🔴 高 |
-| 无速率限制 | 缺少 Rate Limiter | 🔴 高 |
-| 配置文件硬编码 | S3 密钥、JWT secret 在 yml 中 | 🟡 中 |
-| 无请求大小限制 | WebSocket 消息无上限 | 🟡 中 |
-| 无 CSP 头 | 前端缺少 Content-Security-Policy | 🟡 中 |
-
 ### 4. 性能与扩展性
 
 | ⚠️ 问题 | 影响 |
 |---------|------|
-| 无缓存层 | 每次请求都查数据库，无 Redis |
 | 消息全量加载 | 进入聊天室加载所有历史消息 |
 | WebSocket 单机 | 不支持集群部署，无 Sticky Session |
 | 缺少连接池调优 | MongoDB、HTTP 连接池使用默认配置 |
 | 无消息分页 | 消息量大时性能下降 |
-
-### 5. 监控与可观测性
-
-🔴 **当前**: 仅 Spring Boot Actuator (`/actuator/health`)
-
-**缺失**:
-```
-├── Prometheus 指标
-├── Grafana 监控面板
-├── 分布式链路追踪 (Jaeger/Zipkin)
-├── 结构化日志 (JSON)
-├── 错误上报 (Sentry)
-├── 业务指标 (消息数、活跃用户、OpenClaw 调用)
-└── 告警机制
-```
 
 ### 6. 用户体验功能缺失
 
@@ -99,7 +73,6 @@
 | Kimi 直接调用 | ❌ TODO 未完成 |
 | 多模态 (图片理解) | ⚠️ 仅基础上传 |
 | RAG (知识库) | ❌ 缺失 |
-| 智能体市场 | ❌ 缺失 |
 
 ## 📋 发展计划
 
@@ -139,25 +112,6 @@
   - [ ] GitHub Actions 测试阶段
   - [ ] 测试覆盖率报告 (Codecov)
 
-### Phase 3: 安全加固（1 周）
-
-- [ ] **CORS 配置收紧**
-  - [ ] 生产环境只允许特定域名
-
-- [ ] **速率限制**
-  - [ ] API 端点: 100 req/min
-  - [ ] 登录端点: 5 req/min
-  - [ ] WebSocket: 消息频率限制
-
-- [ ] **密钥管理**
-  - [ ] 使用环境变量/Secrets Manager
-  - [ ] 移除 application.yml 硬编码
-
-- [ ] **安全头**
-  - [ ] Content-Security-Policy
-  - [ ] X-Frame-Options
-  - [ ] X-Content-Type-Options
-
 ### Phase 4: 性能优化（2 周）
 
 - [ ] **缓存层**
@@ -177,24 +131,6 @@
 - [ ] **WebSocket 集群支持**
   - [ ] Redis Pub/Sub 消息广播
 
-### Phase 5: 可观测性（1-2 周）
-
-- [ ] **指标采集**
-  - [ ] Micrometer + Prometheus
-  - [ ] 自定义业务指标
-  - [ ] JVM/系统指标
-
-- [ ] **日志系统**
-  - [ ] 结构化 JSON 日志
-  - [ ] 日志分级 (ERROR/WARN/INFO/DEBUG)
-
-- [ ] **链路追踪**
-  - [ ] Micrometer Tracing + Zipkin
-
-- [ ] **告警**
-  - [ ] 错误率阈值告警
-  - [ ] 响应时间告警
-
 ### Phase 6: 功能增强（持续）
 
 - [ ] **消息系统**
@@ -205,10 +141,8 @@
 - [ ] **AI 能力**
   - [ ] 完成 Claude Code 集成
   - [ ] RAG 知识库
-  - [ ] Agent 市场
 
 - [ ] **移动端**
-  - [ ] iOS 支持 (Capacitor)
   - [ ] 推送通知 (FCM/APNs)
 
 ## 🎯 立即执行建议（本周）
@@ -216,7 +150,6 @@
 1. **拆分 HomeView.vue** - 最高优先级，技术债最严重
 2. **添加消息分页** - 解决性能隐患
 3. **完成 Claude Code TODO** - 功能完整性
-4. **配置生产环境 CORS** - 安全风险
 
 ## 📁 建议新增文件
 
