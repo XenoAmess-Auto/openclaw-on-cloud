@@ -1,52 +1,65 @@
-以下是 OpenClaw on Cloud (OOC) 的欠缺评估和发展计划。
+# OpenClaw on Cloud (OOC) 待办事项
 
-## 📊 项目现状概览
+**最后更新**: 2026-02-20
 
-| 维度 | 状态 | 说明 |
-|------|------|------|
-| 核心功能 | ✅ 完成 | 聊天、OpenClaw集成、流程图、用户系统 |
-| 代码规模 | ✅ 完成 | 21,837 行（后端 11,457 行 Java + 前端 10,380 行 Vue） |
-| 移动端 | ✅ 完成 | Android App + 响应式 Web |
-| 部署 | ✅ 完成 | auto-deploy.sh + Docker + CI/CD |
-| 测试 | ⚠️ 薄弱 | 仅后端 5 个单元测试，前端 3 个测试 |
-| 文档 | ❌ 缺失 | 仅基础 README，无 API 文档 |
+---
 
-## 🔴 关键欠缺（按优先级排序）
+## 🔴 未完成事项
 
 ### 1. 代码质量与可维护性
 
-| 🔴 问题 | 现状 | 风险 |
+| 🔴 问题 | 状态 | 风险 |
 |--------|------|------|
-| **巨型组件** | ⚠️ 部分完成 | HomeView.vue 已拆分为小组件，但仍有优化空间 |
 | ChatView.vue 废弃 | ❌ 未完成 | 文件仍存在，需删除或修复路由映射 |
 | TODO 遗留 | ❌ 未完成 | Claude Code API、Kimi 调用、WebSocket 通知 |
+
+#### Phase 1: 代码重构（剩余任务）
+
+- [ ] **完成 HomeView.vue 拆分**
+  - [ ] 提取 SessionPanel 组件
+  - [ ] 提取 TaskQueuePanel 组件
+
+- [ ] **删除废弃的 ChatView.vue 或修复路由映射**
+
+- [ ] **服务层解耦**
+  - [ ] 拆分 ChatWebSocketHandler (2300+行)
+  - [ ] 提取 OpenClawResponseParser
+
+- [ ] **完成 TODO**
+  - [ ] Claude Code API 集成
+  - [ ] Kimi 直接调用实现
+
+---
 
 ### 2. 测试覆盖
 
 ```
-⚠️ 后端测试: 5 个文件 (Service层)
-├── ChatRoomServiceTest          ✅ 完成
-├── FileStorageServiceTest       ✅ 完成
-├── MentionServiceTest           ✅ 完成
-├── OocSessionServiceTest        ✅ 完成
-└── UserServiceTest              ✅ 完成
-
 缺失:
 ├── Controller 测试              ❌ 未完成 (0%)
 ├── WebSocketHandler 测试        ❌ 未完成 (0%)
 ├── OpenClawPluginService 测试   ❌ 未完成 (0%)
-└── Repository 测试              ❌ 未完成 (0%)
-
-前端测试: 3 个文件
-├── auth.spec.ts                 ✅ 完成
-├── ChatView.markdown.spec.ts    ✅ 完成
-└── markdown-render.spec.ts      ✅ 完成
-
-缺失:
-    E2E 测试自动化               ❌ 未完成
+├── Repository 测试              ❌ 未完成 (0%)
+└── E2E 测试自动化               ❌ 未完成
 ```
 
-### 4. 性能与扩展性
+#### Phase 2: 测试体系建设
+
+- [ ] **后端测试** (目标: 60% 覆盖率)
+  - [ ] Controller 层测试 (WebTestClient)
+  - [ ] WebSocket 集成测试
+  - [ ] Repository 测试 (@DataMongoTest)
+  - [ ] OpenClawPluginService Mock 测试
+
+- [ ] **前端测试**
+  - [ ] Playwright E2E 测试
+
+- [ ] **CI/CD 增强**
+  - [ ] GitHub Actions 测试阶段
+  - [ ] 测试覆盖率报告 (Codecov)
+
+---
+
+### 3. 性能与扩展性
 
 | ⚠️ 问题 | 影响 | 状态 |
 |---------|------|------|
@@ -55,7 +68,28 @@
 | 缺少连接池调优 | MongoDB、HTTP 连接池使用默认配置 | ❌ 未完成 |
 | 无消息分页 | 消息量大时性能下降 | ❌ 未完成 |
 
-### 6. 用户体验功能缺失
+#### Phase 4: 性能优化
+
+- [ ] **缓存层**
+  - [ ] Redis 集成
+  - [ ] 用户会话缓存
+  - [ ] 聊天记录分页缓存
+  - [ ] 热点数据缓存
+
+- [ ] **消息分页**
+  - [ ] 后端: 支持 cursor-based 分页
+  - [ ] 前端: 虚拟滚动 (vue-virtual-scroller)
+
+- [ ] **数据库优化**
+  - [ ] MongoDB 索引优化
+  - [ ] 连接池配置调优
+
+- [ ] **WebSocket 集群支持**
+  - [ ] Redis Pub/Sub 消息广播
+
+---
+
+### 4. 用户体验功能缺失
 
 | 功能 | 状态 | 优先级 |
 |------|------|--------|
@@ -66,7 +100,23 @@
 | 文件预览 (PDF/图片) | ⚠️ 基础支持 | 🟡 中 |
 | 消息转发 | ❌ 未完成 | 🟢 低 |
 
-### 7. AI 能力扩展
+#### Phase 6: 功能增强
+
+- [ ] **消息系统**
+  - [ ] 全文搜索 (MongoDB Text Search / Elasticsearch)
+  - [ ] 消息撤回/编辑 (5分钟内)
+  - [ ] 已读回执
+
+- [ ] **AI 能力**
+  - [ ] 完成 Claude Code 集成
+  - [ ] RAG 知识库
+
+- [ ] **移动端**
+  - [ ] 推送通知 (FCM/APNs)
+
+---
+
+### 5. AI 能力扩展
 
 | 功能 | 状态 |
 |------|------|
@@ -75,84 +125,20 @@
 | 多模态 (图片理解) | ⚠️ 仅基础上传 |
 | RAG (知识库) | ❌ 未完成 |
 
-## 📋 发展计划
+---
 
-### Phase 1: 代码重构（2-3 周）
+### 6. 文档缺失
 
-- [x] **HomeView.vue 拆分** ⚠️ 部分完成
-  - [x] 提取 MessageList 组件 ✅ 完成
-  - [x] 提取 MessageInput 组件 ✅ 完成
-  - [x] 提取 ChatHeader 组件 ✅ 完成
-  - [ ] 提取 SessionPanel 组件 ❌ 未完成
-  - [ ] 提取 TaskQueuePanel 组件 ❌ 未完成
+| 文档 | 状态 |
+|------|------|
+| API 文档 (OpenAPI/Swagger) | ❌ 未完成 |
+| 架构设计文档 | ❌ 未完成 |
+| 生产部署指南 | ❌ 未完成 |
+| 常见问题排查 | ❌ 未完成 |
 
-- [ ] **删除废弃的 ChatView.vue 或修复路由映射** ❌ 未完成
+---
 
-- [ ] **服务层解耦** ❌ 未完成
-  - [ ] 拆分 ChatWebSocketHandler (2300+行)
-  - [ ] 提取 OpenClawResponseParser
-
-- [ ] **完成 TODO** ❌ 未完成
-  - [ ] Claude Code API 集成
-  - [ ] Kimi 直接调用实现
-
-### Phase 2: 测试体系建设（2 周）
-
-- [ ] **后端测试** (目标: 60% 覆盖率) ❌ 未完成
-  - [ ] Controller 层测试 (WebTestClient)
-  - [ ] WebSocket 集成测试
-  - [ ] Repository 测试 (@DataMongoTest)
-  - [ ] OpenClawPluginService Mock 测试
-
-- [x] **前端测试** ⚠️ 部分完成
-  - [x] Vitest 单元测试 (Pinia stores) ✅ 完成 (auth.spec.ts)
-  - [x] Vue Test Utils 组件测试 ✅ 部分完成
-  - [ ] Playwright E2E 测试 ❌ 未完成
-
-- [ ] **CI/CD 增强** ❌ 未完成
-  - [ ] GitHub Actions 测试阶段
-  - [ ] 测试覆盖率报告 (Codecov)
-
-### Phase 4: 性能优化（2 周）
-
-- [ ] **缓存层** ❌ 未完成
-  - [ ] Redis 集成
-  - [ ] 用户会话缓存
-  - [ ] 聊天记录分页缓存
-  - [ ] 热点数据缓存
-
-- [ ] **消息分页** ❌ 未完成
-  - [ ] 后端: 支持 cursor-based 分页
-  - [ ] 前端: 虚拟滚动 (vue-virtual-scroller)
-
-- [ ] **数据库优化** ❌ 未完成
-  - [ ] MongoDB 索引优化
-  - [ ] 连接池配置调优
-
-- [ ] **WebSocket 集群支持** ❌ 未完成
-  - [ ] Redis Pub/Sub 消息广播
-
-### Phase 6: 功能增强（持续）
-
-- [ ] **消息系统** ❌ 未完成
-  - [ ] 全文搜索 (MongoDB Text Search / Elasticsearch)
-  - [ ] 消息撤回/编辑 (5分钟内)
-  - [ ] 已读回执
-
-- [ ] **AI 能力** ❌ 未完成
-  - [ ] 完成 Claude Code 集成
-  - [ ] RAG 知识库
-
-- [ ] **移动端** ❌ 未完成
-  - [ ] 推送通知 (FCM/APNs)
-
-## 🎯 立即执行建议（本周）
-
-1. **删除/修复废弃的 ChatView.vue** - 避免混淆，防止修改错误文件
-2. **添加消息分页** - 解决性能隐患
-3. **完成 Claude Code TODO** - 功能完整性
-
-## 📁 建议新增文件
+### 7. 待创建文件
 
 ```
 docs/
@@ -162,10 +148,7 @@ docs/
 └── TROUBLESHOOTING.md        ❌ 未完成 # 常见问题排查
 
 frontend/src/components/chat/
-├── MessageList.vue           ✅ 完成
 ├── MessageItem.vue           ❌ 未完成
-├── MessageInput.vue          ✅ 完成
-├── ChatHeader.vue            ✅ 完成
 ├── SessionPanel.vue          ❌ 未完成
 └── TaskQueuePanel.vue        ❌ 未完成
 
@@ -182,20 +165,64 @@ monitoring/
 
 ---
 
-## 📊 完成度统计
+## 🎯 立即执行建议（本周）
 
-| 类别 | 已完成 | 未完成 | 完成率 |
-|------|--------|--------|--------|
-| **项目现状** | 4 | 2 | 67% |
-| **Phase 1: 代码重构** | 4 | 6 | 40% |
-| **Phase 2: 测试体系** | 1 | 8 | 11% |
-| **Phase 4: 性能优化** | 0 | 11 | 0% |
-| **Phase 6: 功能增强** | 0 | 6 | 0% |
-| **建议文件** | 3 | 13 | 19% |
-| **总计** | **12** | **46** | **21%** |
+1. **删除/修复废弃的 ChatView.vue** - 避免混淆，防止修改错误文件
+2. **添加消息分页** - 解决性能隐患
+3. **完成 Claude Code TODO** - 功能完整性
 
 ---
 
-**总结**: 这是一个功能完整但需要在 **代码质量、测试、安全和可观测性** 方面重点投入的项目。建议按上述 Phase 逐步推进，每个 Phase 产出可独立交付。
+## 📊 待办统计
 
-**最后更新**: 2026-02-20
+| 类别 | 未完成数 | 优先级 |
+|------|----------|--------|
+| 代码质量 | 6 | 🔴 高 |
+| 测试覆盖 | 8 | 🔴 高 |
+| 性能优化 | 11 | 🟡 中 |
+| 功能增强 | 6 | 🟡 中 |
+| 文档 | 4 | 🟢 低 |
+| 待创建文件 | 13 | 🟡 中 |
+| **总计** | **48** | - |
+
+---
+
+## ✅ 已完成项目（存档参考）
+
+<details>
+<summary>点击展开查看已完成项目</summary>
+
+### 项目现状
+- ✅ 核心功能成熟（聊天、OpenClaw集成、流程图、用户系统）
+- ✅ 代码规模 21,837 行
+- ✅ 移动端完整（Android App + 响应式 Web）
+- ✅ 部署自动化（auto-deploy.sh + Docker + CI/CD）
+
+### Phase 1 已完成
+- ✅ 提取 MessageList 组件
+- ✅ 提取 MessageInput 组件
+- ✅ 提取 ChatHeader 组件
+- ✅ 提取 RoomSidebar 组件
+
+### Phase 2 已完成
+- ✅ Vitest 单元测试（auth.spec.ts）
+- ✅ Markdown 渲染测试
+
+### 现有测试文件
+```
+backend/src/test/java/com/ooc/service/
+├── ChatRoomServiceTest.java      ✅
+├── FileStorageServiceTest.java   ✅
+├── MentionServiceTest.java       ✅
+├── OocSessionServiceTest.java    ✅
+└── UserServiceTest.java          ✅
+
+frontend/src/stores/__tests__/
+└── auth.spec.ts                  ✅
+
+frontend/src/views/__tests__/
+├── ChatView.markdown.spec.ts     ✅
+└── markdown-render.spec.ts       ✅
+```
+
+</details>
