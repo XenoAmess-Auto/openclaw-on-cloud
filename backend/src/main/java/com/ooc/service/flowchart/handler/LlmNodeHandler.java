@@ -3,6 +3,7 @@ package com.ooc.service.flowchart.handler;
 import com.ooc.entity.flowchart.FlowchartTemplate;
 import com.ooc.openclaw.OpenClawPluginService;
 import com.ooc.service.ClaudeCodePluginService;
+import com.ooc.service.KimiPluginService;
 import com.ooc.service.flowchart.ExecutionContext;
 import com.ooc.service.flowchart.NodeHandler;
 import com.ooc.service.flowchart.NodeResult;
@@ -31,6 +32,7 @@ public class LlmNodeHandler implements NodeHandler {
 
     private final OpenClawPluginService openClawPluginService;
     private final ClaudeCodePluginService claudeCodePluginService;
+    private final KimiPluginService kimiPluginService;
 
     // 模板变量正则: {{variableName}}
     private static final Pattern TEMPLATE_PATTERN = Pattern.compile("\\{\\{(\\w+)\\}\\}");
@@ -106,8 +108,7 @@ public class LlmNodeHandler implements NodeHandler {
             case "claude-code":
                 return callClaude(sessionId, systemPrompt, userPrompt);
             case "kimi":
-                // TODO: 实现 Kimi 调用
-                throw new UnsupportedOperationException("Kimi model not yet implemented");
+                return callKimi(sessionId, systemPrompt, userPrompt);
             default:
                 // 默认使用 OpenClaw
                 log.warn("Unknown model '{}', falling back to openclaw", model);
@@ -185,6 +186,45 @@ public class LlmNodeHandler implements NodeHandler {
         } catch (Exception e) {
             log.error("Claude call failed", e);
             throw new RuntimeException("Claude调用失败: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 调用 Kimi
+     */
+    private String callKimi(String sessionId, String systemPrompt, String userPrompt) {
+        // 先创建会话
+        try {
+            // 创建新会话 - 使用 boundedElastic 调度器避免阻塞问题
+            List<Map<String, Object>> context = new ArrayList<>();
+
+            // 调用创建会话
+            Mono.from(kimiPluginService.createSession("flowchart-" + sessionId, context))
+                .subscribeOn(Schedulers.boundedElastic())
+                .block(Duration.ofSeconds(60));
+
+            // 构建消息内容
+            StringBuilder fullPrompt = new StringBuilder();
+            if (systemPrompt != null && !systemPrompt.isEmpty()) {
+                fullPrompt.append(systemPrompt).append("\n\n");
+            }
+            fullPrompt.append(userPrompt);
+
+            // 调用 Kimi（非流式）- 使用 boundedElastic 调度器避免阻塞问题
+            KimiPluginService.KimiResponse response = Mono.from(
+                kimiPluginService.sendMessage(sessionId, fullPrompt.toString(), null, "flowchart", "Flowchart")
+            )
+            .subscribeOn(Schedulers.boundedElastic())
+            .block(Duration.ofSeconds(300)); // 5分钟超时
+
+            if (response != null && response.completed()) {
+                return response.content();
+            } else {
+                throw new RuntimeException("Kimi returned unsuccessful response");
+            }
+        } catch (Exception e) {
+            log.error("Kimi call failed", e);
+            throw new RuntimeException("Kimi调用失败: " + e.getMessage(), e);
         }
     }
 

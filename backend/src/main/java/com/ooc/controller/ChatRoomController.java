@@ -754,11 +754,147 @@ public class ChatRoomController {
     private void triggerClaude(String roomId, ChatRoom.Message message) {
         try {
             log.info("Starting async Claude processing for room: {}, message: {}", roomId, message.getId());
-            // TODO: 实现 Claude Code API 调用
-            log.warn("Claude Code processing not yet implemented for room: {}", roomId);
+
+            // 获取房间信息
+            ChatRoom room = chatRoomService.getChatRoom(roomId)
+                    .orElseThrow(() -> new RuntimeException("Chat room not found: " + roomId));
+
+            String roomName = room.getName() != null ? room.getName() : "聊天室";
+            String userId = message.getSenderId();
+            String userName = message.getSenderName();
+            String content = message.getContent();
+
+            // 获取或创建 Claude 会话
+            String claudeSessionId = room.getOpenClawSessions().stream()
+                    .filter(ChatRoom.OpenClawSession::isActive)
+                    .findFirst()
+                    .map(ChatRoom.OpenClawSession::getSessionId)
+                    .orElse(null);
+
+            if (claudeSessionId != null && !claudeCodePluginService.isSessionAlive(claudeSessionId)) {
+                log.info("Claude session {} is not alive, will create new", claudeSessionId);
+                claudeSessionId = null;
+            }
+
+            // 如果需要，创建新会话
+            if (claudeSessionId == null) {
+                log.info("Creating new Claude session for room: {}", roomId);
+                OocSession oocSession = oocSessionService.getOrCreateSession(roomId, roomName).block();
+                List<Map<String, Object>> context = convertToContext(oocSession);
+
+                ClaudeCodePluginService.ClaudeSession newSession = claudeCodePluginService.createSession("ooc-" + roomId, context).block();
+                if (newSession == null) {
+                    log.error("Failed to create Claude session for room: {}", roomId);
+                    return;
+                }
+                claudeSessionId = newSession.sessionId();
+                chatRoomService.updateOpenClawSession(roomId, claudeSessionId);
+                log.info("Claude session created: {}", claudeSessionId);
+            }
+
+            // 创建流式消息
+            String responseMessageId = UUID.randomUUID().toString();
+            String botUsername = claudeCodePluginService.getBotUsername();
+            String botAvatarUrl = claudeCodePluginService.getBotAvatarUrl();
+
+            ChatRoom.Message streamingMsg = ChatRoom.Message.builder()
+                    .id(responseMessageId)
+                    .senderId(botUsername)
+                    .senderName(botUsername)
+                    .senderAvatar(botAvatarUrl)
+                    .content("")
+                    .timestamp(Instant.now())
+                    .openclawMentioned(false)
+                    .fromOpenClaw(true)
+                    .isStreaming(true)
+                    .toolCalls(new ArrayList<>())
+                    .build();
+
+            chatRoomService.addMessage(roomId, streamingMsg);
+
+            // 广播 stream_start 事件
+            webSocketHandler.broadcastToRoom(roomId, WebSocketMessage.builder()
+                    .type("stream_start")
+                    .message(streamingMsg)
+                    .build());
+            log.info("Broadcasted stream_start for Claude message: {} in room: {}", responseMessageId, roomId);
+
+            // 发送流式请求
+            StringBuilder responseBuilder = new StringBuilder();
+            final String finalSessionId = claudeSessionId;
+            java.util.concurrent.CountDownLatch latch = new java.util.concurrent.CountDownLatch(1);
+
+            claudeCodePluginService.sendMessageStream(finalSessionId, content, null, userId, userName, roomName)
+                    .doOnNext(event -> {
+                        if ("message".equals(event.type()) && event.content() != null) {
+                            responseBuilder.append(event.content());
+                        }
+                    })
+                    .doOnError(error -> {
+                        log.error("Claude streaming error for room: {}", roomId, error);
+                        String errorContent = responseBuilder + "\n\n[错误: " + error.getMessage() + "]";
+                        saveClaudeResponse(roomId, responseMessageId, errorContent);
+                        latch.countDown();
+                    })
+                    .doOnComplete(() -> {
+                        String finalContent = responseBuilder.toString();
+                        if (finalContent.isEmpty()) {
+                            finalContent = "*(Claude 无回复)*";
+                        }
+                        saveClaudeResponse(roomId, responseMessageId, finalContent);
+                        latch.countDown();
+                    })
+                    .subscribe();
+
+            // 等待流完成（最多120秒）
+            try {
+                if (!latch.await(120, java.util.concurrent.TimeUnit.SECONDS)) {
+                    log.warn("Claude streaming timeout after 120s for room: {}", roomId);
+                    String timeoutContent = responseBuilder.toString();
+                    if (timeoutContent.isEmpty()) {
+                        timeoutContent = "*(Claude 响应超时)*";
+                    } else {
+                        timeoutContent += "\n\n[响应超时，部分内容可能未加载完成]";
+                    }
+                    saveClaudeResponse(roomId, responseMessageId, timeoutContent);
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                log.error("Claude streaming interrupted for room: {}", roomId);
+            }
+
         } catch (Exception e) {
             log.error("Failed to process Claude request for room: {}", roomId, e);
         }
+    }
+
+    /**
+     * 保存 Claude 响应
+     */
+    private void saveClaudeResponse(String roomId, String messageId, String content) {
+        String botUsername = claudeCodePluginService.getBotUsername();
+        String botAvatarUrl = claudeCodePluginService.getBotAvatarUrl();
+
+        ChatRoom.Message finalMsg = ChatRoom.Message.builder()
+                .id(messageId)
+                .senderId(botUsername)
+                .senderName(botUsername)
+                .senderAvatar(botAvatarUrl)
+                .content(content)
+                .timestamp(Instant.now())
+                .openclawMentioned(false)
+                .fromOpenClaw(true)
+                .isStreaming(false)
+                .build();
+        chatRoomService.updateMessage(roomId, finalMsg);
+
+        // 广播 WebSocket stream_end 事件
+        webSocketHandler.broadcastToRoom(roomId, WebSocketMessage.builder()
+                .type("stream_end")
+                .message(finalMsg)
+                .build());
+
+        log.info("Claude response saved for room: {}, content length: {}", roomId, content.length());
     }
 
     /**
