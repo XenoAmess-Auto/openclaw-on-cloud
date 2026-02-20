@@ -20,10 +20,10 @@ public class FileStorageService {
     private final StorageProvider storageProvider;
 
     public FileInfo store(MultipartFile file) {
-        // 验证文件类型
+        // 文件类型验证已移除，允许上传任意类型文件
         String contentType = file.getContentType();
-        if (contentType == null || !Arrays.asList(fileProperties.getAllowedTypes()).contains(contentType)) {
-            throw new RuntimeException("不支持的文件类型: " + contentType);
+        if (contentType == null) {
+            contentType = "application/octet-stream";
         }
 
         // 验证文件大小

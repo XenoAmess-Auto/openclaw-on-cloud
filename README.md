@@ -71,11 +71,36 @@ docker compose up -d
 
 - **用户系统**: 注册/登录/权限管理
 - **聊天室**: 创建/加入/离开
-- **OpenClaw 集成**: 
+- **OpenClaw 集成**:
   - 私聊自动触发
   - 群聊 @openclaw 触发
   - 会话自动保存/恢复/总结
+- **流程图编辑器**: 可视化编排 AI 工作流
 - **移动端适配**: 响应式设计
+
+## 界面截图
+
+### 聊天界面
+
+**OpenClaw 工具调用**
+![聊天界面 - 工具调用](docs/screenshots/img.png)
+
+**OpenClaw 任务队列**
+![聊天界面 - 任务队列](docs/screenshots/img_1.png)
+
+**流程图执行结果**
+![聊天界面 - 流程图执行](docs/screenshots/img_5.png)
+
+**Flowbot 变量卡片**
+![聊天界面 - Flowbot](docs/screenshots/img_6.png)
+
+### 流程图编辑器
+
+**工作流设计**
+![流程图编辑器](docs/screenshots/img_2.png)
+
+**运行模板配置**
+![运行模板](docs/screenshots/img_4.png)
 
 ## API 文档
 

@@ -224,7 +224,6 @@
                 type="file"
                 ref="fileInputRef"
                 @change="handleFileSelect"
-                accept="image/*,.pdf,.txt"
                 style="display: none"
               />
               <button 
