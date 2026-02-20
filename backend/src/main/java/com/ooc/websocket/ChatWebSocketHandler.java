@@ -428,7 +428,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                         .id(UUID.randomUUID().toString())
                         .type(typeUpper)
                         .contentType(mimeType)
-                        .name("image.png")
+                        .name(url.substring(url.lastIndexOf("/") + 1))
                         .url(url)
                         .size(size)
                         .build());

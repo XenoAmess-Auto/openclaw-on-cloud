@@ -328,8 +328,17 @@ export const useChatStore = defineStore('chat', () => {
             const filesIndex = url.indexOf('/api/files/')
             url = url.substring(filesIndex)
           }
+          // 根据 MIME 类型确定附件类型
+          let type = 'file'
+          if (att.mimeType?.startsWith('image/')) {
+            type = 'image'
+          } else if (att.mimeType === 'application/pdf') {
+            type = 'pdf'
+          } else if (att.mimeType === 'text/plain') {
+            type = 'text'
+          }
           return {
-            type: 'image',
+            type: type,
             mimeType: att.mimeType,
             url: url
           }
