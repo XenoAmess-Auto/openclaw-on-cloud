@@ -188,9 +188,10 @@ export const useChatStore = defineStore('chat', () => {
     }
     
     // 首次连接时（非重连）重置消息和状态
-    if (reconnectAttempts.value === 0) {
+    // 或者 currentRoom 为 null 时（确保状态正确）
+    if (reconnectAttempts.value === 0 || !currentRoom.value) {
       let room = rooms.value.find(r => r.id === roomId)
-      
+
       if (!room) {
         try {
           const response = await chatRoomApi.getRoom(roomId)
@@ -199,7 +200,7 @@ export const useChatStore = defineStore('chat', () => {
           console.error('Failed to get room:', err)
         }
       }
-      
+
       currentRoom.value = room || null
       messages.value = []
       typingUsers.value.clear()
@@ -382,6 +383,14 @@ export const useChatStore = defineStore('chat', () => {
         break
       case 'stream_start':
         // 流式消息开始 - 只处理当前房间的消息
+        // 兜底：如果 currentRoom 为 null，尝试恢复
+        if (!currentRoom.value && data.roomId) {
+          const room = rooms.value.find(r => r.id === data.roomId)
+          if (room) {
+            currentRoom.value = room
+            console.log('[WebSocket] stream_start - restored currentRoom:', data.roomId)
+          }
+        }
         if (data.roomId && data.roomId !== currentRoom.value?.id) {
           console.log('[WebSocket] stream_start ignored - room mismatch:', data.roomId, '!=', currentRoom.value?.id)
           break
@@ -400,6 +409,14 @@ export const useChatStore = defineStore('chat', () => {
         break
       case 'stream_delta':
         // 流式消息增量 - 只处理当前房间的消息
+        // 兜底：如果 currentRoom 为 null，尝试恢复
+        if (!currentRoom.value && data.roomId) {
+          const room = rooms.value.find(r => r.id === data.roomId)
+          if (room) {
+            currentRoom.value = room
+            console.log('[WebSocket] stream_delta - restored currentRoom:', data.roomId)
+          }
+        }
         if (data.roomId && data.roomId !== currentRoom.value?.id) {
           console.log('[WebSocket] stream_delta ignored - room mismatch:', data.roomId, '!=', currentRoom.value?.id)
           break
@@ -420,6 +437,14 @@ export const useChatStore = defineStore('chat', () => {
         break
       case 'tool_start':
         // 工具调用开始 - 只处理当前房间的消息
+        // 兜底：如果 currentRoom 为 null，尝试恢复
+        if (!currentRoom.value && data.roomId) {
+          const room = rooms.value.find(r => r.id === data.roomId)
+          if (room) {
+            currentRoom.value = room
+            console.log('[WebSocket] tool_start - restored currentRoom:', data.roomId)
+          }
+        }
         if (data.roomId && data.roomId !== currentRoom.value?.id) {
           console.log('[WebSocket] tool_start ignored - room mismatch:', data.roomId, '!=', currentRoom.value?.id)
           break
@@ -443,6 +468,14 @@ export const useChatStore = defineStore('chat', () => {
         break
       case 'tool_result':
         // 工具调用完成 - 只处理当前房间的消息
+        // 兜底：如果 currentRoom 为 null，尝试恢复
+        if (!currentRoom.value && data.roomId) {
+          const room = rooms.value.find(r => r.id === data.roomId)
+          if (room) {
+            currentRoom.value = room
+            console.log('[WebSocket] tool_result - restored currentRoom:', data.roomId)
+          }
+        }
         if (data.roomId && data.roomId !== currentRoom.value?.id) {
           console.log('[WebSocket] tool_result ignored - room mismatch:', data.roomId, '!=', currentRoom.value?.id)
           break
@@ -462,8 +495,16 @@ export const useChatStore = defineStore('chat', () => {
           }
         }
         break
-      case 'stream_end':
+            case 'stream_end':
         // 流式消息结束 - 只处理当前房间的消息
+        // 兜底：如果 currentRoom 为 null，尝试恢复
+        if (!currentRoom.value && data.roomId) {
+          const room = rooms.value.find(r => r.id === data.roomId)
+          if (room) {
+            currentRoom.value = room
+            console.log('[WebSocket] stream_end - restored currentRoom:', data.roomId)
+          }
+        }
         if (data.roomId && data.roomId !== currentRoom.value?.id) {
           console.log('[WebSocket] stream_end ignored - room mismatch:', data.roomId, '!=', currentRoom.value?.id)
           break

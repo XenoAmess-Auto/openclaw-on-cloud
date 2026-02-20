@@ -188,7 +188,16 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
 
     @Override
     protected void handleTextMessage(WebSocketSession session, TextMessage message) throws Exception {
-        WebSocketMessage payload = objectMapper.readValue(message.getPayload(), WebSocketMessage.class);
+        String payloadText = message.getPayload();
+        WebSocketMessage payload = objectMapper.readValue(payloadText, WebSocketMessage.class);
+
+        // 调试：记录 message 类型的原始 payload
+        if ("message".equals(payload.getType())) {
+            log.info("[WebSocket Raw] Received message payload: {}",
+                    payloadText.length() > 500 ? payloadText.substring(0, 500) + "..." : payloadText);
+            log.info("[WebSocket Parsed] attachments: {}",
+                    payload.getAttachments() != null ? payload.getAttachments().size() : "null");
+        }
 
         switch (payload.getType()) {
             case "join" -> handleJoin(session, payload);
