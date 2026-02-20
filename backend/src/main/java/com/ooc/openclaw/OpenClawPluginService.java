@@ -664,6 +664,10 @@ public class OpenClawPluginService {
                         } else if (url.startsWith("data:")) {
                             // 已经是 data URL，直接使用
                             imageDataUrl = url;
+                        } else if (url.startsWith("http://") || url.startsWith("https://")) {
+                            // 外部 URL，直接使用（OpenClaw 可以下载）
+                            imageDataUrl = url;
+                            log.info("[sendMessageStream] Using external URL for image: {}", url);
                         }
                     }
 
