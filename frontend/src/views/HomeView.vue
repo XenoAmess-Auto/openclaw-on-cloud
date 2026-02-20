@@ -724,19 +724,31 @@ function handleVoiceSend(text: string) {
   showMentionList.value = false
 }
 
-// 处理粘贴事件
+// 处理粘贴事件 - 支持所有文件格式
 async function handlePaste(event: ClipboardEvent) {
-  const items = event.clipboardData?.items
-  if (!items) return
+  const clipboardData = event.clipboardData
+  if (!clipboardData) return
 
   const files: File[] = []
-  
-  for (let i = 0; i < items.length; i++) {
-    const item = items[i]
-    // 支持所有文件类型，不限于图片
-    const file = item.getAsFile()
-    if (file) {
-      files.push(file)
+
+  // 1. 优先从 files 属性获取（从文件系统复制时的标准方式）
+  if (clipboardData.files && clipboardData.files.length > 0) {
+    for (let i = 0; i < clipboardData.files.length; i++) {
+      files.push(clipboardData.files[i])
+    }
+  }
+
+  // 2. 从 items 获取（某些应用复制时的方式，如截图、富文本等）
+  if (files.length === 0 && clipboardData.items) {
+    for (let i = 0; i < clipboardData.items.length; i++) {
+      const item = clipboardData.items[i]
+      // 跳过纯文本项，只获取文件
+      if (item.kind === 'file') {
+        const file = item.getAsFile()
+        if (file) {
+          files.push(file)
+        }
+      }
     }
   }
 
