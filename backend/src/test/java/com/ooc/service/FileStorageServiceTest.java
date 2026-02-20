@@ -123,8 +123,8 @@ class FileStorageServiceTest {
     }
 
     @Test
-    void store_WithUnsupportedType_ShouldThrowException() {
-        // Given
+    void store_WithUnsupportedType_ShouldStoreSuccessfully() throws IOException {
+        // Given - 文件类型验证已移除，允许上传任意类型文件
         MultipartFile file = new MockMultipartFile(
                 "file",
                 "malware.exe",
@@ -132,10 +132,13 @@ class FileStorageServiceTest {
                 "fake-exe".getBytes()
         );
 
-        // When & Then
-        assertThatThrownBy(() -> fileStorageService.store(file))
-                .isInstanceOf(RuntimeException.class)
-                .hasMessageContaining("不支持的文件类型");
+        // When
+        FileStorageService.FileInfo result = fileStorageService.store(file);
+
+        // Then
+        assertThat(result).isNotNull();
+        assertThat(result.getOriginalName()).isEqualTo("malware.exe");
+        assertThat(result.getFilename()).endsWith(".exe");
     }
 
     @Test
@@ -156,8 +159,8 @@ class FileStorageServiceTest {
     }
 
     @Test
-    void store_WithNullContentType_ShouldThrowException() {
-        // Given
+    void store_WithNullContentType_ShouldUseDefaultType() throws IOException {
+        // Given - null contentType 会被替换为 application/octet-stream
         MultipartFile file = new MockMultipartFile(
                 "file",
                 "unknown",
@@ -165,10 +168,13 @@ class FileStorageServiceTest {
                 "content".getBytes()
         );
 
-        // When & Then
-        assertThatThrownBy(() -> fileStorageService.store(file))
-                .isInstanceOf(RuntimeException.class)
-                .hasMessageContaining("不支持的文件类型");
+        // When
+        FileStorageService.FileInfo result = fileStorageService.store(file);
+
+        // Then
+        assertThat(result).isNotNull();
+        assertThat(result.getContentType()).isEqualTo("application/octet-stream");
+        assertThat(result.getFilename()).doesNotContain(".");
     }
 
     @Test

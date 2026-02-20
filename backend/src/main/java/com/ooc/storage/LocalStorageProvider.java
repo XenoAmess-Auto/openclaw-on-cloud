@@ -49,6 +49,9 @@ public class LocalStorageProvider implements StorageProvider {
 
             Path absolutePath = targetLocation.toAbsolutePath().normalize();
             String contentType = file.getContentType();
+            if (contentType == null) {
+                contentType = "application/octet-stream";
+            }
 
             log.info("[LocalStorage] File stored: {}", absolutePath);
 
