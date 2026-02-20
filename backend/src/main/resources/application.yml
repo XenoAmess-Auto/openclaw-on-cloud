@@ -71,7 +71,7 @@ file:
 
     # 自定义 CDN URL (可选，用于返回自定义域名访问地址)
     # 例如: https://cdn.example.com 或 https://your-bucket.r2.dev
-    cdn-url: ${S3_CDN_URL:http://localhost:32000}
+    cdn-url: ${S3_CDN_URL:http://23.94.174.102:32000}
 
 logging:
   level:
