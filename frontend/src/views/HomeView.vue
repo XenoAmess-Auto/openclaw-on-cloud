@@ -224,6 +224,7 @@
                 type="file"
                 ref="fileInputRef"
                 @change="handleFileSelect"
+                accept="*/*"
                 style="display: none"
               />
               <button 
