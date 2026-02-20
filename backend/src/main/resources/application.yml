@@ -38,7 +38,7 @@ kimi:
 # 支持两种存储类型: local (本地文件系统) 或 s3 (S3 兼容存储)
 file:
   # 存储类型: local | s3
-  storage-type: ${FILE_STORAGE_TYPE:s3}
+  storage-type: ${FILE_STORAGE_TYPE:local}
 
   # ===== 本地存储配置 (storage-type = local) =====
   upload-dir: ${FILE_UPLOAD_DIR:/home/xenoamess/.openclaw/workspace/openclaw-on-cloud/uploads}
