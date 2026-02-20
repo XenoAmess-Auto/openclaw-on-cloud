@@ -24,14 +24,14 @@ public class WebSocketConfig implements WebSocketConfigurer {
 
     /**
      * 配置 WebSocket 容器，增加消息大小限制
-     * 默认 8KB 太小，改为 10MB 文本消息 + 10MB 二进制消息
+     * 默认 8KB 太小，改为 1MB 文本消息 + 1MB 二进制消息
      * 支持复制粘贴大段代码、日志等内容
      */
     @Bean
     public ServletServerContainerFactoryBean createWebSocketContainer() {
         ServletServerContainerFactoryBean container = new ServletServerContainerFactoryBean();
-        container.setMaxTextMessageBufferSize(10 * 1024 * 1024);  // 10MB 文本消息
-        container.setMaxBinaryMessageBufferSize(10 * 1024 * 1024); // 10MB 二进制消息
+        container.setMaxTextMessageBufferSize(1024 * 1024);  // 1MB 文本消息
+        container.setMaxBinaryMessageBufferSize(1024 * 1024); // 1MB 二进制消息
         return container;
     }
 }
