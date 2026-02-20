@@ -369,7 +369,7 @@ function handleSendMessage(content: string, attachments: Array<{ id: string; dat
 
 .flowchart-link, .settings-link {
   padding: 0.5rem 1rem;
-  background: var(--bg-tertiary);
+  background: var(--bg-color);
   color: var(--text-primary);
   text-decoration: none;
   border-radius: 6px;
