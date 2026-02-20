@@ -36,12 +36,49 @@ export const useChatStore = defineStore('chat', () => {
   const heartbeatTimer = ref<number | null>(null)
   const HEARTBEAT_INTERVAL = 30000 // 30秒发送一次心跳
 
+  // 网络状态监听
+  const currentRoomIdForReconnect = ref<string | null>(null)
+
   // 清理心跳定时器
   function clearHeartbeatTimer() {
     if (heartbeatTimer.value) {
       clearInterval(heartbeatTimer.value)
       heartbeatTimer.value = null
     }
+  }
+
+  // 网络恢复时的处理函数
+  function handleOnline() {
+    console.log('[WebSocket] Network is online, checking connection...')
+    if (!isConnected.value && currentRoomIdForReconnect.value) {
+      console.log('[WebSocket] Triggering reconnect due to network recovery')
+      reconnectAttempts.value = 0 // 重置计数器，立即重连
+      scheduleReconnect(currentRoomIdForReconnect.value)
+    }
+  }
+
+  // 页面可见性变化处理
+  function handleVisibilityChange() {
+    if (document.visibilityState === 'visible') {
+      console.log('[WebSocket] Page became visible, checking connection...')
+      if (!isConnected.value && currentRoomIdForReconnect.value) {
+        console.log('[WebSocket] Triggering reconnect due to page visibility')
+        reconnectAttempts.value = 0 // 重置计数器，立即重连
+        scheduleReconnect(currentRoomIdForReconnect.value)
+      }
+    }
+  }
+
+  // 注册网络状态监听
+  function setupNetworkListeners() {
+    window.addEventListener('online', handleOnline)
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+  }
+
+  // 移除网络状态监听
+  function cleanupNetworkListeners() {
+    window.removeEventListener('online', handleOnline)
+    document.removeEventListener('visibilitychange', handleVisibilityChange)
   }
 
   // 启动心跳
@@ -81,7 +118,11 @@ export const useChatStore = defineStore('chat', () => {
 
   // 执行重连
   function scheduleReconnect(roomId: string) {
-    clearReconnectTimer()
+    // 避免重复调度重连
+    if (reconnectTimer.value) {
+      console.log('[WebSocket] Reconnect already scheduled, skipping')
+      return
+    }
     
     if (reconnectAttempts.value >= MAX_RECONNECT_ATTEMPTS) {
       console.error('[WebSocket] Max reconnect attempts reached, continuing to retry...')
@@ -121,6 +162,14 @@ export const useChatStore = defineStore('chat', () => {
 
   async function connect(roomId: string) {
     const authStore = useAuthStore()
+    
+    // 保存当前房间ID用于重连
+    currentRoomIdForReconnect.value = roomId
+    
+    // 设置网络状态监听（只设置一次）
+    if (!isConnected.value && reconnectAttempts.value === 0) {
+      setupNetworkListeners()
+    }
     
     // 连接前刷新用户信息，确保 userId 和头像是最新的
     if (authStore.isAuthenticated) {
@@ -241,6 +290,8 @@ export const useChatStore = defineStore('chat', () => {
     clearReconnectTimer()
     clearHeartbeatTimer()
     reconnectAttempts.value = 0
+    currentRoomIdForReconnect.value = null
+    cleanupNetworkListeners()
 
     if (ws.value) {
       ws.value.close()
