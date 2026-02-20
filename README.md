@@ -4,30 +4,6 @@
 
 [English](README_EN.md) | [中文](README.md)
 
-## Android 应用下载
-
-GitHub Actions 自动构建 Android APK，**支持覆盖安装**（无需卸载旧版本）。
-
-**下载 APK：**
-- 访问 [Actions 页面](https://github.com/XenoAmess-Auto/openclaw-on-cloud/actions/workflows/android-build.yml)
-- 点击最新运行记录 → Artifacts → 下载 APK
-
-**覆盖安装说明：**
-- 新 APK 可直接覆盖旧版本，数据和设置保留
-- 每次构建版本号自动递增
-
-## Android 本地构建
-
-如需本地构建：
-
-```bash
-cd frontend
-./scripts/build-android.sh  # 一键构建
-# 或: pnpm mobile:build
-```
-
-详见 [frontend/android/README.md](frontend/android/README.md)
-
 ## 项目结构
 
 ```
@@ -125,6 +101,30 @@ docker compose up -d
 - `MONGODB_URI`: MongoDB 连接字符串
 - `OPENCLAW_URL`: OpenClaw 网关地址
 - `OPENCLAW_API_KEY`: OpenClaw API 密钥
+
+## Android 应用下载
+
+GitHub Actions 自动构建 Android APK，**支持覆盖安装**（无需卸载旧版本）。
+
+**下载 APK：**
+- 访问 [Actions 页面](https://github.com/XenoAmess-Auto/openclaw-on-cloud/actions/workflows/android-build.yml)
+- 点击最新运行记录 → Artifacts → 下载 APK
+
+**覆盖安装说明：**
+- 新 APK 可直接覆盖旧版本，数据和设置保留
+- 每次构建版本号自动递增
+
+## Android 本地构建
+
+如需本地构建：
+
+```bash
+cd frontend
+./scripts/build-android.sh  # 一键构建
+# 或: pnpm mobile:build
+```
+
+详见 [frontend/android/README.md](frontend/android/README.md)
 
 ## License
 
