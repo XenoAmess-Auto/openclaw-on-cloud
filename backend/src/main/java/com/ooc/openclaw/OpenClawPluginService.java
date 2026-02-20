@@ -3,6 +3,7 @@ package com.ooc.openclaw;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ooc.config.FileProperties;
+import com.ooc.storage.S3Config;
 import com.ooc.entity.BotUserConfig;
 import com.ooc.entity.ChatRoom;
 import com.ooc.entity.User;
@@ -482,11 +483,48 @@ public class OpenClawPluginService {
         // 构建消息内容块（支持多模态）
         List<Map<String, Object>> contentBlocks = new ArrayList<>();
         
+        // 收集文件下载链接
+        List<String> fileDownloadLinks = new ArrayList<>();
+        if (attachments != null && !attachments.isEmpty()) {
+            for (Attachment att : attachments) {
+                String url = att.getUrl();
+                if (url != null && !url.isEmpty()) {
+                    String fullUrl = toFullDownloadUrl(url);
+                    if (fullUrl != null) {
+                        String filename = url.substring(url.lastIndexOf("/") + 1);
+                        fileDownloadLinks.add(String.format("- %s: %s", filename, fullUrl));
+                    }
+                }
+            }
+        }
+        
         // 添加文本内容块
         if (processedMessage != null && !processedMessage.isEmpty()) {
             Map<String, Object> textBlock = new HashMap<>();
             textBlock.put("type", "text");
-            textBlock.put("text", userName + ": " + processedMessage);
+            StringBuilder textContent = new StringBuilder();
+            textContent.append(userName).append(": ").append(processedMessage);
+            
+            // 如果有文件，添加下载链接到文本末尾
+            if (!fileDownloadLinks.isEmpty()) {
+                textContent.append("\n\n📎 附件下载链接：\n");
+                for (String link : fileDownloadLinks) {
+                    textContent.append(link).append("\n");
+                }
+            }
+            
+            textBlock.put("text", textContent.toString());
+            contentBlocks.add(textBlock);
+        } else if (!fileDownloadLinks.isEmpty()) {
+            // 纯附件消息（无文字内容）
+            Map<String, Object> textBlock = new HashMap<>();
+            textBlock.put("type", "text");
+            StringBuilder textContent = new StringBuilder();
+            textContent.append(userName).append(" 发送了附件：\n\n");
+            for (String link : fileDownloadLinks) {
+                textContent.append(link).append("\n");
+            }
+            textBlock.put("text", textContent.toString());
             contentBlocks.add(textBlock);
         }
         
@@ -688,6 +726,55 @@ public class OpenClawPluginService {
     }
 
     /**
+     * 获取外部可访问的基础 URL
+     */
+    private String getExternalBaseUrl() {
+        // 优先使用配置的 externalBaseUrl
+        if (fileProperties.getExternalBaseUrl() != null && !fileProperties.getExternalBaseUrl().isBlank()) {
+            return fileProperties.getExternalBaseUrl().replaceAll("/$", "");
+        }
+        
+        // 尝试从环境变量获取
+        String envUrl = System.getenv("OOC_EXTERNAL_URL");
+        if (envUrl != null && !envUrl.isBlank()) {
+            return envUrl.replaceAll("/$", "");
+        }
+        
+        // 默认使用 localhost
+        return "http://localhost:8081";
+    }
+    
+    /**
+     * 将相对 URL 转换为完整的外部可访问 URL
+     */
+    private String toFullDownloadUrl(String relativeUrl) {
+        if (relativeUrl == null || relativeUrl.isEmpty()) {
+            return null;
+        }
+        
+        // 如果已经是完整 URL，直接返回
+        if (relativeUrl.startsWith("http://") || relativeUrl.startsWith("https://")) {
+            return relativeUrl;
+        }
+        
+        // 确保相对 URL 以 / 开头
+        String normalizedUrl = relativeUrl.startsWith("/") ? relativeUrl : "/" + relativeUrl;
+        
+        // 如果是 S3 存储，使用 S3 CDN URL
+        if ("s3".equalsIgnoreCase(storageProvider.getStorageType())) {
+            S3Config s3Config = fileProperties.getS3();
+            if (s3Config != null && s3Config.getCdnUrl() != null && !s3Config.getCdnUrl().isBlank()) {
+                String cdnUrl = s3Config.getCdnUrl().replaceAll("/$", "");
+                // 对于 S3，路径格式通常是 /bucket-name/filename
+                return cdnUrl + normalizedUrl;
+            }
+        }
+        
+        // 本地存储：使用外部基础 URL
+        return getExternalBaseUrl() + normalizedUrl;
+    }
+
+    /**
      * 发送消息到 OpenClaw 并获取流式回复（内部实现）- WebSocket 版本
      *
      * 使用 WebSocket 协议连接到 OpenClaw Gateway，接收原生工具事件
@@ -714,13 +801,51 @@ public class OpenClawPluginService {
         // 构建多模态内容块列表
         List<Map<String, Object>> contentBlocks = new ArrayList<>();
 
+        // 收集文件下载链接
+        List<String> fileDownloadLinks = new ArrayList<>();
+        if (attachments != null && !attachments.isEmpty()) {
+            for (Attachment att : attachments) {
+                String url = att.getUrl();
+                if (url != null && !url.isEmpty()) {
+                    String fullUrl = toFullDownloadUrl(url);
+                    if (fullUrl != null) {
+                        String filename = url.substring(url.lastIndexOf("/") + 1);
+                        fileDownloadLinks.add(String.format("- %s: %s", filename, fullUrl));
+                    }
+                }
+            }
+        }
+
         // 添加文本内容块，格式: [群名群] 用户xxx说: 内容
+        // 如果有附件，在文本末尾添加下载链接
         if (processedMessage != null && !processedMessage.isEmpty()) {
             Map<String, Object> textBlock = new HashMap<>();
             textBlock.put("type", "text");
-            String formattedMessage = String.format("[%s群] 用户%s说: %s",
-                    roomName != null ? roomName : "未知", userName, processedMessage);
-            textBlock.put("text", formattedMessage);
+            StringBuilder formattedMessage = new StringBuilder();
+            formattedMessage.append(String.format("[%s群] 用户%s说: %s",
+                    roomName != null ? roomName : "未知", userName, processedMessage));
+            
+            // 如果有文件，添加下载链接到文本末尾
+            if (!fileDownloadLinks.isEmpty()) {
+                formattedMessage.append("\n\n📎 附件下载链接：\n");
+                for (String link : fileDownloadLinks) {
+                    formattedMessage.append(link).append("\n");
+                }
+            }
+            
+            textBlock.put("text", formattedMessage.toString());
+            contentBlocks.add(textBlock);
+        } else if (!fileDownloadLinks.isEmpty()) {
+            // 纯附件消息（无文字内容）
+            Map<String, Object> textBlock = new HashMap<>();
+            textBlock.put("type", "text");
+            StringBuilder formattedMessage = new StringBuilder();
+            formattedMessage.append(String.format("[%s群] 用户%s发送了附件：\n\n", 
+                    roomName != null ? roomName : "未知", userName));
+            for (String link : fileDownloadLinks) {
+                formattedMessage.append(link).append("\n");
+            }
+            textBlock.put("text", formattedMessage.toString());
             contentBlocks.add(textBlock);
         }
 

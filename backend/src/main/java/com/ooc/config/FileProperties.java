@@ -27,4 +27,11 @@ public class FileProperties {
      * S3 存储配置
      */
     private S3Config s3;
+
+    /**
+     * 外部可访问的基础 URL，用于生成文件下载链接
+     * 例如: http://3.94.174.102:8081 或 https://ooc.example.com
+     * 如果不配置，将尝试自动检测
+     */
+    private String externalBaseUrl = "";
 }
