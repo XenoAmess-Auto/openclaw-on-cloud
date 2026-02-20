@@ -13,6 +13,7 @@ import java.util.*;
 public class ChatRoomService {
 
     private final ChatRoomRepository chatRoomRepository;
+    private final FileStorageService fileStorageService;
 
     public ChatRoom createChatRoom(String name, String description, String creatorId) {
         Set<String> memberIds = new HashSet<>();
@@ -120,5 +121,27 @@ public class ChatRoomService {
 
     public void deleteChatRoom(String roomId) {
         chatRoomRepository.deleteById(roomId);
+    }
+
+    /**
+     * 根据ID获取消息
+     */
+    public ChatRoom.Message getMessageById(String roomId, String messageId) {
+        return chatRoomRepository.findById(roomId)
+            .flatMap(room -> room.getMessages().stream()
+                .filter(m -> m.getId().equals(messageId))
+                .findFirst())
+            .orElse(null);
+    }
+
+    /**
+     * 获取文件数据
+     */
+    public byte[] getFileData(String fileKey) {
+        try (var inputStream = fileStorageService.getInputStream(fileKey)) {
+            return inputStream.readAllBytes();
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to read file: " + fileKey, e);
+        }
     }
 }

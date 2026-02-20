@@ -834,4 +834,74 @@ public class ChatRoomController {
     private String getUserIdFromAuth(Authentication authentication) {
         return authentication.getName();
     }
+
+    /**
+     * 下载消息中的附件到指定目录
+     */
+    @PostMapping("/{roomId}/messages/{messageId}/attachments/download")
+    public ResponseEntity<?> downloadMessageAttachments(
+            @PathVariable String roomId,
+            @PathVariable String messageId,
+            @RequestBody Map<String, String> request,
+            Authentication authentication) {
+        String userId = getUserIdFromAuth(authentication);
+        String targetDir = request.get("targetDir");
+
+        if (targetDir == null || targetDir.isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "targetDir is required"));
+        }
+
+        try {
+            ChatRoom.Message message = chatRoomService.getMessageById(roomId, messageId);
+            if (message == null) {
+                return ResponseEntity.notFound().build();
+            }
+
+            List<Map<String, String>> downloadedFiles = new ArrayList<>();
+            java.nio.file.Path targetPath = java.nio.file.Paths.get(targetDir);
+            java.nio.file.Files.createDirectories(targetPath);
+
+            if (message.getAttachments() != null) {
+                for (ChatRoom.Message.Attachment att : message.getAttachments()) {
+                    String url = att.getUrl();
+                    String filename = att.getName();
+                    if (filename == null || filename.isEmpty()) {
+                        filename = UUID.randomUUID().toString() + ".bin";
+                    }
+
+                    // 下载文件
+                    byte[] fileData = null;
+                    if (url != null && !url.isEmpty()) {
+                        if (url.startsWith("/api/files/")) {
+                            String fileKey = url.substring("/api/files/".length());
+                            fileData = chatRoomService.getFileData(fileKey);
+                        } else if (url.contains("/api/files/")) {
+                            String fileKey = url.substring(url.lastIndexOf("/api/files/") + "/api/files/".length());
+                            fileData = chatRoomService.getFileData(fileKey);
+                        }
+                    }
+
+                    if (fileData != null) {
+                        java.nio.file.Path filePath = targetPath.resolve(filename);
+                        java.nio.file.Files.write(filePath, fileData);
+                        downloadedFiles.add(Map.of(
+                            "originalName", att.getName(),
+                            "savedPath", filePath.toString(),
+                            "size", String.valueOf(fileData.length)
+                        ));
+                    }
+                }
+            }
+
+            return ResponseEntity.ok(Map.of(
+                "success", true,
+                "downloaded", downloadedFiles.size(),
+                "files", downloadedFiles
+            ));
+        } catch (Exception e) {
+            log.error("Failed to download attachments", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(Map.of("error", e.getMessage()));
+        }
+    }
 }
