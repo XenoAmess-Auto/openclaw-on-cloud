@@ -141,23 +141,24 @@ public class OpenClawResponseParser {
     /**
      * 从内容中直接检测工具调用（备选方案）
      * 用于当标准格式解析失败时
-     * 
+     *
      * @param content OpenClaw 返回的内容
      * @return 检测到的工具调用列表
      */
     public List<ChatRoom.Message.ToolCall> detectToolsFromContent(String content) {
         List<ChatRoom.Message.ToolCall> toolCalls = new ArrayList<>();
-        
+
         if (content == null) {
             return toolCalls;
         }
-        
+
         String lowerContent = content.toLowerCase();
-        
+
         for (String toolName : COMMON_TOOLS) {
             // 检查内容中是否包含工具名称（作为独立单词）
-            String pattern = "\\b" + toolName + "\\b";
-            if (lowerContent.matches(".*" + pattern + ".*")) {
+            // 使用简单的字符串包含检查，避免正则复杂性问题
+            String lowerToolName = toolName.toLowerCase();
+            if (containsWord(lowerContent, lowerToolName)) {
                 // 检查是否已经添加过
                 boolean alreadyAdded = toolCalls.stream()
                     .anyMatch(tc -> tc.getName().equalsIgnoreCase(toolName));
@@ -173,11 +174,28 @@ public class OpenClawResponseParser {
                 }
             }
         }
-        
+
         if (!toolCalls.isEmpty()) {
             log.info("detectToolsFromContent: total {} tools detected", toolCalls.size());
         }
         return toolCalls;
+    }
+
+    /**
+     * 检查字符串中是否包含完整的单词
+     */
+    private boolean containsWord(String text, String word) {
+        int index = text.indexOf(word);
+        while (index != -1) {
+            boolean startValid = index == 0 || !Character.isLetterOrDigit(text.charAt(index - 1));
+            boolean endValid = index + word.length() >= text.length()
+                    || !Character.isLetterOrDigit(text.charAt(index + word.length()));
+            if (startValid && endValid) {
+                return true;
+            }
+            index = text.indexOf(word, index + 1);
+        }
+        return false;
     }
 
     /**
@@ -367,15 +385,15 @@ public class OpenClawResponseParser {
             // 处理不同类型的消息
             if (node.has("choices") && node.get("choices").isArray() && node.get("choices").size() > 0) {
                 com.fasterxml.jackson.databind.JsonNode choice = node.get("choices").get(0);
-                
+
                 if (choice.has("delta")) {
                     com.fasterxml.jackson.databind.JsonNode delta = choice.get("delta");
-                    
+
                     // 处理内容增量
                     if (delta.has("content") && !delta.get("content").isNull()) {
                         content = delta.get("content").asText();
                     }
-                    
+
                     // 处理工具调用
                     if (delta.has("tool_calls") && delta.get("tool_calls").isArray()) {
                         com.fasterxml.jackson.databind.JsonNode toolCalls = delta.get("tool_calls");
@@ -391,6 +409,14 @@ public class OpenClawResponseParser {
                             }
                         }
                     }
+                }
+            }
+
+            // 处理直接 delta 格式（如 content_block_delta 类型）
+            if (content == null && node.has("delta")) {
+                com.fasterxml.jackson.databind.JsonNode delta = node.get("delta");
+                if (delta.has("text") && !delta.get("text").isNull()) {
+                    content = delta.get("text").asText();
                 }
             }
 
