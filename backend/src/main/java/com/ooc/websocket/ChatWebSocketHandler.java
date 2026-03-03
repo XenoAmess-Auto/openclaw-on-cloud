@@ -302,6 +302,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
 
                 WebSocketMessage historyMsg = WebSocketMessage.builder()
                         .type("history")
+                        .roomId(roomId)
                         .messages(enrichedMessages)
                         .hasMore(allMessages != null && allMessages.size() > 10)
                         .build();
