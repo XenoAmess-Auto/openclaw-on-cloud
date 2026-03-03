@@ -1286,6 +1286,9 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
 
             final String finalSessionId = openClawSessionId;
 
+            // 添加详细日志，确保每个房间使用独立的 session
+            log.info("[OpenClaw Session] Room {} using session: {}", roomId, finalSessionId != null ? finalSessionId : "(new session will be created)");
+
             if (finalSessionId == null) {
                 // 创建新会话并发送流式消息
                 log.info("Creating new OpenClaw session for room: {}", roomId);

@@ -671,9 +671,13 @@ public class OpenClawPluginService {
 
     /**
      * 创建新的 OpenClaw 会话（使用 chat completions API 时，会话由 user 字段管理）
+     * sessionId 格式: ooc-{roomId}-{uuid}，确保每个房间有独立的 session
      */
     public Mono<OpenClawSession> createSession(String instanceName, List<Map<String, Object>> context) {
-        String sessionId = UUID.randomUUID().toString();
+        // 从 instanceName 中提取 roomId（格式: ooc-{roomId}）
+        String roomId = instanceName.startsWith("ooc-") ? instanceName.substring(4) : instanceName;
+        // 生成包含 roomId 的 sessionId，确保不同房间的 session 完全隔离
+        String sessionId = "ooc-" + roomId + "-" + UUID.randomUUID().toString();
         
         OpenClawSessionState state = OpenClawSessionState.builder()
                 .sessionId(sessionId)
@@ -683,7 +687,7 @@ public class OpenClawPluginService {
                 .build();
         sessionStates.put(sessionId, state);
         
-        log.info("Created OpenClaw session: {}", sessionId);
+        log.info("Created OpenClaw session for room {}: {}", roomId, sessionId);
         return Mono.just(new OpenClawSession(sessionId, instanceName, Instant.now()));
     }
 
