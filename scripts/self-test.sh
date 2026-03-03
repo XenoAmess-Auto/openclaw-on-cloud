@@ -48,8 +48,9 @@ fi
 
 # Check JAR exists
 echo "  [4/4] Verifying JAR artifact..."
-if [ -f "target/ooc-backend-1.0.0.jar" ]; then
-    echo -e "  ${GREEN}✓ JAR artifact exists${NC}"
+JAR_FILE=$(ls target/ooc-backend-*.jar 2>/dev/null | head -1)
+if [ -n "$JAR_FILE" ]; then
+    echo -e "  ${GREEN}✓ JAR artifact exists${NC} ($JAR_FILE)"
 else
     echo -e "  ${RED}✗ JAR artifact not found${NC}"
     FAILED=1
@@ -103,7 +104,7 @@ echo "========================================"
 if [ $FAILED -eq 0 ]; then
     echo -e "${GREEN}  All tests passed! ✓${NC}"
     echo ""
-    echo "  Backend JAR: backend/target/ooc-backend-1.0.0.jar"
+    echo "  Backend JAR: $JAR_FILE"
     echo "  Frontend dist: frontend/dist/"
 else
     echo -e "${RED}  Some tests failed! ✗${NC}"
