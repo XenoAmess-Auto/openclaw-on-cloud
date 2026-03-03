@@ -243,9 +243,17 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                 .avatar(avatar)
                 .build();
 
+        // 检查该 session 是否已经在其他房间，如果是则先清理旧房间关联
+        WebSocketUserInfo oldUserInfo = userInfoMap.get(session);
+        if (oldUserInfo != null && !oldUserInfo.getRoomId().equals(roomId)) {
+            log.info("User {} switching from room {} to room {}, cleaning up old room association",
+                    userName, oldUserInfo.getRoomId(), roomId);
+            broadcastService.removeRoomSession(oldUserInfo.getRoomId(), session);
+        }
+
         userInfoMap.put(session, userInfo);
         userSessions.computeIfAbsent(userId, k -> ConcurrentHashMap.newKeySet()).add(session);
-        
+
         // 注册到广播服务（唯一会话管理源）
         broadcastService.registerRoomSession(roomId, session);
 
