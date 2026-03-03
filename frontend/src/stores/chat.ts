@@ -377,6 +377,11 @@ export const useChatStore = defineStore('chat', () => {
   function handleMessage(data: any) {
     switch (data.type) {
       case 'history':
+        // 历史消息 - 只处理当前房间的消息
+        if (data.roomId && data.roomId !== currentRoom.value?.id) {
+          console.log('[WebSocket] history ignored - room mismatch:', data.roomId, '!=', currentRoom.value?.id)
+          break
+        }
         // 合并历史消息，避免重复（特别是 WebSocket 重连时）
         {
           const historyMessages = data.messages || []
@@ -397,6 +402,11 @@ export const useChatStore = defineStore('chat', () => {
         }
         break
       case 'message':
+        // 普通消息 - 只处理当前房间的消息
+        if (data.roomId && data.roomId !== currentRoom.value?.id) {
+          console.log('[WebSocket] message ignored - room mismatch:', data.roomId, '!=', currentRoom.value?.id)
+          break
+        }
         // 检查是否已存在相同ID的消息，避免重复添加
         {
           const existingIndex = messages.value.findIndex(m => m.id === data.message.id)
@@ -587,6 +597,11 @@ export const useChatStore = defineStore('chat', () => {
         }
         break
       case 'user_joined':
+        // 用户加入 - 只处理当前房间的消息
+        if (data.roomId && data.roomId !== currentRoom.value?.id) {
+          console.log('[WebSocket] user_joined ignored - room mismatch:', data.roomId, '!=', currentRoom.value?.id)
+          break
+        }
         // 添加系统消息
         messages.value.push({
           id: `system-${Date.now()}`,
@@ -600,6 +615,11 @@ export const useChatStore = defineStore('chat', () => {
         } as Message)
         break
       case 'user_left':
+        // 用户离开 - 只处理当前房间的消息
+        if (data.roomId && data.roomId !== currentRoom.value?.id) {
+          console.log('[WebSocket] user_left ignored - room mismatch:', data.roomId, '!=', currentRoom.value?.id)
+          break
+        }
         messages.value.push({
           id: `system-${Date.now()}`,
           senderId: 'system',
@@ -612,6 +632,11 @@ export const useChatStore = defineStore('chat', () => {
         } as Message)
         break
       case 'user_avatar_updated':
+        // 用户头像更新 - 只处理当前房间的消息
+        if (data.roomId && data.roomId !== currentRoom.value?.id) {
+          console.log('[WebSocket] user_avatar_updated ignored - room mismatch:', data.roomId, '!=', currentRoom.value?.id)
+          break
+        }
         // 用户头像更新 - 更新消息列表中该用户的所有消息头像
         if (data.userId && data.content) {
           messages.value.forEach((msg, index) => {

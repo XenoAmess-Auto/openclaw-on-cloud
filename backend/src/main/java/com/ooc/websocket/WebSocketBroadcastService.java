@@ -62,6 +62,9 @@ public class WebSocketBroadcastService {
      * 广播消息到房间
      */
     public void broadcastToRoom(String roomId, WebSocketMessage message, WebSocketSession... exclude) {
+        // 确保消息包含 roomId
+        message.setRoomId(roomId);
+        
         Set<WebSocketSession> excludeSet = new HashSet<>(java.util.Arrays.asList(exclude));
         Set<WebSocketSession> sessions = roomSessions.getOrDefault(roomId, Collections.emptySet());
 

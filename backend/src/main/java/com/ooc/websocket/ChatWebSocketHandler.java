@@ -52,9 +52,6 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
     @org.springframework.beans.factory.annotation.Autowired
     private MentionService mentionService;
 
-    // roomId -> Set<WebSocketSession>
-    private final Map<String, Set<WebSocketSession>> roomSessions = new ConcurrentHashMap<>();
-
     // session -> userInfo
     private final Map<WebSocketSession, WebSocketUserInfo> userInfoMap = new ConcurrentHashMap<>();
 
@@ -167,10 +164,6 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
         log.info("WebSocket closed: {}", session.getId());
         WebSocketUserInfo userInfo = userInfoMap.remove(session);
         if (userInfo != null) {
-            Set<WebSocketSession> sessions = roomSessions.get(userInfo.getRoomId());
-            if (sessions != null) {
-                sessions.remove(session);
-            }
             // Remove from userSessions
             Set<WebSocketSession> userSess = userSessions.get(userInfo.getUserId());
             if (userSess != null) {
@@ -179,7 +172,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                     userSessions.remove(userInfo.getUserId());
                 }
             }
-            // 从广播服务移除
+            // 从广播服务移除（唯一会话管理源）
             broadcastService.removeRoomSession(userInfo.getRoomId(), session);
         }
         // 从广播服务移除会话（所有房间）
@@ -251,10 +244,9 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                 .build();
 
         userInfoMap.put(session, userInfo);
-        roomSessions.computeIfAbsent(roomId, k -> ConcurrentHashMap.newKeySet()).add(session);
         userSessions.computeIfAbsent(userId, k -> ConcurrentHashMap.newKeySet()).add(session);
         
-        // 注册到广播服务
+        // 注册到广播服务（唯一会话管理源）
         broadcastService.registerRoomSession(roomId, session);
 
         // 发送历史消息（只发送最新的10条）
@@ -375,8 +367,8 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
         // 解析@提及
         MentionService.MentionParseResult mentionResult = mentionService.parseMentions(content != null ? content : "", roomId);
 
-        // 获取房间成员数
-        int memberCount = roomSessions.getOrDefault(roomId, Collections.emptySet()).size();
+        // 获取房间成员数（从广播服务获取）
+        int memberCount = broadcastService.getRoomSessionCount(roomId);
 
         log.info("Message received: room={}, sender={}, content={}, attachments={}, memberCount={}, mentionedOpenClaw={}, mentionedKimi={}, mentionedClaude={}, mentions={}",
                 roomId, userInfo.getUserName(),
@@ -2117,10 +2109,8 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
         WebSocketUserInfo userInfo = userInfoMap.remove(session);
         if (userInfo == null) return;
 
-        Set<WebSocketSession> sessions = roomSessions.get(userInfo.getRoomId());
-        if (sessions != null) {
-            sessions.remove(session);
-        }
+        // 从广播服务移除（唯一会话管理源）
+        broadcastService.removeRoomSession(userInfo.getRoomId(), session);
 
         broadcastToRoom(userInfo.getRoomId(), WebSocketMessage.builder()
                 .type("user_left")
