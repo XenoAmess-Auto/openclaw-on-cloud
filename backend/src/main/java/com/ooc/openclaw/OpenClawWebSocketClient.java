@@ -244,7 +244,9 @@ public class OpenClawWebSocketClient {
         request.put("method", "chat.send");
 
         Map<String, Object> params = new HashMap<>();
-        params.put("sessionKey", "ooc-" + sessionId);
+        // 使用正确的 session key 格式: agent:{agentId}:{rest}
+        // 确保不同房间的 session 被正确隔离
+        params.put("sessionKey", "agent:main:ooc-" + sessionId);
 
         // 从 contentBlocks 中提取文本和图片
         StringBuilder messageBuilder = new StringBuilder();
