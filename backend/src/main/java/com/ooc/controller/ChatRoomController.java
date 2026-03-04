@@ -513,7 +513,7 @@ public class ChatRoomController {
             final String finalSessionId = openClawSessionId;
             java.util.concurrent.CountDownLatch latch = new java.util.concurrent.CountDownLatch(1);
 
-            openClawPluginService.sendMessageStreamWithRoomAttachments(finalSessionId, content, message.getAttachments(), userId, userName, roomName, room.getProjects())
+            openClawPluginService.sendMessageStreamWithRoomAttachments(finalSessionId, content, message.getAttachments(), userId, userName, roomName, getEffectiveProjects(room))
                     .doOnNext(event -> {
                         if ("message".equals(event.type()) && event.content() != null) {
                             responseBuilder.append(event.content());
@@ -1078,6 +1078,18 @@ public class ChatRoomController {
     }
 
     /**
+     * 获取房间的有效项目列表（如果没有配置则返回默认的群名）
+     */
+    private List<String> getEffectiveProjects(ChatRoom room) {
+        List<String> projects = room.getProjects();
+        if (projects == null || projects.isEmpty()) {
+            // 如果没有配置项目，默认使用群名
+            return List.of(room.getName() != null ? room.getName() : "default");
+        }
+        return projects;
+    }
+
+    /**
      * 获取群聊的项目配置
      */
     @GetMapping("/{roomId}/projects")
@@ -1085,14 +1097,7 @@ public class ChatRoomController {
         ChatRoom room = chatRoomService.getChatRoom(roomId)
                 .orElseThrow(() -> new RuntimeException("Chat room not found"));
         
-        List<String> projects = room.getProjects();
-        
-        // 如果没有配置项目，默认使用群名
-        if (projects == null || projects.isEmpty()) {
-            projects = List.of(room.getName() != null ? room.getName() : "default");
-        }
-        
-        return ResponseEntity.ok(projects);
+        return ResponseEntity.ok(getEffectiveProjects(room));
     }
 
     /**

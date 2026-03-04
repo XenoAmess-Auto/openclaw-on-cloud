@@ -927,10 +927,8 @@ public class OpenClawPluginService {
                 roomContextPrompt.append("'").append(projects.get(i)).append("'");
             }
             roomContextPrompt.append("。请只回答与这些项目相关的问题，如果用户询问其他话题，请礼貌地提醒他们此群只讨论指定项目。");
-        } else if (roomName != null && !roomName.isEmpty()) {
-            // 如果没有配置项目，默认使用群名作为项目
-            roomContextPrompt.append("\n\n【群聊主题限制】当前群聊 '").append(roomName).append("' 只讨论 '").append(roomName).append("' 项目。请只回答与此项目相关的问题。");
         }
+        // 注意：不再自动使用群名作为默认项目，项目必须在群聊配置中显式设置
         
         String systemPrompt = getSystemPrompt() + userOverridePrompt + roomContextPrompt +
                 " When using tools, format: **Tools used:** - tool_name. **Tool details:** - tool_name: ```output```";
