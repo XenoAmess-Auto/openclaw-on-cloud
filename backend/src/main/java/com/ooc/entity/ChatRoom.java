@@ -58,6 +58,10 @@ public class ChatRoom {
     @LastModifiedDate
     private Instant updatedAt;
 
+    @JsonProperty("projects")
+    @Builder.Default
+    private List<String> projects = new ArrayList<>();
+
     @Data
     @Builder(toBuilder = true)
     @NoArgsConstructor

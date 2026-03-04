@@ -5,6 +5,7 @@ import lombok.Builder;
 import lombok.Data;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Set;
 
 @Data
@@ -15,6 +16,7 @@ public class ChatRoomDto {
     private String description;
     private Set<String> memberIds;
     private String creatorId;
+    private List<String> projects;
     private Instant createdAt;
     private Instant updatedAt;
 
@@ -25,6 +27,7 @@ public class ChatRoomDto {
                 .description(room.getDescription())
                 .memberIds(room.getMemberIds())
                 .creatorId(room.getCreatorId())
+                .projects(room.getProjects())
                 .createdAt(room.getCreatedAt())
                 .updatedAt(room.getUpdatedAt())
                 .build();

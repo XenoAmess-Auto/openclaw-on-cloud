@@ -71,6 +71,25 @@ public class ChatRoomController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
+    @PutMapping("/{roomId}/projects")
+    public ResponseEntity<ChatRoomDto> updateRoomProjects(
+            @PathVariable String roomId,
+            @RequestBody Map<String, List<String>> request,
+            Authentication authentication) {
+        String userId = getUserIdFromAuth(authentication);
+        ChatRoom room = chatRoomService.getChatRoom(roomId)
+                .orElseThrow(() -> new RuntimeException("Chat room not found"));
+
+        // Only creator can update projects
+        if (!room.getCreatorId().equals(userId)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
+
+        List<String> projects = request.get("projects");
+        ChatRoom updatedRoom = chatRoomService.updateProjects(roomId, projects);
+        return ResponseEntity.ok(ChatRoomDto.fromEntity(updatedRoom));
+    }
+
     @GetMapping("/{roomId}/members")
     public ResponseEntity<List<MemberDto>> getChatRoomMembers(@PathVariable String roomId) {
         ChatRoom room = chatRoomService.getChatRoom(roomId)
@@ -513,7 +532,7 @@ public class ChatRoomController {
             final String finalSessionId = openClawSessionId;
             java.util.concurrent.CountDownLatch latch = new java.util.concurrent.CountDownLatch(1);
 
-            openClawPluginService.sendMessageStreamWithRoomAttachments(finalSessionId, content, message.getAttachments(), userId, userName, roomName)
+            openClawPluginService.sendMessageStreamWithRoomAttachments(finalSessionId, content, message.getAttachments(), userId, userName, roomName, room.getProjects())
                     .doOnNext(event -> {
                         if ("message".equals(event.type()) && event.content() != null) {
                             responseBuilder.append(event.content());
@@ -1039,5 +1058,86 @@ public class ChatRoomController {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(Map.of("error", e.getMessage()));
         }
+    }
+
+    /**
+     * 获取所有可用项目列表（扫描工作空间目录）
+     */
+    @GetMapping("/projects")
+    public ResponseEntity<List<Map<String, String>>> getAvailableProjects() {
+        List<Map<String, String>> projects = new ArrayList<>();
+        
+        // 扫描工作空间目录获取项目列表
+        String workspacePath = System.getProperty("user.dir");
+        java.io.File workspace = new java.io.File(workspacePath);
+        
+        if (workspace.exists() && workspace.isDirectory()) {
+            java.io.File[] dirs = workspace.listFiles(java.io.File::isDirectory);
+            if (dirs != null) {
+                for (java.io.File dir : dirs) {
+                    String name = dir.getName();
+                    // 排除隐藏目录和特定目录
+                    if (!name.startsWith(".") && 
+                        !name.equals("keys") && 
+                        !name.equals("memory") &&
+                        !name.equals("android-sdk")) {
+                        Map<String, String> project = new HashMap<>();
+                        project.put("name", name);
+                        project.put("path", dir.getAbsolutePath());
+                        projects.add(project);
+                    }
+                }
+            }
+        }
+        
+        // 按名称排序
+        projects.sort((a, b) -> a.get("name").compareTo(b.get("name")));
+        
+        return ResponseEntity.ok(projects);
+    }
+
+    /**
+     * 获取群聊的项目配置
+     */
+    @GetMapping("/{roomId}/projects")
+    public ResponseEntity<List<String>> getRoomProjects(@PathVariable String roomId) {
+        ChatRoom room = chatRoomService.getChatRoom(roomId)
+                .orElseThrow(() -> new RuntimeException("Chat room not found"));
+        
+        List<String> projects = room.getProjects();
+        
+        // 如果没有配置项目，默认使用群名
+        if (projects == null || projects.isEmpty()) {
+            projects = List.of(room.getName() != null ? room.getName() : "default");
+        }
+        
+        return ResponseEntity.ok(projects);
+    }
+
+    /**
+     * 更新群聊的项目配置
+     */
+    @PutMapping("/{roomId}/projects")
+    public ResponseEntity<Map<String, Object>> updateRoomProjects(
+            @PathVariable String roomId,
+            @RequestBody List<String> projects,
+            Authentication authentication) {
+        
+        String currentUserId = getUserIdFromAuth(authentication);
+        ChatRoom room = chatRoomService.getChatRoom(roomId)
+                .orElseThrow(() -> new RuntimeException("Chat room not found"));
+        
+        // 检查权限（只有创建者可以配置）
+        if (!room.getCreatorId().equals(currentUserId)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of("error", "Only room creator can configure projects"));
+        }
+        
+        chatRoomService.updateRoomProjects(roomId, projects);
+        
+        return ResponseEntity.ok(Map.of(
+            "success", true,
+            "projects", projects
+        ));
     }
 }

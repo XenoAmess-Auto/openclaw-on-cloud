@@ -1315,7 +1315,8 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                                     task.getAttachments(),
                                     task.getUserInfo().getUserId(),
                                     task.getUserInfo().getUserName(),
-                                    room.getName());
+                                    room.getName(),
+                                    room.getProjects());
                         })
                         .subscribe(
                                 event -> handleOpenClawStreamEvent(roomId, streamingMessageId, contentBuilder, streamingMessage, event, task),
@@ -1362,7 +1363,8 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                                 task.getAttachments(),
                                 task.getUserInfo().getUserId(),
                                 task.getUserInfo().getUserName(),
-                                room.getName())
+                                room.getName(),
+                                room.getProjects())
                         .subscribe(
                                 event -> handleOpenClawStreamEvent(roomId, streamingMessageId, contentBuilder, streamingMessage, event, task),
                                 error -> {

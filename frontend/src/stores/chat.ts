@@ -720,6 +720,26 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
+  // 更新房间关联的项目
+  async function updateRoomProjects(roomId: string, projects: string[]): Promise<boolean> {
+    try {
+      await chatRoomApi.updateProjects(roomId, projects)
+      // 更新当前房间的项目
+      if (currentRoom.value && currentRoom.value.id === roomId) {
+        currentRoom.value.projects = projects
+      }
+      // 更新房间列表中的项目
+      const roomIndex = rooms.value.findIndex(r => r.id === roomId)
+      if (roomIndex !== -1) {
+        rooms.value[roomIndex].projects = projects
+      }
+      return true
+    } catch (err) {
+      console.error('Failed to update room projects:', err)
+      return false
+    }
+  }
+
   return {
     rooms,
     currentRoom,
@@ -735,6 +755,7 @@ export const useChatStore = defineStore('chat', () => {
     disconnect,
     sendMessage,
     sendTyping,
-    loadMoreMessages
+    loadMoreMessages,
+    updateRoomProjects
   }
 })

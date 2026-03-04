@@ -15,6 +15,7 @@ export interface ChatRoom {
   creatorId: string
   createdAt: string
   updatedAt: string
+  projects?: string[]
 }
 
 export interface Mention {

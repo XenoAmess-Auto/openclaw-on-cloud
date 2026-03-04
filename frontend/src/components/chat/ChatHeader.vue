@@ -5,9 +5,16 @@
       <span :class="['status', { connected: isConnected }]">
         {{ isConnected ? '已连接' : '连接中...' }}
       </span>
+      <span v-if="roomProjects && roomProjects.length > 0" class="room-projects" :title="'关联项目: ' + roomProjects.join(', ')">
+        📁 {{ roomProjects.join(', ') }}
+      </span>
     </div>
     <div class="chat-actions">
+      <button v-if="isCreator" class="btn-config" @click="$emit('show-project-config')" title="配置群聊项目">
+        ⚙️ 项目
+      </button>
       <button v-if="isCreator" class="btn-danger" @click="$emit('dismiss')">解散</button>
+      <button @click="$emit('show-config')">配置</button>
       <button @click="$emit('show-members')">成员</button>
       <button @click="$emit('show-sessions')">会话</button>
       <button @click="$emit('show-task-queue')">队列</button>
@@ -20,13 +27,16 @@ defineProps<{
   roomName?: string
   isConnected: boolean
   isCreator: boolean
+  roomProjects?: string[]
 }>()
 
 defineEmits<{
   dismiss: []
+  'show-config': []
   'show-members': []
   'show-sessions': []
   'show-task-queue': []
+  'show-project-config': []
 }>()
 </script>
 
@@ -44,12 +54,17 @@ defineEmits<{
   display: flex;
   align-items: center;
   gap: 0.75rem;
+  flex: 1;
+  min-width: 0;
 }
 
 .room-info h3 {
   margin: 0;
   font-size: 1.125rem;
   color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .status {
@@ -58,6 +73,7 @@ defineEmits<{
   padding: 0.25rem 0.5rem;
   background: var(--surface-color);
   border-radius: 4px;
+  white-space: nowrap;
 }
 
 .status.connected {
@@ -65,9 +81,22 @@ defineEmits<{
   background: rgba(16, 185, 129, 0.1);
 }
 
+.room-projects {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  padding: 0.25rem 0.5rem;
+  background: rgba(59, 130, 246, 0.1);
+  border-radius: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
+}
+
 .chat-actions {
   display: flex;
   gap: 0.5rem;
+  flex-shrink: 0;
 }
 
 .chat-actions button {
@@ -93,6 +122,16 @@ defineEmits<{
 
 .chat-actions .btn-danger:hover {
   background: #fecaca;
+}
+
+.chat-actions .btn-config {
+  background: #dbeafe;
+  border-color: #bfdbfe;
+  color: #2563eb;
+}
+
+.chat-actions .btn-config:hover {
+  background: #bfdbfe;
 }
 
 /* ============================================
@@ -123,6 +162,12 @@ defineEmits<{
     font-size: 0.6875rem;
     padding: 0.125rem 0.375rem;
     white-space: nowrap;
+  }
+
+  .room-projects {
+    font-size: 0.6875rem;
+    max-width: 120px;
+    display: none;
   }
 
   .chat-actions {

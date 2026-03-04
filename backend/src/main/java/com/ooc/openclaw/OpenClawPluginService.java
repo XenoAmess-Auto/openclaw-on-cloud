@@ -784,7 +784,7 @@ public class OpenClawPluginService {
      * 使用 WebSocket 协议连接到 OpenClaw Gateway，接收原生工具事件
      */
     private Flux<StreamEvent> sendMessageStreamInternal(String sessionId, String message,
-            List<Attachment> attachments, String userId, String userName, String roomName) {
+            List<Attachment> attachments, String userId, String userName, String roomName, List<String> projects) {
 
         String processedMessage = convertUploadsPath(message);
 
@@ -913,11 +913,26 @@ public class OpenClawPluginService {
             contentBlocks.add(textBlock);
         }
 
-        // 构建系统提示词 - 使用数据库配置，并添加当前用户信息覆盖
+        // 构建系统提示词 - 使用数据库配置，并添加当前用户信息和群聊项目信息
         String userOverridePrompt = "\n\nIMPORTANT: The current user in this conversation is '" + userName + "'. " +
                 "Use this name to address the user. Ignore any USER.md file that may contain different user information. " +
                 "The user speaking to you now is '" + userName + "', not anyone else.";
-        String systemPrompt = getSystemPrompt() + userOverridePrompt +
+        
+        // 构建群聊项目上下文提示
+        StringBuilder roomContextPrompt = new StringBuilder();
+        if (projects != null && !projects.isEmpty()) {
+            roomContextPrompt.append("\n\n【群聊主题限制】当前群聊 '").append(roomName).append("' 只讨论以下项目：");
+            for (int i = 0; i < projects.size(); i++) {
+                if (i > 0) roomContextPrompt.append("、");
+                roomContextPrompt.append("'").append(projects.get(i)).append("'");
+            }
+            roomContextPrompt.append("。请只回答与这些项目相关的问题，如果用户询问其他话题，请礼貌地提醒他们此群只讨论指定项目。");
+        } else if (roomName != null && !roomName.isEmpty()) {
+            // 如果没有配置项目，默认使用群名作为项目
+            roomContextPrompt.append("\n\n【群聊主题限制】当前群聊 '").append(roomName).append("' 只讨论 '").append(roomName).append("' 项目。请只回答与此项目相关的问题。");
+        }
+        
+        String systemPrompt = getSystemPrompt() + userOverridePrompt + roomContextPrompt +
                 " When using tools, format: **Tools used:** - tool_name. **Tool details:** - tool_name: ```output```";
 
         log.info("Sending WebSocket request to OpenClaw: sessionId={}, textBlocks={}, imageBlocks={}",
@@ -1043,7 +1058,7 @@ public class OpenClawPluginService {
      * 发送消息到 OpenClaw 并获取流式回复（使用 ChatRoom.Message.Attachment）
      */
     public Flux<StreamEvent> sendMessageStreamWithRoomAttachments(String sessionId, String message,
-            List<ChatRoom.Message.Attachment> attachments, String userId, String userName, String roomName) {
+            List<ChatRoom.Message.Attachment> attachments, String userId, String userName, String roomName, List<String> projects) {
         // 转换为 Attachment
         List<Attachment> convertedAttachments = new ArrayList<>();
         if (attachments != null && !attachments.isEmpty()) {
@@ -1056,14 +1071,22 @@ public class OpenClawPluginService {
                 convertedAttachments.add(converted);
             }
         }
-        return sendMessageStreamInternal(sessionId, message, convertedAttachments, userId, userName, roomName);
+        return sendMessageStreamInternal(sessionId, message, convertedAttachments, userId, userName, roomName, projects);
     }
 
     /**
      * 发送消息到 OpenClaw 并获取流式回复
      */
     public Flux<StreamEvent> sendMessageStream(String sessionId, String message,
+            List<Attachment> attachments, String userId, String userName, String roomName, List<String> projects) {
+        return sendMessageStreamInternal(sessionId, message, attachments, userId, userName, roomName, projects);
+    }
+
+    /**
+     * 发送消息到 OpenClaw 并获取流式回复（向后兼容，无项目配置）
+     */
+    public Flux<StreamEvent> sendMessageStream(String sessionId, String message,
             List<Attachment> attachments, String userId, String userName, String roomName) {
-        return sendMessageStreamInternal(sessionId, message, attachments, userId, userName, roomName);
+        return sendMessageStreamInternal(sessionId, message, attachments, userId, userName, roomName, null);
     }
 }

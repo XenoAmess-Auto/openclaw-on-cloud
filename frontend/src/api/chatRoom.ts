@@ -68,5 +68,20 @@ export const chatRoomApi = {
     apiClient.post(`/chat-rooms/${roomId}/queue/reorder`, { taskIds }),
 
   cancelTask: (roomId: string, taskId: string) =>
-    apiClient.delete(`/chat-rooms/${roomId}/queue/${taskId}`)
+    apiClient.delete(`/chat-rooms/${roomId}/queue/${taskId}`),
+
+  // 获取所有可用项目
+  getAvailableProjects: () =>
+    apiClient.get<{ name: string; path: string }[]>('/chat-rooms/projects'),
+
+  // 获取群聊的项目配置
+  getRoomProjects: (roomId: string) =>
+    apiClient.get<string[]>(`/chat-rooms/${roomId}/projects`),
+
+  // 更新群聊的项目配置
+  updateRoomProjects: (roomId: string, projects: string[]) =>
+    apiClient.put(`/chat-rooms/${roomId}/projects`, projects),
+
+  updateProjects: (roomId: string, projects: string[]) =>
+    apiClient.put<ChatRoom>(`/chat-rooms/${roomId}/projects`, { projects })
 }

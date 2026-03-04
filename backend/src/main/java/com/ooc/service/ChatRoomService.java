@@ -135,6 +135,23 @@ public class ChatRoomService {
     }
 
     /**
+     * 更新房间关联的项目
+     */
+    public ChatRoom updateProjects(String roomId, List<String> projects) {
+        return chatRoomRepository.findById(roomId).map(room -> {
+            room.setProjects(projects != null ? projects : new ArrayList<>());
+            return chatRoomRepository.save(room);
+        }).orElseThrow(() -> new RuntimeException("Chat room not found"));
+    }
+
+    /**
+     * 更新房间关联的项目（别名，供 Controller 调用）
+     */
+    public ChatRoom updateRoomProjects(String roomId, List<String> projects) {
+        return updateProjects(roomId, projects);
+    }
+
+    /**
      * 获取文件数据
      */
     public byte[] getFileData(String fileKey) {

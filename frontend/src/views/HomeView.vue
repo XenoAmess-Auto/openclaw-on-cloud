@@ -38,10 +38,13 @@
             :room-name="chatStore.currentRoom?.name"
             :is-connected="chatStore.isConnected"
             :is-creator="isCreator"
+            :room-projects="chatStore.currentRoom?.projects"
             @dismiss="confirmDismiss"
+            @show-config="showRoomConfig = true"
             @show-members="showMembers = true"
             @show-sessions="showSessions = true"
             @show-task-queue="showTaskQueue = true"
+            @show-project-config="showProjectConfig = true"
           />
           
           <MessageList
@@ -127,6 +130,24 @@
       :visible="showTaskQueue"
       @close="showTaskQueue = false"
     />
+
+    <RoomConfigDialog
+      v-if="showRoomConfig && currentRoomId && chatStore.currentRoom"
+      :room-id="currentRoomId"
+      :room-name="chatStore.currentRoom.name"
+      :current-projects="chatStore.currentRoom.projects"
+      @close="showRoomConfig = false"
+      @save="handleSaveRoomConfig"
+    />
+
+    <RoomConfigDialog
+      v-if="showProjectConfig && currentRoomId && chatStore.currentRoom"
+      :room-id="currentRoomId"
+      :room-name="chatStore.currentRoom.name"
+      :current-projects="chatStore.currentRoom.projects"
+      @close="showProjectConfig = false"
+      @save="handleSaveProjectConfig"
+    />
   </div>
 </template>
 
@@ -143,6 +164,7 @@ import MessageInput from '@/components/chat/MessageInput.vue'
 import SessionManager from '@/components/SessionManager.vue'
 import MemberManager from '@/components/MemberManager.vue'
 import TaskQueuePanel from '@/components/TaskQueuePanel.vue'
+import RoomConfigDialog from '@/components/chat/RoomConfigDialog.vue'
 import type { MemberDto } from '@/types'
 
 const router = useRouter()
@@ -166,6 +188,8 @@ const showMembers = ref(false)
 const showSessions = ref(false)
 const showTaskQueue = ref(false)
 const showDismissDialog = ref(false)
+const showRoomConfig = ref(false)
+const showProjectConfig = ref(false)
 
 // 成员列表
 const roomMembers = ref<MemberDto[]>([])
@@ -249,6 +273,30 @@ async function dismissRoom() {
   } catch (err) {
     console.error('Failed to dismiss room:', err)
     alert('解散群失败，请重试')
+  }
+}
+
+// 保存房间配置
+async function handleSaveRoomConfig(projects: string[]) {
+  if (!currentRoomId.value) return
+  
+  const success = await chatStore.updateRoomProjects(currentRoomId.value, projects)
+  if (success) {
+    showRoomConfig.value = false
+  } else {
+    alert('保存配置失败，请重试')
+  }
+}
+
+// 保存项目配置
+async function handleSaveProjectConfig(projects: string[]) {
+  if (!currentRoomId.value) return
+  
+  const success = await chatStore.updateRoomProjects(currentRoomId.value, projects)
+  if (success) {
+    showProjectConfig.value = false
+  } else {
+    alert('保存配置失败，请重试')
   }
 }
 
