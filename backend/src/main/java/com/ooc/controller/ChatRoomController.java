@@ -71,25 +71,6 @@ public class ChatRoomController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
-    @PutMapping("/{roomId}/projects")
-    public ResponseEntity<ChatRoomDto> updateRoomProjects(
-            @PathVariable String roomId,
-            @RequestBody Map<String, List<String>> request,
-            Authentication authentication) {
-        String userId = getUserIdFromAuth(authentication);
-        ChatRoom room = chatRoomService.getChatRoom(roomId)
-                .orElseThrow(() -> new RuntimeException("Chat room not found"));
-
-        // Only creator can update projects
-        if (!room.getCreatorId().equals(userId)) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
-        }
-
-        List<String> projects = request.get("projects");
-        ChatRoom updatedRoom = chatRoomService.updateProjects(roomId, projects);
-        return ResponseEntity.ok(ChatRoomDto.fromEntity(updatedRoom));
-    }
-
     @GetMapping("/{roomId}/members")
     public ResponseEntity<List<MemberDto>> getChatRoomMembers(@PathVariable String roomId) {
         ChatRoom room = chatRoomService.getChatRoom(roomId)
