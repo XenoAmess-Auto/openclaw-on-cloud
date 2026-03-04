@@ -48,6 +48,18 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
     private final com.ooc.service.flowchart.FlowchartTaskQueueIntegration flowchartTaskQueueIntegration;
     private final WebSocketBroadcastService broadcastService;
 
+    /**
+     * 获取房间的有效项目列表（如果没有配置则返回群名作为默认项目）
+     */
+    private List<String> getEffectiveProjects(ChatRoom room) {
+        List<String> projects = room.getProjects();
+        if (projects == null || projects.isEmpty()) {
+            // 未配置时默认使用群名作为项目名
+            return List.of(room.getName() != null ? room.getName() : "default");
+        }
+        return projects;
+    }
+
     @Lazy
     @org.springframework.beans.factory.annotation.Autowired
     private MentionService mentionService;
@@ -1316,7 +1328,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                                     task.getUserInfo().getUserId(),
                                     task.getUserInfo().getUserName(),
                                     room.getName(),
-                                    room.getProjects());
+                                    getEffectiveProjects(room));
                         })
                         .subscribe(
                                 event -> handleOpenClawStreamEvent(roomId, streamingMessageId, contentBuilder, streamingMessage, event, task),
@@ -1364,7 +1376,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                                 task.getUserInfo().getUserId(),
                                 task.getUserInfo().getUserName(),
                                 room.getName(),
-                                room.getProjects())
+                                getEffectiveProjects(room))
                         .subscribe(
                                 event -> handleOpenClawStreamEvent(roomId, streamingMessageId, contentBuilder, streamingMessage, event, task),
                                 error -> {

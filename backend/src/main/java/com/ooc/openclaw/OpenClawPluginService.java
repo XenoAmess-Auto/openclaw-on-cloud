@@ -928,7 +928,7 @@ public class OpenClawPluginService {
             }
             roomContextPrompt.append("。请只回答与这些项目相关的问题，如果用户询问其他话题，请礼貌地提醒他们此群只讨论指定项目。");
         }
-        // 注意：不再自动使用群名作为默认项目，项目必须在群聊配置中显式设置
+        // 注意：projects 为空时由调用方（ChatWebSocketHandler）默认使用群名
         
         String systemPrompt = getSystemPrompt() + userOverridePrompt + roomContextPrompt +
                 " When using tools, format: **Tools used:** - tool_name. **Tool details:** - tool_name: ```output```";
