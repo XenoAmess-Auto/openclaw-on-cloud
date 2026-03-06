@@ -248,4 +248,13 @@ public class WebSocketBroadcastService {
     public int getRoomSessionCount(String roomId) {
         return roomSessions.getOrDefault(roomId, Collections.emptySet()).size();
     }
+
+    /**
+     * 获取房间的所有 WebSocket 会话（用于外部验证）
+     */
+    public Set<WebSocketSession> getRoomSessions(String roomId) {
+        Set<WebSocketSession> sessions = roomSessions.getOrDefault(roomId, Collections.emptySet());
+        // 返回副本以避免外部修改
+        return new HashSet<>(sessions);
+    }
 }

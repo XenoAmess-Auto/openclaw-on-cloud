@@ -2156,8 +2156,51 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
     }
 
     public void broadcastToRoom(String roomId, WebSocketMessage message, WebSocketSession... exclude) {
-        // 统一使用广播服务发送消息
-        broadcastService.broadcastToRoom(roomId, message, exclude);
+        // 双重验证：只广播给确实在该房间的 session
+        // 防止用户快速切换房间时，消息串到其他房间
+        Set<WebSocketSession> validSessions = new HashSet<>();
+        Set<WebSocketSession> excludeSet = new HashSet<>(java.util.Arrays.asList(exclude));
+
+        for (WebSocketSession session : broadcastService.getRoomSessions(roomId)) {
+            if (excludeSet.contains(session)) {
+                continue;
+            }
+            WebSocketUserInfo userInfo = userInfoMap.get(session);
+            // 关键验证：session 必须在 userInfoMap 中，且 roomId 匹配
+            if (userInfo != null && roomId.equals(userInfo.getRoomId())) {
+                validSessions.add(session);
+            } else {
+                log.warn("[CROSS-ROOM FILTER] Session {} is in roomSessions[{}] but userInfo says room={}. Skipping.",
+                        session.getId(), roomId, userInfo != null ? userInfo.getRoomId() : "null");
+                // 清理过期的 session 注册
+                broadcastService.removeRoomSession(roomId, session);
+            }
+        }
+
+        if (validSessions.isEmpty()) {
+            log.debug("[Broadcast] No valid sessions to broadcast to room: {}", roomId);
+            return;
+        }
+
+        // 直接发送给验证过的 sessions
+        try {
+            String payload = objectMapper.writeValueAsString(message);
+            int sentCount = 0;
+            for (WebSocketSession s : validSessions) {
+                try {
+                    if (s.isOpen()) {
+                        s.sendMessage(new TextMessage(payload));
+                        sentCount++;
+                    }
+                } catch (IOException e) {
+                    log.error("[Broadcast] Failed to send message to session {}: {}", s.getId(), e.getMessage());
+                }
+            }
+            log.info("[Broadcast] Message type='{}' broadcasted to {}/{} sessions in room {}",
+                    message.getType(), sentCount, validSessions.size(), roomId);
+        } catch (Exception e) {
+            log.error("[Broadcast] Failed to serialize message: {}", e.getMessage(), e);
+        }
     }
 
     /**
