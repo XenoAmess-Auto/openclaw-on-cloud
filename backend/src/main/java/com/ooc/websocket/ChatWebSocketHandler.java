@@ -255,18 +255,17 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                 .avatar(avatar)
                 .build();
 
-        // 检查该 session 是否已经在其他房间，如果是则先清理旧房间关联
+        // 记录用户加入日志
         WebSocketUserInfo oldUserInfo = userInfoMap.get(session);
         if (oldUserInfo != null && !oldUserInfo.getRoomId().equals(roomId)) {
-            log.info("User {} switching from room {} to room {}, cleaning up old room association",
+            log.info("[RoomSwitch] User {} switching from room {} to room {}",
                     userName, oldUserInfo.getRoomId(), roomId);
-            broadcastService.removeRoomSession(oldUserInfo.getRoomId(), session);
         }
 
         userInfoMap.put(session, userInfo);
         userSessions.computeIfAbsent(userId, k -> ConcurrentHashMap.newKeySet()).add(session);
 
-        // 注册到广播服务（唯一会话管理源）
+        // 注册到广播服务（broadcastService 内部会处理防串房间逻辑）
         broadcastService.registerRoomSession(roomId, session);
 
         // 发送历史消息（只发送最新的10条）
