@@ -31,9 +31,32 @@ public class WebSocketBroadcastService {
 
     /**
      * 注册房间会话（由 ChatWebSocketHandler 调用）
+     * 会先确保 session 从所有其他房间移除，防止串房间
      */
     public void registerRoomSession(String roomId, WebSocketSession session) {
+        // 先确保 session 不在任何其他房间（防止串房间）
+        removeSessionFromAllRooms(session);
+        
         roomSessions.computeIfAbsent(roomId, k -> ConcurrentHashMap.newKeySet()).add(session);
+        log.debug("Registered session {} to room {}", session.getId(), roomId);
+    }
+
+    /**
+     * 从所有房间移除指定 session
+     */
+    private void removeSessionFromAllRooms(WebSocketSession session) {
+        for (Map.Entry<String, Set<WebSocketSession>> entry : roomSessions.entrySet()) {
+            String otherRoomId = entry.getKey();
+            Set<WebSocketSession> sessions = entry.getValue();
+            if (sessions.remove(session)) {
+                log.debug("Removed session {} from room {} before registering to new room", 
+                        session.getId(), otherRoomId);
+                // 如果房间空了，清理该房间条目
+                if (sessions.isEmpty()) {
+                    roomSessions.remove(otherRoomId);
+                }
+            }
+        }
     }
 
     /**
@@ -73,6 +96,11 @@ public class WebSocketBroadcastService {
             return;
         }
 
+        // 检查是否有 session 同时存在于多个房间（串房间检测）
+        if (log.isDebugEnabled()) {
+            checkForCrossRoomSessions(roomId, sessions);
+        }
+
         try {
             String payload = objectMapper.writeValueAsString(message);
             int sentCount = 0;
@@ -89,6 +117,21 @@ public class WebSocketBroadcastService {
             log.debug("Broadcasted message to {} sessions in room {}", sentCount, roomId);
         } catch (Exception e) {
             log.error("Failed to serialize message", e);
+        }
+    }
+
+    /**
+     * 检查指定 session 集合中是否有 session 同时存在于其他房间（用于调试串房间问题）
+     */
+    private void checkForCrossRoomSessions(String roomId, Set<WebSocketSession> sessions) {
+        for (WebSocketSession session : sessions) {
+            for (Map.Entry<String, Set<WebSocketSession>> entry : roomSessions.entrySet()) {
+                String otherRoomId = entry.getKey();
+                if (!otherRoomId.equals(roomId) && entry.getValue().contains(session)) {
+                    log.warn("CROSS-ROOM DETECTED: Session {} exists in both room {} and room {}", 
+                            session.getId(), roomId, otherRoomId);
+                }
+            }
         }
     }
 
