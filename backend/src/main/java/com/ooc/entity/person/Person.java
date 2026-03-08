@@ -63,6 +63,26 @@ public class Person {
     @Builder.Default
     private List<Trait> traits = new ArrayList<>();
     
+    /**
+     * 孩子的ID列表
+     * 记录该人物所有子女的引用
+     */
+    @JsonProperty("children")
+    @Builder.Default
+    private List<String> children = new ArrayList<>();
+    
+    /**
+     * 父亲的ID
+     */
+    @JsonProperty("fatherId")
+    private String fatherId;
+    
+    /**
+     * 母亲的ID
+     */
+    @JsonProperty("motherId")
+    private String motherId;
+    
     @JsonProperty("createdAt")
     @CreatedDate
     private Instant createdAt;
@@ -183,6 +203,72 @@ public class Person {
         deathTime = null;
         deathReason = null;
     }
+    
+    // ==================== 孩子管理方法 ====================
+    
+    /**
+     * 添加孩子引用
+     * @param childId 孩子的ID
+     */
+    public void addChild(String childId) {
+        if (children == null) {
+            children = new ArrayList<>();
+        }
+        if (!children.contains(childId)) {
+            children.add(childId);
+        }
+    }
+    
+    /**
+     * 移除孩子引用
+     * @param childId 孩子的ID
+     */
+    public void removeChild(String childId) {
+        if (children != null) {
+            children.remove(childId);
+        }
+    }
+    
+    /**
+     * 设置父母引用（通常在出生时调用）
+     * @param fatherId 父亲ID
+     * @param motherId 母亲ID
+     */
+    public void setParents(String fatherId, String motherId) {
+        this.fatherId = fatherId;
+        this.motherId = motherId;
+    }
+    
+    /**
+     * 获取孩子数量
+     */
+    public int getChildCount() {
+        return children == null ? 0 : children.size();
+    }
+    
+    /**
+     * 检查是否是指定人物的孩子
+     */
+    public boolean isChildOf(String parentId) {
+        return (fatherId != null && fatherId.equals(parentId)) ||
+               (motherId != null && motherId.equals(parentId));
+    }
+    
+    /**
+     * 获取父亲ID
+     */
+    public Optional<String> getFatherId() {
+        return Optional.ofNullable(fatherId);
+    }
+    
+    /**
+     * 获取母亲ID
+     */
+    public Optional<String> getMotherId() {
+        return Optional.ofNullable(motherId);
+    }
+    
+    // ==================== 特质管理方法 ====================
     
     /**
      * 清理已过期的特质

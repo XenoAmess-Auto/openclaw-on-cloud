@@ -60,6 +60,34 @@ public class PersonController {
     }
     
     /**
+     * 创建孩子并更新父母的children列表
+     * 这是专门用于生育/创建子代的端点
+     */
+    @PostMapping("/child")
+    public ResponseEntity<Person> createChild(@RequestBody CreateChildRequest request) {
+        Person child = personService.createChild(
+                request.name(),
+                request.displayName(),
+                request.gender(),
+                request.age(),
+                request.fatherId(),
+                request.motherId()
+        );
+        return ResponseEntity.ok(child);
+    }
+    
+    /**
+     * 为现有人物设置父母（补全家谱信息）
+     */
+    @PostMapping("/{id}/parents")
+    public ResponseEntity<Person> setParents(
+            @PathVariable String id,
+            @RequestBody SetParentsRequest request) {
+        Person person = personService.setParents(id, request.fatherId(), request.motherId());
+        return ResponseEntity.ok(person);
+    }
+    
+    /**
      * 更新人物
      */
     @PutMapping("/{id}")
@@ -134,6 +162,20 @@ public class PersonController {
             String displayName,
             Person.Gender gender,
             int age
+    ) {}
+    
+    public record CreateChildRequest(
+            String name,
+            String displayName,
+            Person.Gender gender,
+            int age,
+            String fatherId,
+            String motherId
+    ) {}
+    
+    public record SetParentsRequest(
+            String fatherId,
+            String motherId
     ) {}
     
     public record PregnancyRequest(

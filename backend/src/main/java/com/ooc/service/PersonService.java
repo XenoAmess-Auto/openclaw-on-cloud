@@ -124,8 +124,88 @@ public class PersonService {
     }
     
     /**
-     * 清理过期特质
+     * 创建孩子并更新父母的孩子列表
+     * 这是一个事务性操作，确保所有更新要么全部成功要么全部失败
+     * 
+     * @param name 孩子名称
+     * @param displayName 显示名称
+     * @param gender 性别
+     * @param age 年龄
+     * @param fatherId 父亲ID（可为null）
+     * @param motherId 母亲ID（可为null）
+     * @return 创建的孩子对象
      */
+    public Person createChild(String name, String displayName, Person.Gender gender, int age, 
+                              String fatherId, String motherId) {
+        // 创建孩子
+        Person child = Person.builder()
+                .name(name)
+                .displayName(displayName != null ? displayName : name)
+                .gender(gender)
+                .age(age)
+                .isAlive(true)
+                .fatherId(fatherId)
+                .motherId(motherId)
+                .build();
+        
+        Person savedChild = personRepository.save(child);
+        log.info("孩子 {} 已创建，ID: {}", savedChild.getName(), savedChild.getId());
+        
+        // 更新父亲的孩子列表
+        if (fatherId != null) {
+            personRepository.findById(fatherId).ifPresent(father -> {
+                father.addChild(savedChild.getId());
+                personRepository.save(father);
+                log.info("已更新父亲 {} 的孩子列表，新增孩子: {}", father.getName(), savedChild.getName());
+            });
+        }
+        
+        // 更新母亲的孩子列表
+        if (motherId != null) {
+            personRepository.findById(motherId).ifPresent(mother -> {
+                mother.addChild(savedChild.getId());
+                personRepository.save(mother);
+                log.info("已更新母亲 {} 的孩子列表，新增孩子: {}", mother.getName(), savedChild.getName());
+            });
+        }
+        
+        return savedChild;
+    }
+    
+    /**
+     * 为现有人物设置父母并更新父母的children列表
+     * 用于在已有数据库中为人物补全父母信息
+     * 
+     * @param personId 孩子ID
+     * @param fatherId 父亲ID（可为null）
+     * @param motherId 母亲ID（可为null）
+     * @return 更新后的孩子对象
+     */
+    public Person setParents(String personId, String fatherId, String motherId) {
+        Person person = getPersonById(personId)
+                .orElseThrow(() -> new IllegalArgumentException("人物不存在: " + personId));
+        
+        // 更新孩子的父母引用
+        person.setParents(fatherId, motherId);
+        
+        // 更新父亲的孩子列表
+        if (fatherId != null) {
+            personRepository.findById(fatherId).ifPresent(father -> {
+                father.addChild(personId);
+                personRepository.save(father);
+            });
+        }
+        
+        // 更新母亲的孩子列表
+        if (motherId != null) {
+            personRepository.findById(motherId).ifPresent(mother -> {
+                mother.addChild(personId);
+                personRepository.save(mother);
+            });
+        }
+        
+        return personRepository.save(person);
+    }
     public void cleanupExpiredTraits(String personId) {
         Person person = getPersonById(personId)
                 .orElseThrow(() -> new IllegalArgumentException("人物不存在: " + personId));
