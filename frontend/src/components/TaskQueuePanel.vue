@@ -1,6 +1,10 @@
 <template>
-  <div v-if="visible" class="task-queue-panel">
-    <div class="queue-header">
+  <div 
+    v-if="visible" 
+    class="task-queue-panel"
+    :style="panelStyle"
+  >
+    <div class="queue-header" @mousedown="startDrag">
       <span class="queue-title">
         🤖 OpenClaw 任务队列
         <span v-if="queueInfo.isProcessing" class="processing-badge">
@@ -114,10 +118,95 @@ const loading = ref(false)
 const cancellingTaskId = ref<string | null>(null)
 const refreshInterval = ref<number | null>(null)
 
-// 拖拽相关状态
+// 任务列表拖拽相关状态
 const draggedTaskId = ref<string | null>(null)
 const draggedIndex = ref<number>(-1)
 const dragOverTaskId = ref<string | null>(null)
+
+// 面板拖拽相关状态
+const isDragging = ref(false)
+const panelPosition = ref({ x: 0, y: 0 })
+const dragOffset = ref({ x: 0, y: 0 })
+
+// 默认位置（相对于 right/top）
+const DEFAULT_RIGHT = 20
+const DEFAULT_TOP = 140
+
+// 面板样式计算属性
+const panelStyle = computed(() => {
+  if (panelPosition.value.x === 0 && panelPosition.value.y === 0) {
+    // 使用默认位置
+    return {
+      right: `${DEFAULT_RIGHT}px`,
+      top: `${DEFAULT_TOP}px`,
+      left: 'auto'
+    }
+  }
+  // 使用拖拽后的位置
+  return {
+    left: `${panelPosition.value.x}px`,
+    top: `${panelPosition.value.y}px`,
+    right: 'auto'
+  }
+})
+
+// 拖拽处理函数
+const startDrag = (event: MouseEvent) => {
+  // 只有左键可以拖拽
+  if (event.button !== 0) return
+  
+  isDragging.value = true
+  
+  // 获取面板元素
+  const panel = (event.target as HTMLElement).closest('.task-queue-panel') as HTMLElement
+  if (!panel) return
+  
+  const rect = panel.getBoundingClientRect()
+  
+  // 如果是第一次拖拽，从默认位置计算
+  if (panelPosition.value.x === 0 && panelPosition.value.y === 0) {
+    panelPosition.value = {
+      x: rect.left,
+      y: rect.top
+    }
+  }
+  
+  // 计算鼠标相对于面板左上角的偏移
+  dragOffset.value = {
+    x: event.clientX - rect.left,
+    y: event.clientY - rect.top
+  }
+  
+  // 添加全局事件监听
+  document.addEventListener('mousemove', onDrag)
+  document.addEventListener('mouseup', stopDrag)
+  
+  // 防止选中文本
+  event.preventDefault()
+}
+
+const onDrag = (event: MouseEvent) => {
+  if (!isDragging.value) return
+  
+  // 计算新位置
+  let newX = event.clientX - dragOffset.value.x
+  let newY = event.clientY - dragOffset.value.y
+  
+  // 边界限制：确保面板不会完全移出视口
+  const panelWidth = 380
+  const minVisible = 50 // 至少保留可见的像素
+  
+  newX = Math.max(minVisible - panelWidth, Math.min(newX, window.innerWidth - minVisible))
+  newY = Math.max(0, Math.min(newY, window.innerHeight - minVisible))
+  
+  panelPosition.value = { x: newX, y: newY }
+}
+
+const stopDrag = () => {
+  isDragging.value = false
+  document.removeEventListener('mousemove', onDrag)
+  document.removeEventListener('mouseup', stopDrag)
+}
 
 // 计算属性
 const pendingCount = computed(() => queueInfo.value.tasks.filter(t => t.status === 'PENDING').length)
@@ -293,12 +382,20 @@ onUnmounted(() => {
   if (refreshInterval.value) {
     clearInterval(refreshInterval.value)
   }
+  // 清理拖拽事件监听
+  if (isDragging.value) {
+    document.removeEventListener('mousemove', onDrag)
+    document.removeEventListener('mouseup', stopDrag)
+  }
 })
 
 // 当 visible 变化时刷新
 watch(() => props.visible, (newVal) => {
   if (newVal) {
     fetchQueue()
+  } else {
+    // 关闭时重置面板位置，下次打开使用默认位置
+    panelPosition.value = { x: 0, y: 0 }
   }
 })
 </script>
@@ -306,8 +403,6 @@ watch(() => props.visible, (newVal) => {
 <style scoped>
 .task-queue-panel {
   position: fixed;
-  right: 20px;
-  top: 80px;
   width: 380px;
   max-height: 500px;
   background: white;
@@ -317,6 +412,7 @@ watch(() => props.visible, (newVal) => {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  user-select: none;
 }
 
 .queue-header {
@@ -327,6 +423,12 @@ watch(() => props.visible, (newVal) => {
   border-bottom: 1px solid #eee;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
+  cursor: grab;
+  user-select: none;
+}
+
+.queue-header:active {
+  cursor: grabbing;
 }
 
 .queue-title {
@@ -645,10 +747,10 @@ watch(() => props.visible, (newVal) => {
 
 @media (max-width: 768px) {
   .task-queue-panel {
-    right: 10px;
-    left: 10px;
-    width: auto;
-    top: 60px;
+    left: 10px !important;
+    right: 10px !important;
+    width: auto !important;
+    top: 100px !important;
   }
 }
 </style>
