@@ -105,7 +105,7 @@ const save = async () => {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${localStorage.getItem('token')}`
       },
-      body: JSON.stringify(selectedProjects.value)
+      body: JSON.stringify({ projects: selectedProjects.value })
     })
     
     if (response.ok) {
