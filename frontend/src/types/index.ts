@@ -142,3 +142,78 @@ export interface Attachment {
   contentType: string
   size: number
 }
+
+// ==================== Person Trait System ====================
+
+/**
+ * 特质类型
+ */
+export type TraitType = 'PREGNANCY' | string
+
+/**
+ * 特质接口
+ */
+export interface Trait {
+  id: string
+  type: TraitType
+  name: string
+  description: string
+  createdAt: string
+  expiresAt?: string
+  clearedOnDeath: boolean
+  properties?: Record<string, any>
+}
+
+/**
+ * 怀孕特质
+ */
+export interface PregnancyTrait extends Trait {
+  type: 'PREGNANCY'
+  fatherId?: string
+  fatherName?: string
+  conceptionDate: string
+  dueDate: string
+  stage: 'EARLY' | 'MIDDLE' | 'LATE'
+}
+
+/**
+ * 性别枚举
+ */
+export type Gender = 'MALE' | 'FEMALE' | 'UNKNOWN'
+
+/**
+ * 人物接口
+ */
+export interface Person {
+  id: string
+  name: string
+  displayName: string
+  avatar?: string
+  gender: Gender
+  age: number
+  isAlive: boolean
+  deathTime?: string
+  deathReason?: string
+  traits: Trait[]
+  createdAt: string
+  updatedAt: string
+}
+
+/**
+ * 创建人物请求
+ */
+export interface CreatePersonRequest {
+  name: string
+  displayName?: string
+  gender: Gender
+  age: number
+}
+
+/**
+ * 设置怀孕请求
+ */
+export interface SetPregnancyRequest {
+  fatherId?: string
+  fatherName?: string
+  daysUntilBirth: number
+}
