@@ -1106,21 +1106,22 @@ public class ChatRoomController {
     @PutMapping("/{roomId}/projects")
     public ResponseEntity<Map<String, Object>> updateRoomProjects(
             @PathVariable String roomId,
-            @RequestBody List<String> projects,
+            @RequestBody com.ooc.dto.UpdateProjectsRequest request,
             Authentication authentication) {
-        
+
         String currentUserId = getUserIdFromAuth(authentication);
         ChatRoom room = chatRoomService.getChatRoom(roomId)
                 .orElseThrow(() -> new RuntimeException("Chat room not found"));
-        
+
         // 检查权限（只有创建者可以配置）
         if (!room.getCreatorId().equals(currentUserId)) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body(Map.of("error", "Only room creator can configure projects"));
         }
-        
+
+        List<String> projects = request.getProjects() != null ? request.getProjects() : List.of();
         chatRoomService.updateRoomProjects(roomId, projects);
-        
+
         return ResponseEntity.ok(Map.of(
             "success", true,
             "projects", projects
