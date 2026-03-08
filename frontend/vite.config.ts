@@ -45,12 +45,12 @@ export default defineConfig({
   build: {
     rollupOptions: {
       output: {
-        entryFileNames: 'assets/[name]-[hash]-v2.js',
-        chunkFileNames: 'assets/[name]-[hash]-v2.js',
+        entryFileNames: 'assets/[name]-[hash]-v3.js',
+        chunkFileNames: 'assets/[name]-[hash]-v3.js',
         assetFileNames: (assetInfo) => {
           const info = assetInfo.name?.split('.') || []
           const ext = info[info.length - 1]
-          return `assets/[name]-[hash]-v2[extname]`
+          return `assets/[name]-[hash]-v3[extname]`
         }
       }
     }
