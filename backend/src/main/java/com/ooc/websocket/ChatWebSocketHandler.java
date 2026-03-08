@@ -1420,6 +1420,13 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
             OpenClawPluginService.StreamEvent event,
             OpenClawTask task) {
 
+        // 关键验证：确保事件被路由到正确的房间
+        if (!roomId.equals(task.getRoomId())) {
+            log.error("[CROSS-ROOM ERROR] Event routed to wrong room! Expected: {}, Task's room: {}. Discarding event.",
+                    roomId, task.getRoomId());
+            return;
+        }
+
         // 检查任务是否被取消
         if (taskQueueService.isTaskCancelled(task.getTaskId())) {
             log.info("Task {} has been cancelled, stopping stream processing", task.getTaskId());
