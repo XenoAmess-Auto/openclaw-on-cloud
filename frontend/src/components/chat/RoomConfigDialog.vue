@@ -153,7 +153,7 @@ function handleBackspace() {
 async function save() {
   saving.value = true
   try {
-    await chatRoomApi.updateRoomProjects(props.roomId, selectedProjects.value)
+    await chatRoomApi.updateProjects(props.roomId, selectedProjects.value)
     emit('save', selectedProjects.value)
   } catch (error) {
     console.error('Failed to save projects:', error)

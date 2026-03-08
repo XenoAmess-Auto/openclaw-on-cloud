@@ -74,14 +74,7 @@ export const chatRoomApi = {
   getAvailableProjects: () =>
     apiClient.get<{ name: string; path: string }[]>('/chat-rooms/projects'),
 
-  // 获取群聊的项目配置
-  getRoomProjects: (roomId: string) =>
-    apiClient.get<string[]>(`/chat-rooms/${roomId}/projects`),
-
   // 更新群聊的项目配置
-  updateRoomProjects: (roomId: string, projects: string[]) =>
-    apiClient.put(`/chat-rooms/${roomId}/projects`, projects),
-
   updateProjects: (roomId: string, projects: string[]) =>
     apiClient.put<ChatRoom>(`/chat-rooms/${roomId}/projects`, { projects })
 }
