@@ -1,0 +1,60 @@
+name: Dependabot auto-merge
+
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+
+permissions:
+  pull-requests: write
+  contents: write
+
+jobs:
+  dependabot:
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.user.login == 'dependabot[bot]'
+    steps:
+      - name: Dependabot metadata
+        id: metadata
+        uses: dependabot/fetch-metadata@v2
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+
+      - name: Check if auto-merge applicable
+        id: check
+        run: |
+          UPDATE_TYPE="${{ steps.metadata.outputs.update-type }}"
+          echo "Update type: $UPDATE_TYPE"
+          
+          if [[ "$UPDATE_TYPE" == "version-update:semver-patch" ]] || \
+             [[ "$UPDATE_TYPE" == "version-update:semver-minor" ]]; then
+            echo "should_merge=true" >> $GITHUB_OUTPUT
+            echo "✅ Patch or minor update detected. Will auto-merge after CI passes."
+          else
+            echo "should_merge=false" >> $GITHUB_OUTPUT
+            echo "⏭️ Major update or unknown type. Skipping auto-merge."
+          fi
+
+      - name: Wait for CI checks
+        if: steps.check.outputs.should_merge == 'true'
+        uses: lewagon/wait-on-check-action@v1.3.4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          check-regexp: '.*'
+          wait-interval: 10
+          allowed-conclusions: success,skipped
+
+      - name: Approve PR
+        if: steps.check.outputs.should_merge == 'true'
+        run: gh pr review --approve "$PR_URL"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Enable auto-merge (squash)
+        if: steps.check.outputs.should_merge == 'true'
+        run: gh pr merge --auto --squash "$PR_URL"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
