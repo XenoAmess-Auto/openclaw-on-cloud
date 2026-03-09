@@ -922,12 +922,12 @@ public class OpenClawPluginService {
         StringBuilder roomContextPrompt = new StringBuilder();
         log.info("[sendMessageStreamInternal] Building system prompt for room: {}, projects: {}", roomName, projects);
         if (projects != null && !projects.isEmpty()) {
-            roomContextPrompt.append("\n\n【群聊主题限制】当前群聊 '").append(roomName).append("' 只讨论以下项目：");
+            roomContextPrompt.append("\n\n【工作空间项目配置】当前群聊 '").append(roomName).append("' 关联的代码仓库/项目：");
             for (int i = 0; i < projects.size(); i++) {
                 if (i > 0) roomContextPrompt.append("、");
                 roomContextPrompt.append("'").append(projects.get(i)).append("'");
             }
-            roomContextPrompt.append("。请只回答与这些项目相关的问题，如果用户询问其他话题，请礼貌地提醒他们此群只讨论指定项目。");
+            roomContextPrompt.append("。这些项目对应工作空间中的目录。请使用工具（read/write/edit/exec等）帮助用户处理这些项目的代码和文件。如果用户询问与这些项目无关的话题，请礼貌地说明你只能协助处理上述项目相关的事务。");
             log.info("[sendMessageStreamInternal] Added room context prompt: {}", roomContextPrompt.toString());
         } else {
             log.warn("[sendMessageStreamInternal] No projects provided for room: {}", roomName);
