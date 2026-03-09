@@ -511,10 +511,11 @@ export const useChatStore = defineStore('chat', () => {
           if (index !== -1) {
             const updatedMsg = { ...messages.value[index] }
             // 更新工具调用列表（后端发送完整列表）
-            updatedMsg.toolCalls = data.message.toolCalls || []
-            updatedMsg.isToolCall = updatedMsg.toolCalls.length > 0
+            const toolCalls = data.message.toolCalls || []
+            updatedMsg.toolCalls = toolCalls
+            updatedMsg.isToolCall = toolCalls.length > 0
             messages.value.splice(index, 1, updatedMsg)
-            console.log('[WebSocket] tool_result - updated tool calls:', updatedMsg.toolCalls?.length)
+            console.log('[WebSocket] tool_result - updated tool calls:', toolCalls.length)
           } else {
             console.warn('[WebSocket] tool_result - message not found:', data.message.id)
           }
