@@ -920,6 +920,7 @@ public class OpenClawPluginService {
         
         // 构建群聊项目上下文提示
         StringBuilder roomContextPrompt = new StringBuilder();
+        log.info("[sendMessageStreamInternal] Building system prompt for room: {}, projects: {}", roomName, projects);
         if (projects != null && !projects.isEmpty()) {
             roomContextPrompt.append("\n\n【群聊主题限制】当前群聊 '").append(roomName).append("' 只讨论以下项目：");
             for (int i = 0; i < projects.size(); i++) {
@@ -927,11 +928,15 @@ public class OpenClawPluginService {
                 roomContextPrompt.append("'").append(projects.get(i)).append("'");
             }
             roomContextPrompt.append("。请只回答与这些项目相关的问题，如果用户询问其他话题，请礼貌地提醒他们此群只讨论指定项目。");
+            log.info("[sendMessageStreamInternal] Added room context prompt: {}", roomContextPrompt.toString());
+        } else {
+            log.warn("[sendMessageStreamInternal] No projects provided for room: {}", roomName);
         }
         // 注意：projects 为空时由调用方（ChatWebSocketHandler）默认使用群名
         
         String systemPrompt = getSystemPrompt() + userOverridePrompt + roomContextPrompt +
                 " When using tools, format: **Tools used:** - tool_name. **Tool details:** - tool_name: ```output```";
+        log.debug("[sendMessageStreamInternal] Final system prompt length: {}", systemPrompt.length());
 
         log.info("Sending WebSocket request to OpenClaw: sessionId={}, textBlocks={}, imageBlocks={}",
                 sessionId, contentBlocks.size() - imageCount, imageCount);

@@ -53,10 +53,14 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
      */
     private List<String> getEffectiveProjects(ChatRoom room) {
         List<String> projects = room.getProjects();
+        log.info("[getEffectiveProjects] Room: {}, raw projects from DB: {}", room.getName(), projects);
         if (projects == null || projects.isEmpty()) {
             // 未配置时默认使用群名作为项目名
-            return List.of(room.getName() != null ? room.getName() : "default");
+            String defaultProject = room.getName() != null ? room.getName() : "default";
+            log.info("[getEffectiveProjects] No projects configured, using room name as default: {}", defaultProject);
+            return List.of(defaultProject);
         }
+        log.info("[getEffectiveProjects] Returning configured projects: {}", projects);
         return projects;
     }
 
