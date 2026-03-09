@@ -34,6 +34,9 @@ public class WebSocketBroadcastService {
 
     // 用于保护 session 注册/移除操作的全局锁
     private final Object sessionLock = new Object();
+    
+    // session -> roomId 映射，用于快速反向查找和验证
+    private final Map<WebSocketSession, String> sessionToRoomMap = new ConcurrentHashMap<>();
 
     /**
      * 注册房间会话（由 ChatWebSocketHandler 调用）
@@ -46,6 +49,8 @@ public class WebSocketBroadcastService {
             removeSessionFromAllRoomsInternal(session);
 
             roomSessions.computeIfAbsent(roomId, k -> ConcurrentHashMap.newKeySet()).add(session);
+            // 更新反向映射
+            sessionToRoomMap.put(session, roomId);
             log.info("[SessionRegistry] Registered session {} to room {}", session.getId(), roomId);
 
             // 记录当前 session 的所有房间（用于调试）
@@ -88,6 +93,8 @@ public class WebSocketBroadcastService {
                 }
             }
         }
+        // 清除反向映射
+        sessionToRoomMap.remove(session);
     }
 
     /**
@@ -114,6 +121,11 @@ public class WebSocketBroadcastService {
                     roomSessions.remove(roomId);
                     log.debug("[SessionRegistry] Removed empty room: {}", roomId);
                 }
+            }
+            // 清除反向映射
+            String currentRoom = sessionToRoomMap.get(session);
+            if (roomId.equals(currentRoom)) {
+                sessionToRoomMap.remove(session);
             }
         }
     }
@@ -149,7 +161,7 @@ public class WebSocketBroadcastService {
             return;
         }
 
-        // 严格检查：确保这些 session 确实只在这个房间
+        // 严格检查：验证每个 session 是否确实只属于目标房间
         Set<WebSocketSession> validSessions = new HashSet<>();
         for (WebSocketSession s : sessions) {
             if (excludeSet.contains(s)) {
@@ -160,14 +172,12 @@ public class WebSocketBroadcastService {
                 continue;
             }
 
-            // 双重检查：验证 session 是否确实只注册在当前房间
-            Set<String> sessionRooms = getSessionRooms(s);
-            if (sessionRooms.size() > 1) {
-                log.error("[CROSS-ROOM ALERT] Session {} is registered in multiple rooms: {}. " +
-                          "Fixing by removing from all rooms except current target: {}",
-                        s.getId(), sessionRooms, roomId);
-                // 修复：从其他房间移除
-                fixCrossRoomSession(s, roomId);
+            // 双重检查：通过反向映射验证 session 是否确实注册在目标房间
+            String registeredRoom = sessionToRoomMap.get(s);
+            if (!roomId.equals(registeredRoom)) {
+                log.error("[CROSS-ROOM ALERT] Session {} is registered in room {} but being broadcasted to room {}. " +
+                          "Skipping this session.", s.getId(), registeredRoom, roomId);
+                continue;
             }
 
             validSessions.add(s);
