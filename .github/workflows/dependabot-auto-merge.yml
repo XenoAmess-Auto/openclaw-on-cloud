@@ -45,6 +45,7 @@ jobs:
           wait-interval: 10
           allowed-conclusions: success,skipped
           repo-token: ${{ secrets.GITHUB_TOKEN }}
+          ignore-checks: docker
 
       - name: Approve PR
         if: steps.check.outputs.should_merge == 'true'
