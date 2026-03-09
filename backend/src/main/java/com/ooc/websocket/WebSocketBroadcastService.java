@@ -207,38 +207,10 @@ public class WebSocketBroadcastService {
     }
 
     /**
-     * 获取 session 当前注册的所有房间（公共方法，供外部验证使用）
+     * 获取 session 当前注册的房间ID（用于验证）
      */
-    public Set<String> getSessionRooms(WebSocketSession session) {
-        Set<String> rooms = new HashSet<>();
-        synchronized (sessionLock) {
-            for (Map.Entry<String, Set<WebSocketSession>> entry : roomSessions.entrySet()) {
-                if (entry.getValue().contains(session)) {
-                    rooms.add(entry.getKey());
-                }
-            }
-        }
-        return rooms;
-    }
-
-    /**
-     * 修复串房间的 session，只保留目标房间的注册
-     */
-    private void fixCrossRoomSession(WebSocketSession session, String keepRoomId) {
-        synchronized (sessionLock) {
-            for (Map.Entry<String, Set<WebSocketSession>> entry : roomSessions.entrySet()) {
-                String roomId = entry.getKey();
-                if (!roomId.equals(keepRoomId)) {
-                    Set<WebSocketSession> sessions = entry.getValue();
-                    if (sessions.remove(session)) {
-                        log.info("[CROSS-ROOM FIX] Removed session {} from room {}", session.getId(), roomId);
-                        if (sessions.isEmpty()) {
-                            roomSessions.remove(roomId);
-                        }
-                    }
-                }
-            }
-        }
+    public String getSessionRoomId(WebSocketSession session) {
+        return sessionToRoomMap.get(session);
     }
 
     /**

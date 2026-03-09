@@ -374,22 +374,23 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
 
         String roomId = userInfo.getRoomId();
         
-        // 双重验证：确保 session 确实注册在 roomId 房间
-        Set<WebSocketSession> roomSessions = broadcastService.getRoomSessions(roomId);
-        if (!roomSessions.contains(session)) {
-            log.error("[CROSS-ROOM VIOLATION] Session {} is in userInfoMap for room {} but not registered in broadcastService for that room! " +
-                      "Registered rooms for this session: {}. Attempting to fix...",
-                    session.getId(), roomId, broadcastService.getSessionRooms(session));
+        // 关键验证：通过 broadcastService 验证 session 确实注册在该房间
+        String registeredRoom = broadcastService.getSessionRoomId(session);
+        if (!roomId.equals(registeredRoom)) {
+            log.error("[CROSS-ROOM VIOLATION] User {} (session {}) has userInfo.roomId={} but broadcastService shows roomId={}. " +
+                      "Attempting to fix by re-registering...", 
+                    userInfo.getUserName(), session.getId(), roomId, registeredRoom);
             
             // 尝试修复：重新注册 session 到正确的房间
             broadcastService.registerRoomSession(roomId, session);
             
-            // 再次检查
-            roomSessions = broadcastService.getRoomSessions(roomId);
-            if (!roomSessions.contains(session)) {
-                log.error("[CROSS-ROOM VIOLATION] Fix failed, dropping message");
+            // 再次验证
+            registeredRoom = broadcastService.getSessionRoomId(session);
+            if (!roomId.equals(registeredRoom)) {
+                log.error("[CROSS-ROOM VIOLATION] Fix failed for session {}, dropping message", session.getId());
                 return;
             }
+            log.info("[CROSS-ROOM VIOLATION] Fixed session {} re-registered to room {}", session.getId(), roomId);
         }
 
         String content = payload.getContent();

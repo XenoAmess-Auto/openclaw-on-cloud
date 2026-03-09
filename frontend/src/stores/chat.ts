@@ -375,6 +375,12 @@ export const useChatStore = defineStore('chat', () => {
   }
 
   function handleMessage(data: any) {
+    // 全局房间过滤：所有消息类型都必须验证 roomId
+    if (data.roomId && data.roomId !== currentRoom.value?.id) {
+      console.log('[WebSocket] Message ignored - room mismatch:', data.roomId, '!=', currentRoom.value?.id, 'type:', data.type)
+      return
+    }
+    
     switch (data.type) {
       case 'history':
         // 历史消息 - 只处理当前房间的消息
