@@ -964,7 +964,7 @@ public class OpenClawPluginService {
                         public void onToolResult(String toolCallId, Object result, boolean isError) {
                             log.info("[OpenClaw WS] Tool result: {} (error={})", toolCallId, isError);
                             String resultStr = result != null ? result.toString() : "";
-                            sink.next(new StreamEvent("tool_result", resultStr, null, null, toolCallId, false));
+                            sink.next(new StreamEvent("tool_result", resultStr, null, null, toolCallId, false, isError));
                         }
 
                         @Override
@@ -1049,8 +1049,14 @@ public class OpenClawPluginService {
             String toolName,
             String toolInput,
             String messageId,
-            boolean completed
-    ) {}
+            boolean completed,
+            boolean isError
+    ) {
+        // 简化构造函数，用于非工具调用事件
+        public StreamEvent(String type, String content, String toolName, String toolInput, String messageId, boolean completed) {
+            this(type, content, toolName, toolInput, messageId, completed, false);
+        }
+    }
 
     /**
      * 发送消息到 OpenClaw 并获取流式回复（使用 ChatRoom.Message.Attachment）

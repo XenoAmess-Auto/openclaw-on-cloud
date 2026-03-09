@@ -27,7 +27,7 @@ export interface ToolCall {
   id: string
   name: string
   description?: string
-  status: 'running' | 'completed' | 'error'
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'error'
   result?: string
   timestamp: string
   position?: number

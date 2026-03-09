@@ -258,7 +258,8 @@ function getToolStatusText(status?: string): string {
     pending: '等待中',
     running: '执行中',
     completed: '已完成',
-    failed: '失败'
+    failed: '失败',
+    error: '错误'
   }
   return statusMap[status || ''] || status || '未知'
 }
@@ -565,7 +566,8 @@ function deleteMessage() {
   color: #6b7280;
 }
 
-.tool-status.failed {
+.tool-status.failed,
+.tool-status.error {
   background: #fee2e2;
   color: #991b1b;
 }

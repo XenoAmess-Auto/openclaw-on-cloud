@@ -1552,8 +1552,9 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
             // 工具执行完成 - 更新工具调用状态
             String toolCallId = event.messageId();
             String result = event.content();
+            boolean isError = event.isError();
             
-            log.info("Tool result received for task {}: toolCallId={}", task.getTaskId(), toolCallId);
+            log.info("Tool result received for task {}: toolCallId={}, isError={}", task.getTaskId(), toolCallId, isError);
             
             // 更新消息中的工具调用状态
             List<ChatRoom.Message.ToolCall> currentToolCalls = new ArrayList<>(streamingMessage.get().getToolCalls());
@@ -1562,12 +1563,14 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
             for (int i = 0; i < currentToolCalls.size(); i++) {
                 ChatRoom.Message.ToolCall tc = currentToolCalls.get(i);
                 if (tc.getId().equals(toolCallId)) {
+                    // 根据错误状态设置正确的状态值
+                    String status = isError ? "failed" : "completed";
                     currentToolCalls.set(i, tc.toBuilder()
-                            .status("completed")
+                            .status(status)
                             .result(result)
                             .build());
                     found = true;
-                    log.info("Updated tool call {} to completed status", tc.getName());
+                    log.info("Updated tool call {} to {} status", tc.getName(), status);
                     break;
                 }
             }

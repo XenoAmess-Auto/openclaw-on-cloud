@@ -479,13 +479,20 @@ export const useChatStore = defineStore('chat', () => {
           const index = messages.value.findIndex(m => m.id === data.message.id)
           if (index !== -1) {
             const updatedMsg = { ...messages.value[index] }
-            // 合并工具调用列表
-            const existingToolCalls = updatedMsg.toolCalls || []
-            const newToolCalls = data.message.toolCalls || []
-            updatedMsg.toolCalls = [...existingToolCalls, ...newToolCalls]
-            updatedMsg.isToolCall = true
-            messages.value.splice(index, 1, updatedMsg)
-            console.log('[WebSocket] tool_start - added tool call:', newToolCalls[0]?.name)
+            const newToolCall = data.message.toolCalls?.[0]
+            if (newToolCall) {
+              const existingToolCalls = updatedMsg.toolCalls || []
+              // 检查是否已存在相同的 toolCallId，避免重复添加
+              const exists = existingToolCalls.some(tc => tc.id === newToolCall.id)
+              if (!exists) {
+                updatedMsg.toolCalls = [...existingToolCalls, newToolCall]
+                updatedMsg.isToolCall = true
+                messages.value.splice(index, 1, updatedMsg)
+                console.log('[WebSocket] tool_start - added tool call:', newToolCall.name, 'id:', newToolCall.id)
+              } else {
+                console.log('[WebSocket] tool_start - tool call already exists:', newToolCall.id)
+              }
+            }
           } else {
             console.warn('[WebSocket] tool_start - message not found:', data.message.id)
           }
@@ -505,7 +512,7 @@ export const useChatStore = defineStore('chat', () => {
             const updatedMsg = { ...messages.value[index] }
             // 更新工具调用列表（后端发送完整列表）
             updatedMsg.toolCalls = data.message.toolCalls || []
-            updatedMsg.isToolCall = true
+            updatedMsg.isToolCall = updatedMsg.toolCalls.length > 0
             messages.value.splice(index, 1, updatedMsg)
             console.log('[WebSocket] tool_result - updated tool calls:', updatedMsg.toolCalls?.length)
           } else {
@@ -513,7 +520,7 @@ export const useChatStore = defineStore('chat', () => {
           }
         }
         break
-            case 'stream_end':
+      case 'stream_end':
         // 流式消息结束 - 只处理当前房间的消息
         // 严格过滤：不处理非当前房间的消息（移除兜底恢复逻辑防止串房间）
         if (data.roomId && data.roomId !== currentRoom.value?.id) {
@@ -530,20 +537,26 @@ export const useChatStore = defineStore('chat', () => {
           })
           const index = messages.value.findIndex(m => m.id === data.message.id)
           if (index !== -1) {
-            // 保留现有的 toolCalls（如果后端没有发送）
+            // 合并消息数据，保留现有的 toolCalls（如果后端没有发送）
             const existingMsg = messages.value[index]
-            if (!data.message.toolCalls && existingMsg.toolCalls && existingMsg.toolCalls.length > 0) {
-              data.message.toolCalls = existingMsg.toolCalls
-              data.message.isToolCall = true
+            const mergedMessage = { ...data.message }
+
+            // 保留 toolCalls（如果后端没有发送）
+            if ((!data.message.toolCalls || data.message.toolCalls.length === 0)
+                && existingMsg.toolCalls && existingMsg.toolCalls.length > 0) {
+              mergedMessage.toolCalls = existingMsg.toolCalls
+              mergedMessage.isToolCall = true
               console.log('[WebSocket] stream_end - preserved existing toolCalls:', existingMsg.toolCalls.length)
             }
+
             // 保留 replyToMessageId（如果后端没有发送）
             if (!data.message.replyToMessageId && existingMsg.replyToMessageId) {
-              data.message.replyToMessageId = existingMsg.replyToMessageId
+              mergedMessage.replyToMessageId = existingMsg.replyToMessageId
               console.log('[WebSocket] stream_end - preserved existing replyToMessageId:', existingMsg.replyToMessageId)
             }
+
             // 使用 splice 确保响应式更新
-            messages.value.splice(index, 1, data.message)
+            messages.value.splice(index, 1, mergedMessage)
             console.log('[WebSocket] stream_end - message replaced at index:', index)
           } else {
             // 找不到消息，追加为新消息（可能是 WebSocket 重连后的新流式消息）
