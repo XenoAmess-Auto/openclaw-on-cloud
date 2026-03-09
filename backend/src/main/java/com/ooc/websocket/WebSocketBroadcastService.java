@@ -197,9 +197,9 @@ public class WebSocketBroadcastService {
     }
 
     /**
-     * 获取 session 当前注册的所有房间
+     * 获取 session 当前注册的所有房间（公共方法，供外部验证使用）
      */
-    private Set<String> getSessionRooms(WebSocketSession session) {
+    public Set<String> getSessionRooms(WebSocketSession session) {
         Set<String> rooms = new HashSet<>();
         synchronized (sessionLock) {
             for (Map.Entry<String, Set<WebSocketSession>> entry : roomSessions.entrySet()) {

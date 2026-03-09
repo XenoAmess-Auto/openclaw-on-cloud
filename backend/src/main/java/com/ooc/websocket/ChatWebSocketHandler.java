@@ -219,7 +219,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
 
         // 强制从数据库获取用户ID，最多重试3次
         User user = getUserFromDatabaseWithRetry(userName);
-        
+
         if (user == null) {
             // 无法从数据库获取用户信息，拒绝连接
             log.error("Failed to get user {} from database after retries, rejecting connection", userName);
@@ -248,6 +248,15 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                 userName, userId, avatar != null ? "(present)" : "(null)",
                 avatarCacheService.isAvatarCached(userId));
 
+        // 记录用户加入日志（在更新 maps 之前）
+        WebSocketUserInfo oldUserInfo = userInfoMap.get(session);
+        if (oldUserInfo != null && !oldUserInfo.getRoomId().equals(roomId)) {
+            log.info("[RoomSwitch] User {} switching from room {} to room {}",
+                    userName, oldUserInfo.getRoomId(), roomId);
+        }
+
+        // 原子性更新：先更新 userInfoMap，再注册到广播服务
+        // 这样可以确保当 broadcastService 中的 session 被注册时，userInfoMap 中已经是最新的 roomId
         WebSocketUserInfo userInfo = WebSocketUserInfo.builder()
                 .userId(userId)
                 .userName(nickname)
@@ -255,18 +264,14 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                 .avatar(avatar)
                 .build();
 
-        // 记录用户加入日志
-        WebSocketUserInfo oldUserInfo = userInfoMap.get(session);
-        if (oldUserInfo != null && !oldUserInfo.getRoomId().equals(roomId)) {
-            log.info("[RoomSwitch] User {} switching from room {} to room {}",
-                    userName, oldUserInfo.getRoomId(), roomId);
+        synchronized (session) {
+            // 先更新 userInfoMap
+            userInfoMap.put(session, userInfo);
+            // 再注册到广播服务
+            broadcastService.registerRoomSession(roomId, session);
         }
 
-        userInfoMap.put(session, userInfo);
         userSessions.computeIfAbsent(userId, k -> ConcurrentHashMap.newKeySet()).add(session);
-
-        // 注册到广播服务（broadcastService 内部会处理防串房间逻辑）
-        broadcastService.registerRoomSession(roomId, session);
 
         // 发送历史消息（只发送最新的10条）
         chatRoomService.getChatRoom(roomId).ifPresent(room -> {
@@ -362,9 +367,31 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
 
     private void handleMessage(WebSocketSession session, WebSocketMessage payload) {
         WebSocketUserInfo userInfo = userInfoMap.get(session);
-        if (userInfo == null) return;
+        if (userInfo == null) {
+            log.warn("[handleMessage] No userInfo found for session {}, ignoring message", session.getId());
+            return;
+        }
 
         String roomId = userInfo.getRoomId();
+        
+        // 双重验证：确保 session 确实注册在 roomId 房间
+        Set<WebSocketSession> roomSessions = broadcastService.getRoomSessions(roomId);
+        if (!roomSessions.contains(session)) {
+            log.error("[CROSS-ROOM VIOLATION] Session {} is in userInfoMap for room {} but not registered in broadcastService for that room! " +
+                      "Registered rooms for this session: {}. Attempting to fix...",
+                    session.getId(), roomId, broadcastService.getSessionRooms(session));
+            
+            // 尝试修复：重新注册 session 到正确的房间
+            broadcastService.registerRoomSession(roomId, session);
+            
+            // 再次检查
+            roomSessions = broadcastService.getRoomSessions(roomId);
+            if (!roomSessions.contains(session)) {
+                log.error("[CROSS-ROOM VIOLATION] Fix failed, dropping message");
+                return;
+            }
+        }
+
         String content = payload.getContent();
         List<com.ooc.websocket.Attachment> attachments = payload.getAttachments();
         boolean hasAttachments = attachments != null && !attachments.isEmpty();

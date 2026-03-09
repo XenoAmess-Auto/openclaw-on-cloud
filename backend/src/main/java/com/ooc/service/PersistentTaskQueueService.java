@@ -180,13 +180,22 @@ public class PersistentTaskQueueService {
 
         taskQueueRepository.save(dbTask);
 
-        // 创建内存任务
+        // 创建内存任务 - 使用 userInfo 的拷贝，防止外部修改影响任务
+        ChatWebSocketHandler.WebSocketUserInfo userInfoCopy = userInfo != null 
+            ? ChatWebSocketHandler.WebSocketUserInfo.builder()
+                .userId(userInfo.getUserId())
+                .userName(userInfo.getUserName())
+                .roomId(userInfo.getRoomId())
+                .avatar(userInfo.getAvatar())
+                .build()
+            : null;
+        
         ChatWebSocketHandler.OpenClawTask task = ChatWebSocketHandler.OpenClawTask.builder()
                 .taskId(taskId)
                 .roomId(roomId)
                 .content(content)
                 .attachments(attachments)
-                .userInfo(userInfo)
+                .userInfo(userInfoCopy)  // 使用拷贝
                 .sourceMessageId(sourceMessageId)
                 .createdAt(Instant.now())
                 .status(ChatWebSocketHandler.OpenClawTask.TaskStatus.PENDING)
