@@ -44,6 +44,7 @@ jobs:
           check-regexp: '.*'
           wait-interval: 10
           allowed-conclusions: success,skipped
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Approve PR
         if: steps.check.outputs.should_merge == 'true'
