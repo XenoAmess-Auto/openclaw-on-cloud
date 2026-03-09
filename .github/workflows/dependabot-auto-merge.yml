@@ -47,16 +47,9 @@ jobs:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
           ignore-checks: docker,dependabot
 
-      - name: Approve PR
+      - name: Enable auto-merge (rebase)
         if: steps.check.outputs.should_merge == 'true'
-        run: gh pr review --approve "$PR_URL"
-        env:
-          PR_URL: ${{ github.event.pull_request.html_url }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Enable auto-merge (squash)
-        if: steps.check.outputs.should_merge == 'true'
-        run: gh pr merge --auto --squash "$PR_URL"
+        run: gh pr merge --auto --rebase "$PR_URL"
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
