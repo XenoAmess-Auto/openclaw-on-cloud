@@ -462,6 +462,7 @@ public class OpenClawWebSocketClient {
                             AtomicBoolean lock = requestLocks.get(sessionId);
                             if (lock != null) {
                                 lock.set(false);
+                                log.info("[OpenClaw WS] Lock released for session {} after agent.run.failed", sessionId);
                             }
                         }
                     }
@@ -520,6 +521,13 @@ public class OpenClawWebSocketClient {
                         lock.set(false);
                         log.info("[OpenClaw WS] Lock released for session {} after chat completion", sessionId);
                     }
+                }
+            } else {
+                // 即使 handler 为 null，也要释放锁
+                AtomicBoolean lock = requestLocks.get(sessionId);
+                if (lock != null) {
+                    lock.set(false);
+                    log.info("[OpenClaw WS] Lock released for session {} (handler was null)", sessionId);
                 }
             }
         }
@@ -626,10 +634,32 @@ public class OpenClawWebSocketClient {
             log.info("[OpenClaw WS] Connection closed: {} (status={})", sessionId, status);
             sessions.remove(sessionId);
 
+            // 取消超时定时器
+            ScheduledFuture<?> closedTimeout = requestTimeouts.remove(sessionId);
+            if (closedTimeout != null) {
+                closedTimeout.cancel(false);
+            }
+
             if (!status.equals(CloseStatus.NORMAL)) {
-                ResponseHandler handler = responseHandlers.get(sessionId);
+                ResponseHandler handler = responseHandlers.remove(sessionId);
                 if (handler != null) {
-                    handler.onError("WebSocket connection closed unexpectedly");
+                    try {
+                        handler.onError("WebSocket connection closed unexpectedly");
+                    } finally {
+                        // 释放请求锁
+                        AtomicBoolean lock = requestLocks.get(sessionId);
+                        if (lock != null) {
+                            lock.set(false);
+                            log.info("[OpenClaw WS] Lock released for session {} after connection closed", sessionId);
+                        }
+                    }
+                }
+            } else {
+                // 正常关闭也需要释放锁
+                AtomicBoolean lock = requestLocks.get(sessionId);
+                if (lock != null) {
+                    lock.set(false);
+                    log.info("[OpenClaw WS] Lock released for session {} after normal close", sessionId);
                 }
             }
         }
@@ -637,9 +667,25 @@ public class OpenClawWebSocketClient {
         @Override
         public void handleTransportError(WebSocketSession session, Throwable exception) {
             log.error("[OpenClaw WS] Transport error: {}", sessionId, exception);
-            ResponseHandler handler = responseHandlers.get(sessionId);
+
+            // 取消超时定时器
+            ScheduledFuture<?> errorTimeout = requestTimeouts.remove(sessionId);
+            if (errorTimeout != null) {
+                errorTimeout.cancel(false);
+            }
+
+            ResponseHandler handler = responseHandlers.remove(sessionId);
             if (handler != null) {
-                handler.onError("WebSocket transport error: " + exception.getMessage());
+                try {
+                    handler.onError("WebSocket transport error: " + exception.getMessage());
+                } finally {
+                    // 释放请求锁
+                    AtomicBoolean lock = requestLocks.get(sessionId);
+                    if (lock != null) {
+                        lock.set(false);
+                        log.info("[OpenClaw WS] Lock released for session {} after transport error", sessionId);
+                    }
+                }
             }
         }
     }
