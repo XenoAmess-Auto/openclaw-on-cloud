@@ -246,10 +246,9 @@ public class OpenClawWebSocketClient {
         Map<String, Object> params = new HashMap<>();
         // 使用正确的 session key 格式: agent:{agentId}:{rest}
         // 确保不同房间的 session 被正确隔离
-        // sessionId 格式: ooc-{roomId}-{UUID}
+        // sessionId 格式: ooc-{roomId}
         // sessionKey 格式: agent:main:{sessionId}
         params.put("sessionKey", "agent:main:" + sessionId);
-        params.put("verboseLevel", "on"); // ⭐ 关键：启用 verbose 模式以接收工具事件
 
         // 从 contentBlocks 中提取文本和图片
         StringBuilder messageBuilder = new StringBuilder();
@@ -342,6 +341,57 @@ public class OpenClawWebSocketClient {
     }
 
     /**
+     * 从 sessionKey 中提取 session ID
+     * sessionKey 格式: agent:main:{sessionId}
+     */
+    private String extractSessionIdFromSessionKey(String sessionKey) {
+        if (sessionKey != null && sessionKey.startsWith("agent:main:")) {
+            return sessionKey.substring("agent:main:".length());
+        }
+        return sessionKey;
+    }
+
+    /**
+     * 从 session ID 中提取 room ID
+     * sessionId 格式: ooc-{roomId}
+     */
+    private String extractRoomIdFromSessionId(String sessionId) {
+        if (sessionId != null && sessionId.startsWith("ooc-")) {
+            return sessionId.substring(4); // 去掉 "ooc-" 前缀
+        }
+        return sessionId;
+    }
+
+    /**
+     * 查找 handler，支持 room-based 匹配
+     * 1. 首先尝试精确匹配
+     * 2. 如果失败，尝试使用 room-based session ID 匹配
+     */
+    private ResponseHandler findHandler(String sessionKeyOrId) {
+        String sessionId = extractSessionIdFromSessionKey(sessionKeyOrId);
+
+        // 1. 精确匹配
+        ResponseHandler handler = responseHandlers.get(sessionId);
+        if (handler != null) {
+            return handler;
+        }
+
+        // 2. 尝试 room-based 匹配
+        String roomId = extractRoomIdFromSessionId(sessionId);
+        if (roomId != null) {
+            String roomBasedSessionId = "ooc-" + roomId;
+            handler = responseHandlers.get(roomBasedSessionId);
+            if (handler != null) {
+                log.debug("[OpenClaw WS] Found handler using room-based session ID: {} -> {}",
+                        sessionId, roomBasedSessionId);
+                return handler;
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * WebSocket 消息处理器
      */
     private class OpenClawGatewayHandler extends TextWebSocketHandler {
@@ -409,6 +459,18 @@ public class OpenClawWebSocketClient {
             String event = msg.path("event").asText();
             JsonNode payload = msg.path("payload");
 
+            // 从 payload 中提取 sessionKey，用于查找 handler
+            String sessionKeyFromPayload = payload.path("sessionKey").asText(null);
+            if (sessionKeyFromPayload != null) {
+                // 提取 session ID 从 sessionKey (格式: agent:main:{sessionId})
+                String extractedSessionId = extractSessionIdFromSessionKey(sessionKeyFromPayload);
+                // 如果提取的 session ID 与当前 handler 的 session ID 不同，更新查找
+                if (!extractedSessionId.equals(sessionId)) {
+                    log.debug("[OpenClaw WS] Session mismatch - handler: {}, payload: {}, extracted: {}",
+                            sessionId, sessionKeyFromPayload, extractedSessionId);
+                }
+            }
+
             switch (event) {
                 case "agent":
                     handleAgentEvent(payload);
@@ -423,22 +485,27 @@ public class OpenClawWebSocketClient {
                     String runId = payload.path("runId").asText();
                     log.info("[OpenClaw WS] Agent run completed: {}", runId);
 
+                    // 从 payload 中提取 sessionKey
+                    String completedSessionKey = payload.path("sessionKey").asText(null);
+                    String completedSessionId = completedSessionKey != null ?
+                            extractSessionIdFromSessionKey(completedSessionKey) : sessionId;
+
                     // 取消超时定时器
-                    ScheduledFuture<?> completedTimeout = requestTimeouts.remove(sessionId);
+                    ScheduledFuture<?> completedTimeout = requestTimeouts.remove(completedSessionId);
                     if (completedTimeout != null) {
                         completedTimeout.cancel(false);
                     }
 
-                    ResponseHandler completedHandler = responseHandlers.remove(sessionId);
+                    ResponseHandler completedHandler = responseHandlers.remove(completedSessionId);
                     if (completedHandler != null) {
                         try {
                             completedHandler.onComplete();
                         } finally {
                             // 释放请求锁
-                            AtomicBoolean lock = requestLocks.get(sessionId);
+                            AtomicBoolean lock = requestLocks.get(completedSessionId);
                             if (lock != null) {
                                 lock.set(false);
-                                log.info("[OpenClaw WS] Lock released for session {} after agent.run.completed (runId={})", sessionId, runId);
+                                log.info("[OpenClaw WS] Lock released for session {} after agent.run.completed (runId={})", completedSessionId, runId);
                             }
                         }
                     }
@@ -447,22 +514,27 @@ public class OpenClawWebSocketClient {
                     String error = payload.path("error").asText("Unknown error");
                     log.error("[OpenClaw WS] Agent run failed: {}", error);
 
+                    // 从 payload 中提取 sessionKey
+                    String failedSessionKey = payload.path("sessionKey").asText(null);
+                    String failedSessionId = failedSessionKey != null ?
+                            extractSessionIdFromSessionKey(failedSessionKey) : sessionId;
+
                     // 取消超时定时器
-                    ScheduledFuture<?> failedTimeout = requestTimeouts.remove(sessionId);
+                    ScheduledFuture<?> failedTimeout = requestTimeouts.remove(failedSessionId);
                     if (failedTimeout != null) {
                         failedTimeout.cancel(false);
                     }
 
-                    ResponseHandler failedHandler = responseHandlers.remove(sessionId);
+                    ResponseHandler failedHandler = responseHandlers.remove(failedSessionId);
                     if (failedHandler != null) {
                         try {
                             failedHandler.onError(error);
                         } finally {
                             // 释放请求锁
-                            AtomicBoolean lock = requestLocks.get(sessionId);
+                            AtomicBoolean lock = requestLocks.get(failedSessionId);
                             if (lock != null) {
                                 lock.set(false);
-                                log.info("[OpenClaw WS] Lock released for session {} after agent.run.failed", sessionId);
+                                log.info("[OpenClaw WS] Lock released for session {} after agent.run.failed", failedSessionId);
                             }
                         }
                     }
@@ -473,8 +545,13 @@ public class OpenClawWebSocketClient {
         }
 
         private void handleChatEvent(JsonNode payload) {
-            ResponseHandler handler = responseHandlers.get(sessionId);
+            // 从 payload 中提取 sessionKey 并使用 findHandler 查找 handler
+            String sessionKeyFromPayload = payload.path("sessionKey").asText(null);
+            ResponseHandler handler = sessionKeyFromPayload != null ?
+                    findHandler(sessionKeyFromPayload) : responseHandlers.get(sessionId);
+
             if (handler == null) {
+                log.debug("[OpenClaw WS] No handler found for chat event, sessionKey: {}", sessionKeyFromPayload);
                 return;
             }
 
@@ -485,10 +562,12 @@ public class OpenClawWebSocketClient {
             String state = payload.path("state").asText("");
             boolean isComplete = payload.path("complete").asBoolean(false) || "final".equals(state);
             if (isComplete) {
-                log.info("[OpenClaw WS] Chat completed event received for session {} (state={})", sessionId, state);
+                String targetSessionId = sessionKeyFromPayload != null ?
+                        extractSessionIdFromSessionKey(sessionKeyFromPayload) : sessionId;
+                log.info("[OpenClaw WS] Chat completed event received for session {} (state={})", targetSessionId, state);
                 // 某些情况下 OpenClaw 不发送 agent.run.completed，但 chat 事件显示完成
                 // 这里也需要触发完成逻辑
-                triggerCompletionIfNotAlreadyDone();
+                triggerCompletionIfNotAlreadyDone(targetSessionId);
             }
 
             // 注意：不处理 chat 事件的内容，因为 agent 事件的 assistant 流已经处理了增量内容
@@ -496,38 +575,42 @@ public class OpenClawWebSocketClient {
         }
 
         private void triggerCompletionIfNotAlreadyDone() {
+            triggerCompletionIfNotAlreadyDone(sessionId);
+        }
+
+        private void triggerCompletionIfNotAlreadyDone(String targetSessionId) {
             // 检查是否已经有完成或失败事件被处理
-            if (!responseHandlers.containsKey(sessionId)) {
-                log.debug("[OpenClaw WS] Handler already removed for session {}, skipping duplicate completion", sessionId);
+            if (!responseHandlers.containsKey(targetSessionId)) {
+                log.debug("[OpenClaw WS] Handler already removed for session {}, skipping duplicate completion", targetSessionId);
                 return;
             }
 
-            log.info("[OpenClaw WS] Triggering completion for session {} from chat event", sessionId);
+            log.info("[OpenClaw WS] Triggering completion for session {} from chat event", targetSessionId);
 
             // 取消超时定时器
-            ScheduledFuture<?> chatTimeout = requestTimeouts.remove(sessionId);
+            ScheduledFuture<?> chatTimeout = requestTimeouts.remove(targetSessionId);
             if (chatTimeout != null) {
                 chatTimeout.cancel(false);
             }
 
-            ResponseHandler handler = responseHandlers.remove(sessionId);
+            ResponseHandler handler = responseHandlers.remove(targetSessionId);
             if (handler != null) {
                 try {
                     handler.onComplete();
                 } finally {
                     // 释放请求锁
-                    AtomicBoolean lock = requestLocks.get(sessionId);
+                    AtomicBoolean lock = requestLocks.get(targetSessionId);
                     if (lock != null) {
                         lock.set(false);
-                        log.info("[OpenClaw WS] Lock released for session {} after chat completion", sessionId);
+                        log.info("[OpenClaw WS] Lock released for session {} after chat completion", targetSessionId);
                     }
                 }
             } else {
                 // 即使 handler 为 null，也要释放锁
-                AtomicBoolean lock = requestLocks.get(sessionId);
+                AtomicBoolean lock = requestLocks.get(targetSessionId);
                 if (lock != null) {
                     lock.set(false);
-                    log.info("[OpenClaw WS] Lock released for session {} (handler was null)", sessionId);
+                    log.info("[OpenClaw WS] Lock released for session {} (handler was null)", targetSessionId);
                 }
             }
         }
@@ -536,11 +619,19 @@ public class OpenClawWebSocketClient {
             String stream = payload.path("stream").asText();
             JsonNode data = payload.path("data");
 
-            log.debug("[OpenClaw WS] Agent event received: stream={}, hasHandler={}", stream, responseHandlers.containsKey(sessionId));
+            // 从 payload 中提取 sessionKey 并使用 findHandler 查找 handler
+            String sessionKeyFromPayload = payload.path("sessionKey").asText(null);
+            ResponseHandler handler = sessionKeyFromPayload != null ?
+                    findHandler(sessionKeyFromPayload) : responseHandlers.get(sessionId);
 
-            ResponseHandler handler = responseHandlers.get(sessionId);
+            String targetSessionId = sessionKeyFromPayload != null ?
+                    extractSessionIdFromSessionKey(sessionKeyFromPayload) : sessionId;
+
+            log.debug("[OpenClaw WS] Agent event received: stream={}, hasHandler={}, targetSession={}",
+                    stream, handler != null, targetSessionId);
+
             if (handler == null) {
-                log.warn("[OpenClaw WS] No handler for session {}, dropping agent event (stream={})", sessionId, stream);
+                log.warn("[OpenClaw WS] No handler for session {}, dropping agent event (stream={})", targetSessionId, stream);
                 return;
             }
 
