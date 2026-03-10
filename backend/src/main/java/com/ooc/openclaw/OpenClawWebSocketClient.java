@@ -249,6 +249,7 @@ public class OpenClawWebSocketClient {
         // sessionId 格式: ooc-{roomId}-{UUID}
         // sessionKey 格式: agent:main:{sessionId}
         params.put("sessionKey", "agent:main:" + sessionId);
+        params.put("verboseLevel", "on"); // ⭐ 关键：启用 verbose 模式以接收工具事件
 
         // 从 contentBlocks 中提取文本和图片
         StringBuilder messageBuilder = new StringBuilder();
@@ -527,13 +528,15 @@ public class OpenClawWebSocketClient {
             String stream = payload.path("stream").asText();
             JsonNode data = payload.path("data");
 
+            log.debug("[OpenClaw WS] Agent event received: stream={}, hasHandler={}", stream, responseHandlers.containsKey(sessionId));
+
             ResponseHandler handler = responseHandlers.get(sessionId);
             if (handler == null) {
+                log.warn("[OpenClaw WS] No handler for session {}, dropping agent event (stream={})", sessionId, stream);
                 return;
             }
 
             switch (stream) {
-                case "assistant":
                     // OpenClaw 发送的是 delta（增量）和 text（累积），不是 content
                     String delta = data.path("delta").asText(null);
                     String text = data.path("text").asText(null);
