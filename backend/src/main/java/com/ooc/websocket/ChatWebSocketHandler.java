@@ -1335,7 +1335,9 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
 
             if (finalSessionId == null) {
                 // 创建新会话并发送流式消息
-                log.info("Creating new OpenClaw session for room: {}", roomId);
+                // 使用固定的 room-based session ID，避免 OpenClaw 路由问题
+                String roomBasedSessionId = "ooc-" + roomId;
+                log.info("Creating new OpenClaw session for room: {} with fixed sessionId: {}", roomId, roomBasedSessionId);
                 reactor.core.Disposable subscription = oocSessionService.getOrCreateSession(roomId, room.getName())
                         .flatMap(oocSession -> {
                             if (oocSession.getMessages().size() > 30) {
@@ -1347,13 +1349,15 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                         .flatMap(oocSession -> {
                             List<Map<String, Object>> context = convertToContext(oocSession);
                             log.info("Creating OpenClaw session with {} context messages", context.size());
-                            return openClawPluginService.createSession("ooc-" + roomId, context);
+                            // 使用固定的 room-based session ID
+                            return openClawPluginService.createSession(roomBasedSessionId, context);
                         })
                         .flatMapMany(newSession -> {
-                            chatRoomService.updateOpenClawSession(roomId, newSession.sessionId());
-                            log.info("OpenClaw session created: {}", newSession.sessionId());
+                            // 使用 room-based session ID，不使用 OpenClaw 返回的 UUID
+                            chatRoomService.updateOpenClawSession(roomId, roomBasedSessionId);
+                            log.info("OpenClaw session created: {} (using room-based ID)", roomBasedSessionId);
                             return openClawPluginService.sendMessageStream(
-                                    newSession.sessionId(),
+                                    roomBasedSessionId,
                                     task.getContent(),
                                     task.getAttachments(),
                                     task.getUserInfo().getUserId(),
@@ -1399,9 +1403,15 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                 taskQueueService.registerTaskSubscription(taskId, subscription);
             } else {
                 // 使用现有会话发送流式消息
-                log.info("Using existing OpenClaw session: {}", finalSessionId);
+                // 标准化为 room-based session ID
+                String roomBasedSessionId = "ooc-" + roomId;
+                if (!roomBasedSessionId.equals(finalSessionId)) {
+                    log.info("Converting session ID from {} to room-based ID: {}", finalSessionId, roomBasedSessionId);
+                    chatRoomService.updateOpenClawSession(roomId, roomBasedSessionId);
+                }
+                log.info("Using existing OpenClaw session: {} (room-based)", roomBasedSessionId);
                 reactor.core.Disposable subscription = openClawPluginService.sendMessageStream(
-                                finalSessionId,
+                                roomBasedSessionId,
                                 task.getContent(),
                                 task.getAttachments(),
                                 task.getUserInfo().getUserId(),

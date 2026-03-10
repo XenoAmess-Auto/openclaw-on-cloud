@@ -674,11 +674,19 @@ public class OpenClawPluginService {
      * sessionId 格式: ooc-{roomId}-{uuid}，确保每个房间有独立的 session
      */
     public Mono<OpenClawSession> createSession(String instanceName, List<Map<String, Object>> context) {
-        // 从 instanceName 中提取 roomId（格式: ooc-{roomId}）
+        // 使用固定的 room-based session ID，避免 OpenClaw 路由问题
+        // instanceName 格式: ooc-{roomId}
         String roomId = instanceName.startsWith("ooc-") ? instanceName.substring(4) : instanceName;
-        // 生成包含 roomId 的 sessionId，确保不同房间的 session 完全隔离
-        String sessionId = "ooc-" + roomId + "-" + UUID.randomUUID().toString();
-        
+        String sessionId = "ooc-" + roomId;
+
+        // 如果 session 已存在，直接返回
+        OpenClawSessionState existingState = sessionStates.get(sessionId);
+        if (existingState != null) {
+            log.info("Reusing existing OpenClaw session for room {}: {}", roomId, sessionId);
+            existingState.setLastActivity(Instant.now());
+            return Mono.just(new OpenClawSession(sessionId, instanceName, existingState.getCreatedAt()));
+        }
+
         OpenClawSessionState state = OpenClawSessionState.builder()
                 .sessionId(sessionId)
                 .instanceName(instanceName)
@@ -686,8 +694,8 @@ public class OpenClawPluginService {
                 .lastActivity(Instant.now())
                 .build();
         sessionStates.put(sessionId, state);
-        
-        log.info("Created OpenClaw session for room {}: {}", roomId, sessionId);
+
+        log.info("Created OpenClaw session for room {}: {} (fixed room-based ID)", roomId, sessionId);
         return Mono.just(new OpenClawSession(sessionId, instanceName, Instant.now()));
     }
 
