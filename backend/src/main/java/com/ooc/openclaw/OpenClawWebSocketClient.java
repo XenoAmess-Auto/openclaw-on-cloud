@@ -407,6 +407,8 @@ public class OpenClawWebSocketClient {
         private boolean connected = false;
         // 跟踪已发送 start 事件的工具调用（OpenClaw 有时会跳过 start 直接发 update/result）
         private final Set<String> startedToolCalls = ConcurrentHashMap.newKeySet();
+        // 跟踪已发送的文本内容长度，用于检测和防止重复内容
+        private final AtomicInteger sentContentLength = new AtomicInteger(0);
 
         public OpenClawGatewayHandler(String sessionId) {
             this.sessionId = sessionId;
@@ -681,18 +683,43 @@ public class OpenClawWebSocketClient {
                     // OpenClaw 发送的是 delta（增量）和 text（累积），不是 content
                     String delta = data.path("delta").asText(null);
                     String text = data.path("text").asText(null);
-                    
-                    log.debug("[OpenClaw WS] Assistant event: delta={}, text={}", 
+
+                    log.debug("[OpenClaw WS] Assistant event: delta={}, text={}",
                             delta != null ? delta.length() : 0,
                             text != null ? text.length() : 0);
-                    
+
+                    // 优先使用 delta（增量内容），忽略 text（累积内容）以避免重复
+                    // delta 和 text 不应该同时使用，因为它们代表相同的内容
                     if (delta != null && !delta.isEmpty()) {
-                        handler.onTextChunk(delta);
-                    } else if (text != null && !text.isEmpty()) {
-                        // 如果没有 delta 但有 text，发送 text（可能是累积文本）
-                        log.info("[OpenClaw WS] Using text field instead of delta: {} chars", text.length());
-                        handler.onTextChunk(text);
+                        // 检查是否是重复内容：如果 text 存在且 delta 等于 text 的最后部分
+                        // 或者 delta 已经被发送过（通过长度检查）
+                        int currentSentLength = sentContentLength.get();
+                        boolean isDuplicate = false;
+
+                        if (text != null && !text.isEmpty()) {
+                            // 如果 text 以 delta 结尾，说明 delta 是新的增量内容
+                            // 但如果 text 长度等于已发送长度，说明没有新内容
+                            if (text.length() == currentSentLength) {
+                                isDuplicate = true;
+                                log.debug("[OpenClaw WS] Skipping duplicate delta: text length ({}) equals sent length ({})",
+                                        text.length(), currentSentLength);
+                            } else if (text.length() < currentSentLength) {
+                                // text 比已发送的内容还短，说明是旧数据
+                                isDuplicate = true;
+                                log.warn("[OpenClaw WS] Skipping outdated delta: text length ({}) < sent length ({})",
+                                        text.length(), currentSentLength);
+                            }
+                        }
+
+                        if (!isDuplicate) {
+                            handler.onTextChunk(delta);
+                            sentContentLength.addAndGet(delta.length());
+                            log.debug("[OpenClaw WS] Sent delta: {} chars, total sent: {} chars",
+                                    delta.length(), sentContentLength.get());
+                        }
                     }
+                    // 注意：不再使用 text 字段，因为它包含的是累积内容
+                    // 使用 text 会导致内容被重复追加（delta 追加了增量，text 又追加了累积）
                     break;
 
                 case "tool":
