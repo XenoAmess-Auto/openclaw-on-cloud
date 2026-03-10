@@ -158,8 +158,8 @@ public class OpenClawWebSocketClient {
         try {
             // 配置 WebSocket 容器以支持大消息 (16MB 缓冲区)
             WebSocketContainer container = ContainerProvider.getWebSocketContainer();
-            container.setDefaultMaxBinaryMessageBufferSize(16 * 1024 * 1024);
-            container.setDefaultMaxTextMessageBufferSize(16 * 1024 * 1024);
+            container.setDefaultMaxBinaryMessageBufferSize(200 * 1024 * 1024);
+            container.setDefaultMaxTextMessageBufferSize(200 * 1024 * 1024);
 
             StandardWebSocketClient client = new StandardWebSocketClient(container);
 
@@ -537,6 +537,7 @@ public class OpenClawWebSocketClient {
             }
 
             switch (stream) {
+                case "assistant":
                     // OpenClaw 发送的是 delta（增量）和 text（累积），不是 content
                     String delta = data.path("delta").asText(null);
                     String text = data.path("text").asText(null);
