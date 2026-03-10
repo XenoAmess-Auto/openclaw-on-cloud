@@ -94,6 +94,8 @@ public class OpenClawWebSocketClient {
 
             // 注册响应处理器
             responseHandlers.put(sessionId, handler);
+            log.info("[OpenClaw WS] Registered handler for session: {}, current handlers count: {}", 
+                    sessionId, responseHandlers.size());
 
             // 构建并发送 chat.send 请求
             try {
@@ -370,9 +372,13 @@ public class OpenClawWebSocketClient {
     private ResponseHandler findHandler(String sessionKeyOrId) {
         String sessionId = extractSessionIdFromSessionKey(sessionKeyOrId);
 
+        log.debug("[OpenClaw WS] findHandler: input={}, extracted sessionId={}, registered handlers={}",
+                sessionKeyOrId, sessionId, responseHandlers.keySet());
+
         // 1. 精确匹配
         ResponseHandler handler = responseHandlers.get(sessionId);
         if (handler != null) {
+            log.debug("[OpenClaw WS] Found handler by exact match: {}", sessionId);
             return handler;
         }
 
@@ -388,6 +394,8 @@ public class OpenClawWebSocketClient {
             }
         }
 
+        log.warn("[OpenClaw WS] Handler not found for: {} (extracted: {}), available handlers: {}",
+                sessionKeyOrId, sessionId, responseHandlers.keySet());
         return null;
     }
 
@@ -547,11 +555,23 @@ public class OpenClawWebSocketClient {
         private void handleChatEvent(JsonNode payload) {
             // 从 payload 中提取 sessionKey 并使用 findHandler 查找 handler
             String sessionKeyFromPayload = payload.path("sessionKey").asText(null);
-            ResponseHandler handler = sessionKeyFromPayload != null ?
-                    findHandler(sessionKeyFromPayload) : responseHandlers.get(sessionId);
+            
+            ResponseHandler handler = null;
+            if (sessionKeyFromPayload != null) {
+                handler = findHandler(sessionKeyFromPayload);
+            }
+            
+            // 如果通过 sessionKey 找不到 handler，尝试使用 WebSocket handler 的 sessionId
+            if (handler == null) {
+                handler = responseHandlers.get(sessionId);
+                if (handler != null) {
+                    log.info("[OpenClaw WS] Found handler for chat event using WebSocket sessionId: {}", sessionId);
+                }
+            }
 
             if (handler == null) {
-                log.debug("[OpenClaw WS] No handler found for chat event, sessionKey: {}", sessionKeyFromPayload);
+                log.debug("[OpenClaw WS] No handler found for chat event, sessionKey: {}, wsSessionId: {}, registered handlers: {}", 
+                        sessionKeyFromPayload, sessionId, responseHandlers.keySet());
                 return;
             }
 
@@ -621,17 +641,38 @@ public class OpenClawWebSocketClient {
 
             // 从 payload 中提取 sessionKey 并使用 findHandler 查找 handler
             String sessionKeyFromPayload = payload.path("sessionKey").asText(null);
-            ResponseHandler handler = sessionKeyFromPayload != null ?
-                    findHandler(sessionKeyFromPayload) : responseHandlers.get(sessionId);
+            
+            log.debug("[OpenClaw WS] Agent event received: stream={}, sessionKeyFromPayload={}", 
+                    stream, sessionKeyFromPayload);
+            
+            ResponseHandler handler = null;
+            String targetSessionId = null;
+            
+            if (sessionKeyFromPayload != null) {
+                handler = findHandler(sessionKeyFromPayload);
+                targetSessionId = extractSessionIdFromSessionKey(sessionKeyFromPayload);
+            }
+            
+            // 如果通过 sessionKey 找不到 handler，尝试使用 WebSocket handler 的 sessionId
+            if (handler == null) {
+                handler = responseHandlers.get(sessionId);
+                if (handler != null) {
+                    targetSessionId = sessionId;
+                    log.info("[OpenClaw WS] Found handler using WebSocket sessionId: {}", sessionId);
+                }
+            }
+            
+            if (targetSessionId == null) {
+                targetSessionId = sessionKeyFromPayload != null ? 
+                        extractSessionIdFromSessionKey(sessionKeyFromPayload) : sessionId;
+            }
 
-            String targetSessionId = sessionKeyFromPayload != null ?
-                    extractSessionIdFromSessionKey(sessionKeyFromPayload) : sessionId;
-
-            log.debug("[OpenClaw WS] Agent event received: stream={}, hasHandler={}, targetSession={}",
-                    stream, handler != null, targetSessionId);
+            log.info("[OpenClaw WS] Agent event: stream={}, hasHandler={}, targetSession={}, sessionKeyFromPayload={}, wsSessionId={}",
+                    stream, handler != null, targetSessionId, sessionKeyFromPayload, sessionId);
 
             if (handler == null) {
-                log.warn("[OpenClaw WS] No handler for session {}, dropping agent event (stream={})", targetSessionId, stream);
+                log.warn("[OpenClaw WS] No handler for session {}, dropping agent event (stream={}). Registered handlers: {}", 
+                        targetSessionId, stream, responseHandlers.keySet());
                 return;
             }
 
