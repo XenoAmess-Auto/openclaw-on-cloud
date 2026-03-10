@@ -542,12 +542,18 @@ export const useChatStore = defineStore('chat', () => {
             const existingMsg = messages.value[index]
             const mergedMessage = { ...data.message }
 
-            // 保留 toolCalls（如果后端没有发送）
-            if ((!data.message.toolCalls || data.message.toolCalls.length === 0)
-                && existingMsg.toolCalls && existingMsg.toolCalls.length > 0) {
+            // 保留 toolCalls（如果后端没有发送或发送了空数组）
+            const backendHasToolCalls = data.message.toolCalls && data.message.toolCalls.length > 0
+            const frontendHasToolCalls = existingMsg.toolCalls && existingMsg.toolCalls!.length > 0
+
+            if (!backendHasToolCalls && frontendHasToolCalls) {
               mergedMessage.toolCalls = existingMsg.toolCalls
               mergedMessage.isToolCall = true
-              console.log('[WebSocket] stream_end - preserved existing toolCalls:', existingMsg.toolCalls.length)
+              console.log('[WebSocket] stream_end - preserved existing toolCalls:', existingMsg.toolCalls!.length)
+            } else if (backendHasToolCalls) {
+              // 后端发送了工具调用，确保 isToolCall 标志正确设置
+              mergedMessage.isToolCall = true
+              console.log('[WebSocket] stream_end - using backend toolCalls:', data.message.toolCalls!.length)
             }
 
             // 保留 replyToMessageId（如果后端没有发送）
