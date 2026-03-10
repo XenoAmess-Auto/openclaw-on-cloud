@@ -1521,7 +1521,8 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
             // 记录工具调用在内容中的位置
             int position = contentBuilder.get().length();
 
-            log.info("Tool call started for task {}: id={}, name={}, position={}", task.getTaskId(), toolId, toolName, position);
+            log.info("Tool call started for task {}: id={}, name={}, position={}, room={}", 
+                    task.getTaskId(), toolId, toolName, position, roomId);
 
             // 创建工具调用记录
             ChatRoom.Message.ToolCall toolCall = ChatRoom.Message.ToolCall.builder()
@@ -1544,6 +1545,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
             streamingMessage.set(updatedMsg);
 
             // 广播工具调用开始事件
+            log.info("Broadcasting tool_start event to room {}: tool={}", roomId, toolName);
             broadcastToRoom(roomId, WebSocketMessage.builder()
                     .type("tool_start")
                     .roomId(roomId)
@@ -1596,6 +1598,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                 streamingMessage.set(updatedMsg);
                 
                 // 广播工具调用完成事件到前端
+                log.info("Broadcasting tool_result event to room {}: tool={}, status={}", roomId, toolCallId, isError ? "error" : "completed");
                 broadcastToRoom(roomId, WebSocketMessage.builder()
                         .type("tool_result")
                         .roomId(roomId)
@@ -1609,8 +1612,11 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                                 .replyToMessageId(task.getSourceMessageId())
                                 .build())
                         .build());
+                log.info("Tool result broadcast completed for room {}: tool={}", roomId, toolCallId);
             } else {
-                log.warn("Tool result received but toolCallId {} not found in message {}", toolCallId, messageId);
+                log.warn("Tool result received but toolCallId {} not found in message {}. Available tool calls: {}", 
+                        toolCallId, messageId, 
+                        currentToolCalls.stream().map(tc -> tc.getId()).toList());
             }
 
         } else if ("done".equals(event.type())) {

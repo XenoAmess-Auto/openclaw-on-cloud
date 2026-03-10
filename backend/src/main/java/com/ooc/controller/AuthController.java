@@ -28,6 +28,11 @@ public class AuthController {
     private final UserService userService;
     private final RsaKeyProvider rsaKeyProvider;
 
+    @GetMapping("/health")
+    public ResponseEntity<Map<String, String>> health() {
+        return ResponseEntity.ok(Map.of("status", "UP"));
+    }
+
     @GetMapping("/public-key")
     public ResponseEntity<Map<String, String>> getPublicKey() {
         return ResponseEntity.ok(Map.of("publicKey", rsaKeyProvider.getPublicKeyBase64()));
