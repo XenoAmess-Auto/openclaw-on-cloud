@@ -311,59 +311,98 @@ export const useChatStore = defineStore('chat', () => {
     openclawMentioned?: boolean
   }) {
     console.log('[chatStore.sendMessage] received attachments:', attachments.length, attachments)
-    if (ws.value && ws.value.readyState === WebSocket.OPEN) {
-      const payload: any = {
-        type: 'message',
-        content
+
+    // 检查 WebSocket 连接状态
+    if (!ws.value || ws.value.readyState !== WebSocket.OPEN) {
+      console.error('[chatStore.sendMessage] WebSocket is not connected. State:', ws.value?.readyState)
+
+      // 触发重连
+      if (currentRoomIdForReconnect.value) {
+        console.log('[chatStore.sendMessage] Triggering reconnect...')
+        reconnectAttempts.value = 0
+        scheduleReconnect(currentRoomIdForReconnect.value)
       }
-      // 如果有附件，添加到消息中
-      if (attachments.length > 0) {
-        payload.attachments = attachments.map(att => {
-          let url = att.dataUrl
-          // 过滤掉无效的 URL（blob URL 或 data URL 不应该被发送到后端）
-          if (url?.startsWith('blob:') || url?.startsWith('data:')) {
-            console.warn('[sendMessage] Invalid URL detected, skipping:', url.substring(0, 50))
-            url = ''
-          }
-          // 将完整 URL 转换为相对路径（后端期望 /uploads/xxx.png 或 /api/files/xxx 格式）
-          if (url?.includes('/uploads/')) {
-            const uploadsIndex = url.indexOf('/uploads/')
-            url = url.substring(uploadsIndex)
-          } else if (url?.includes('/api/files/')) {
-            const filesIndex = url.indexOf('/api/files/')
-            url = url.substring(filesIndex)
-          }
-          // 根据 MIME 类型确定附件类型
-          let type = 'file'
-          if (att.mimeType?.startsWith('image/')) {
-            type = 'image'
-          } else if (att.mimeType === 'application/pdf') {
-            type = 'pdf'
-          } else if (att.mimeType === 'text/plain') {
-            type = 'text'
-          }
-          return {
-            type: type,
-            mimeType: att.mimeType,
-            url: url
-          }
-        }).filter(att => att.url) // 过滤掉空 URL 的附件
-      }
-      // 添加 mentions 相关选项
-      if (options?.mentions?.length) {
-        payload.mentions = options.mentions
-      }
-      if (options?.mentionAll) {
-        payload.mentionAll = true
-      }
-      if (options?.mentionHere) {
-        payload.mentionHere = true
-      }
-      if (options?.openclawMentioned) {
-        payload.openclawMentioned = true
-      }
-      console.log('[chatStore.sendMessage] sending payload:', JSON.stringify(payload).substring(0, 500))
+
+      // 添加系统消息提示用户
+      messages.value.push({
+        id: `system-${Date.now()}`,
+        senderId: 'system',
+        senderName: '系统',
+        content: '消息发送失败：未连接到服务器，正在尝试重新连接...',
+        timestamp: new Date().toISOString(),
+        openclawMentioned: false,
+        fromOpenClaw: false,
+        isSystem: true
+      } as Message)
+
+      throw new Error('WebSocket is not connected')
+    }
+
+    const payload: any = {
+      type: 'message',
+      content
+    }
+    // 如果有附件，添加到消息中
+    if (attachments.length > 0) {
+      payload.attachments = attachments.map(att => {
+        let url = att.dataUrl
+        // 过滤掉无效的 URL（blob URL 或 data URL 不应该被发送到后端）
+        if (url?.startsWith('blob:') || url?.startsWith('data:')) {
+          console.warn('[sendMessage] Invalid URL detected, skipping:', url.substring(0, 50))
+          url = ''
+        }
+        // 将完整 URL 转换为相对路径（后端期望 /uploads/xxx.png 或 /api/files/xxx 格式）
+        if (url?.includes('/uploads/')) {
+          const uploadsIndex = url.indexOf('/uploads/')
+          url = url.substring(uploadsIndex)
+        } else if (url?.includes('/api/files/')) {
+          const filesIndex = url.indexOf('/api/files/')
+          url = url.substring(filesIndex)
+        }
+        // 根据 MIME 类型确定附件类型
+        let type = 'file'
+        if (att.mimeType?.startsWith('image/')) {
+          type = 'image'
+        } else if (att.mimeType === 'application/pdf') {
+          type = 'pdf'
+        } else if (att.mimeType === 'text/plain') {
+          type = 'text'
+        }
+        return {
+          type: type,
+          mimeType: att.mimeType,
+          url: url
+        }
+      }).filter(att => att.url) // 过滤掉空 URL 的附件
+    }
+    // 添加 mentions 相关选项
+    if (options?.mentions?.length) {
+      payload.mentions = options.mentions
+    }
+    if (options?.mentionAll) {
+      payload.mentionAll = true
+    }
+    if (options?.mentionHere) {
+      payload.mentionHere = true
+    }
+    if (options?.openclawMentioned) {
+      payload.openclawMentioned = true
+    }
+    console.log('[chatStore.sendMessage] sending payload:', JSON.stringify(payload).substring(0, 500))
+
+    try {
       ws.value.send(JSON.stringify(payload))
+    } catch (error) {
+      console.error('[chatStore.sendMessage] Failed to send message:', error)
+
+      // 触发重连
+      if (currentRoomIdForReconnect.value) {
+        console.log('[chatStore.sendMessage] Triggering reconnect after send error...')
+        reconnectAttempts.value = 0
+        scheduleReconnect(currentRoomIdForReconnect.value)
+      }
+
+      throw error
     }
   }
   
@@ -474,24 +513,22 @@ export const useChatStore = defineStore('chat', () => {
           console.log('[WebSocket] tool_start ignored - room mismatch:', data.roomId, '!=', currentRoom.value?.id)
           break
         }
-        // 实时更新工具调用状态
+        // 实时更新工具调用状态 - 后端现在发送完整的 toolCalls 列表
         {
           const index = messages.value.findIndex(m => m.id === data.message.id)
           if (index !== -1) {
             const updatedMsg = { ...messages.value[index] }
-            const newToolCall = data.message.toolCalls?.[0]
-            if (newToolCall) {
-              const existingToolCalls = updatedMsg.toolCalls || []
-              // 检查是否已存在相同的 toolCallId，避免重复添加
-              const exists = existingToolCalls.some(tc => tc.id === newToolCall.id)
-              if (!exists) {
-                updatedMsg.toolCalls = [...existingToolCalls, newToolCall]
-                updatedMsg.isToolCall = true
-                messages.value.splice(index, 1, updatedMsg)
-                console.log('[WebSocket] tool_start - added tool call:', newToolCall.name, 'id:', newToolCall.id)
-              } else {
-                console.log('[WebSocket] tool_start - tool call already exists:', newToolCall.id)
+            // 使用后端发送的完整 toolCalls 列表
+            const toolCalls = data.message.toolCalls || []
+            if (toolCalls.length > 0) {
+              updatedMsg.toolCalls = toolCalls
+              updatedMsg.isToolCall = true
+              // 同时更新内容（后端现在发送累积内容）
+              if (data.message.content) {
+                updatedMsg.content = data.message.content
               }
+              messages.value.splice(index, 1, updatedMsg)
+              console.log('[WebSocket] tool_start - updated tool calls:', toolCalls.length)
             }
           } else {
             console.warn('[WebSocket] tool_start - message not found:', data.message.id)

@@ -209,7 +209,7 @@ const filteredMentionUsers = computed(() => {
 
 // ============ 消息发送 ============
 
-function sendMessage() {
+async function sendMessage() {
   const content = inputMessage.value.trim()
   if ((!content && attachments.value.length === 0) || !props.isConnected) return
 
@@ -219,11 +219,18 @@ function sendMessage() {
     mimeType: att.contentType || 'application/octet-stream'
   }))
 
-  emit('send-message', content, chatAttachments)
-  inputMessage.value = ''
-  attachments.value = []
-  showMentionList.value = false
-  adjustTextareaHeight()
+  try {
+    emit('send-message', content, chatAttachments)
+    inputMessage.value = ''
+    attachments.value = []
+    showMentionList.value = false
+    adjustTextareaHeight()
+  } catch (error) {
+    console.error('Failed to send message:', error)
+    // 发送失败时不清空输入，让用户可以重试
+    // 显示错误提示（使用 alert 或 toast）
+    alert('消息发送失败，请检查网络连接后重试')
+  }
 }
 
 // 处理语音输入发送

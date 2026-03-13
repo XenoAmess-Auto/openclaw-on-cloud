@@ -1544,7 +1544,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                     .build();
             streamingMessage.set(updatedMsg);
 
-            // 广播工具调用开始事件
+            // 广播工具调用开始事件 - 包含完整消息内容，方便前端直接更新
             log.info("Broadcasting tool_start event to room {}: tool={}", roomId, toolName);
             broadcastToRoom(roomId, WebSocketMessage.builder()
                     .type("tool_start")
@@ -1553,10 +1553,14 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                             .id(messageId)
                             .senderId(openClawPluginService.getBotUsername())
                             .senderName(openClawPluginService.getBotUsername())
-                            .toolCalls(List.of(toolCall))
+                            .senderAvatar(openClawPluginService.getBotAvatarUrl())
+                            .content(contentBuilder.get().toString())
+                            .toolCalls(currentToolCalls)
                             .isToolCall(true)
+                            .isStreaming(true)
                             .fromOpenClaw(true)
                             .replyToMessageId(task.getSourceMessageId())
+                            .timestamp(Instant.now())
                             .build())
                     .build());
 
@@ -1596,8 +1600,8 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                         .toolCalls(currentToolCalls)
                         .build();
                 streamingMessage.set(updatedMsg);
-                
-                // 广播工具调用完成事件到前端
+
+                // 广播工具调用完成事件到前端 - 包含完整消息内容
                 log.info("Broadcasting tool_result event to room {}: tool={}, status={}", roomId, toolCallId, isError ? "error" : "completed");
                 broadcastToRoom(roomId, WebSocketMessage.builder()
                         .type("tool_result")
@@ -1606,10 +1610,14 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                                 .id(messageId)
                                 .senderId(openClawPluginService.getBotUsername())
                                 .senderName(openClawPluginService.getBotUsername())
+                                .senderAvatar(openClawPluginService.getBotAvatarUrl())
+                                .content(contentBuilder.get().toString())
                                 .toolCalls(currentToolCalls)
                                 .isToolCall(true)
+                                .isStreaming(true)
                                 .fromOpenClaw(true)
                                 .replyToMessageId(task.getSourceMessageId())
+                                .timestamp(Instant.now())
                                 .build())
                         .build());
                 log.info("Tool result broadcast completed for room {}: tool={}", roomId, toolCallId);
