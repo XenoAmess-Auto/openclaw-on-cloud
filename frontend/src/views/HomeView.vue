@@ -356,11 +356,17 @@ async function loadMoreMessages() {
 }
 
 // 发送消息
-function handleSendMessage(content: string, attachments: Array<{ id: string; dataUrl: string; mimeType: string }>) {
-  if ((!content.trim() && attachments.length === 0) || !chatStore.isConnected || !currentRoomId.value) return
+async function handleSendMessage(content: string, attachments: Array<{ id: string; dataUrl: string; mimeType: string }>) {
+  if ((!content.trim() && attachments.length === 0) || !currentRoomId.value) return
 
   console.log('[handleSendMessage] content:', content, 'attachments:', attachments)
-  chatStore.sendMessage(content, attachments)
+
+  try {
+    await chatStore.sendMessage(content, attachments)
+  } catch (error) {
+    console.error('[handleSendMessage] Failed to send message:', error)
+    // 错误已在 chatStore 中处理（显示系统消息），这里不需要额外处理
+  }
 }
 </script>
 
