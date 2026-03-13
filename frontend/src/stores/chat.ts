@@ -699,7 +699,7 @@ export const useChatStore = defineStore('chat', () => {
         return false
       }
 
-      const response = await chatRoomApi.getMessages(roomId, { before, size: 10 })
+      const response = await chatRoomApi.getMessages(roomId, { before, size: 100 })
       const olderMessages = response.data || []
 
       if (olderMessages.length === 0) {
@@ -709,12 +709,12 @@ export const useChatStore = defineStore('chat', () => {
 
       // 将旧消息插入到消息列表开头
       messages.value.unshift(...olderMessages)
-      
+
       // 去重确保没有重复消息
       deduplicateMessages()
-      
+
       // 如果返回的消息少于请求的条数，说明没有更多了
-      if (olderMessages.length < 10) {
+      if (olderMessages.length < 100) {
         hasMoreMessages.value = false
       }
 
