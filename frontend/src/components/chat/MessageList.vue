@@ -37,6 +37,12 @@
             <span class="time">{{ formatTime(msg.timestamp) }}</span>
           </div>
           <div class="message-content flowbot-content" v-html="renderContent(msg)"></div>
+          <!-- 消息操作按钮 -->
+          <div class="message-actions">
+            <button class="action-btn" @click="copyMessage(msg)" title="复制">📋 复制</button>
+            <button class="action-btn" @click="forwardMessage(msg)" title="转发">↗️ 转发</button>
+            <button v-if="msg.senderId === currentUserId" class="action-btn" @click="resendMessage(msg)" title="重发">🔄 重发</button>
+          </div>
         </div>
       </div>
       
@@ -51,6 +57,12 @@
             <span class="time">{{ formatTime(msg.timestamp) }}</span>
           </div>
           <div class="message-content flowbot-content">{{ msg.content }}</div>
+          <!-- 消息操作按钮 -->
+          <div class="message-actions">
+            <button class="action-btn" @click="copyMessage(msg)" title="复制">📋 复制</button>
+            <button class="action-btn" @click="forwardMessage(msg)" title="转发">↗️ 转发</button>
+            <button v-if="msg.senderId === currentUserId" class="action-btn" @click="resendMessage(msg)" title="重发">🔄 重发</button>
+          </div>
         </div>
       </div>
       
@@ -72,6 +84,12 @@
                 </span>
               </div>
               <div class="message-content" v-html="segment.html"></div>
+              <!-- 消息操作按钮 -->
+              <div class="message-actions" v-if="_segIndex === renderSegments(msg).length - 1">
+                <button class="action-btn" @click="copyMessage(msg)" title="复制">📋 复制</button>
+                <button class="action-btn" @click="forwardMessage(msg)" title="转发">↗️ 转发</button>
+                <button v-if="msg.senderId === currentUserId" class="action-btn" @click="resendMessage(msg)" title="重发">🔄 重发</button>
+              </div>
             </div>
           </div>
         </template>
@@ -86,6 +104,12 @@
           </span>
         </div>
         <div class="message-content tool-call-content" v-html="renderContent(msg)"></div>
+        <!-- 消息操作按钮 -->
+        <div class="message-actions">
+          <button class="action-btn" @click="copyMessage(msg)" title="复制">📋 复制</button>
+          <button class="action-btn" @click="forwardMessage(msg)" title="转发">↗️ 转发</button>
+          <button v-if="msg.senderId === currentUserId" class="action-btn" @click="resendMessage(msg)" title="重发">🔄 重发</button>
+        </div>
       </div>
       
       <!-- 普通消息 -->
@@ -105,7 +129,7 @@
           <img v-if="getMessageAvatar(msg)" :src="getMessageAvatar(msg)" :alt="msg.senderName" />
           <div v-else class="avatar-placeholder">{{ getInitials(msg.senderName) }}</div>
         </div>
-        
+
         <div class="message-body">
           <div class="message-header">
             <span class="sender">{{ msg.senderName }}</span>
@@ -118,10 +142,17 @@
             </span>
           </div>
           <div class="message-content" v-html="renderContent(msg)"></div>
-          
+
           <!-- 被@提示 -->
           <div v-if="isMentionedMe(msg) && msg.senderId !== currentUserId" class="mention-notice">
             👤 @了你
+          </div>
+
+          <!-- 消息操作按钮 -->
+          <div class="message-actions">
+            <button class="action-btn" @click="copyMessage(msg)" title="复制">📋 复制</button>
+            <button class="action-btn" @click="forwardMessage(msg)" title="转发">↗️ 转发</button>
+            <button v-if="msg.senderId === currentUserId" class="action-btn" @click="resendMessage(msg)" title="重发">🔄 重发</button>
           </div>
         </div>
       </div>
@@ -142,15 +173,43 @@
       </span>
       <span class="typing-text">{{ formatTypingUsers(typingUsers) }}</span>
     </div>
+
+    <!-- 转发对话框 -->
+    <div v-if="showForwardDialog" class="forward-dialog-overlay" @click="showForwardDialog = false">
+      <div class="forward-dialog" @click.stop>
+        <div class="forward-dialog-header">
+          <h3>转发消息</h3>
+          <button class="close-btn" @click="showForwardDialog = false">&times;</button>
+        </div>
+        <div class="forward-dialog-content">
+          <p style="margin: 0 0 0.5rem; font-size: 0.875rem; color: var(--text-secondary);">
+            选择要转发到的聊天室：
+          </p>
+          <ul class="forward-room-list">
+            <li
+              v-for="room in availableRoomsForForward"
+              :key="room.id"
+              class="forward-room-item"
+              @click="doForward(room.id)"
+            >
+              <div class="room-name">{{ room.name }}</div>
+              <div v-if="room.description" class="room-desc">{{ room.description }}</div>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
-import type { Message, MemberDto } from '@/types'
+import type { Message, MemberDto, ChatRoom } from '@/types'
 import { getBaseUrl } from '@/utils/config'
+import { chatRoomApi } from '@/api/chatRoom'
+import { useChatStore } from '@/stores/chat'
 
 const props = defineProps<{
   messages: Message[]
@@ -162,15 +221,89 @@ const props = defineProps<{
   roomMembers: MemberDto[]
 }>()
 
-defineEmits<{
+const emit = defineEmits<{
   'load-more': []
   'scroll-to-message': [messageId: string]
+  'resend-message': [content: string, attachments: any[]]
 }>()
+
+// 转发对话框状态
+const showForwardDialog = ref(false)
+const selectedMessage = ref<Message | null>(null)
+const chatStore = useChatStore()
+
+// 可用于转发的聊天室列表（排除当前聊天室）
+const availableRoomsForForward = computed(() => {
+  return chatStore.rooms.filter((room: ChatRoom) => room.id !== chatStore.currentRoom?.id)
+})
+
+// 执行转发
+async function doForward(targetRoomId: string) {
+  if (!selectedMessage.value) return
+
+  try {
+    const msg = selectedMessage.value
+    // 构建转发消息内容
+    const forwardContent = `转发自 ${msg.senderName}：\n${msg.content || ''}`
+
+    // 调用 API 发送消息到目标聊天室
+    await chatRoomApi.sendMessage(targetRoomId, {
+      content: forwardContent,
+      attachments: msg.attachments || []
+    })
+
+    showToast('转发成功')
+    showForwardDialog.value = false
+    selectedMessage.value = null
+  } catch (error) {
+    showToast('转发失败')
+  }
+}
 
 const containerRef = ref<HTMLDivElement>()
 
 // 暴露容器引用给父组件
 defineExpose({ containerRef })
+
+// ============ 消息操作 ============
+
+// 复制消息内容
+function copyMessage(msg: Message) {
+  const textToCopy = msg.content || ''
+  navigator.clipboard.writeText(textToCopy).then(() => {
+    showToast('已复制到剪贴板')
+  }).catch(() => {
+    showToast('复制失败')
+  })
+}
+
+// 转发消息
+function forwardMessage(msg: Message) {
+  showForwardDialog.value = true
+  selectedMessage.value = msg
+}
+
+// 重发消息
+async function resendMessage(msg: Message) {
+  if (!msg.content) return
+  try {
+    await emit('resend-message', msg.content, msg.attachments || [])
+    showToast('消息已重发')
+  } catch (error) {
+    showToast('重发失败')
+  }
+}
+
+// 显示提示
+function showToast(message: string) {
+  const toast = document.createElement('div')
+  toast.className = 'toast-message'
+  toast.textContent = message
+  document.body.appendChild(toast)
+  setTimeout(() => {
+    document.body.removeChild(toast)
+  }, 2000)
+}
 
 // ============ 消息类型判断 ============
 
@@ -1389,5 +1522,173 @@ function renderSegments(msg: Message): Array<{ type: 'text' | 'tools', html: str
   .message-container {
     padding: 0.5rem;
   }
+}
+
+/* ============ 消息操作按钮 ============ */
+.message-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--border-color);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.message:hover .message-actions,
+.flowbot-message:hover .message-actions,
+.openclaw-message-container:hover .message-actions,
+.tool-call-message:hover .message-actions {
+  opacity: 1;
+}
+
+.action-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.375rem 0.75rem;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.action-btn:hover {
+  color: var(--primary-color);
+  background: var(--bg-color);
+  border-color: var(--primary-color);
+}
+
+/* 移动端始终显示操作按钮 */
+@media (max-width: 768px) {
+  .message-actions {
+    opacity: 1;
+    gap: 0.375rem;
+  }
+
+  .action-btn {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.6875rem;
+  }
+}
+
+/* Toast 提示 */
+.toast-message {
+  position: fixed;
+  bottom: 100px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 0.75rem 1.5rem;
+  background: rgba(0, 0, 0, 0.8);
+  color: white;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  z-index: 1000;
+  animation: fadeInUp 0.3s ease;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+/* 转发对话框 */
+.forward-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.forward-dialog {
+  background: var(--surface-color);
+  border-radius: 12px;
+  width: 90%;
+  max-width: 400px;
+  max-height: 80vh;
+  overflow: hidden;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+}
+
+.forward-dialog-header {
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.forward-dialog-header h3 {
+  margin: 0;
+  font-size: 1rem;
+  color: var(--text-primary);
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: background 0.2s;
+}
+
+.close-btn:hover {
+  background: var(--bg-color);
+}
+
+.forward-dialog-content {
+  padding: 1rem;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.forward-room-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.forward-room-item {
+  padding: 0.75rem;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.2s;
+  margin-bottom: 0.5rem;
+}
+
+.forward-room-item:hover {
+  background: var(--bg-color);
+}
+
+.forward-room-item .room-name {
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.forward-room-item .room-desc {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  margin-top: 0.25rem;
 }
 </style>

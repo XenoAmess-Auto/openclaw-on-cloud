@@ -76,5 +76,9 @@ export const chatRoomApi = {
 
   // 更新群聊的项目配置
   updateProjects: (roomId: string, projects: string[]) =>
-    apiClient.put<ChatRoom>(`/chat-rooms/${roomId}/projects`, { projects })
+    apiClient.put<ChatRoom>(`/chat-rooms/${roomId}/projects`, { projects }),
+
+  // 发送消息（用于转发等功能）
+  sendMessage: (roomId: string, data: { content: string; attachments?: any[] }) =>
+    apiClient.post<Message>(`/chat-rooms/${roomId}/messages`, data)
 }
