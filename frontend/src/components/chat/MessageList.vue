@@ -267,14 +267,51 @@ defineExpose({ containerRef })
 
 // ============ 消息操作 ============
 
-// 复制消息内容
+// 复制消息内容（兼容非 HTTPS 场景）
 function copyMessage(msg: Message) {
   const textToCopy = msg.content || ''
-  navigator.clipboard.writeText(textToCopy).then(() => {
-    showToast('已复制到剪贴板')
-  }).catch(() => {
+
+  // 优先使用现代 Clipboard API
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(textToCopy).then(() => {
+      showToast('已复制到剪贴板')
+    }).catch(() => {
+      // 降级到 execCommand
+      fallbackCopyTextToClipboard(textToCopy)
+    })
+  } else {
+    // 非安全上下文使用降级方案
+    fallbackCopyTextToClipboard(textToCopy)
+  }
+}
+
+// 降级复制方案（使用 execCommand）
+function fallbackCopyTextToClipboard(text: string) {
+  const textArea = document.createElement('textarea')
+  textArea.value = text
+
+  // 避免滚动到视图中
+  textArea.style.position = 'fixed'
+  textArea.style.left = '-9999px'
+  textArea.style.top = '0'
+
+  document.body.appendChild(textArea)
+  textArea.focus()
+  textArea.select()
+
+  try {
+    const successful = document.execCommand('copy')
+    if (successful) {
+      showToast('已复制到剪贴板')
+    } else {
+      showToast('复制失败')
+    }
+  } catch (err) {
+    console.error('Copy failed:', err)
     showToast('复制失败')
-  })
+  }
+
+  document.body.removeChild(textArea)
 }
 
 // 转发消息
