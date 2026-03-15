@@ -1532,15 +1532,6 @@ function renderSegments(msg: Message): Array<{ type: 'text' | 'tools', html: str
   margin-top: 0.5rem;
   padding-top: 0.5rem;
   border-top: 1px solid var(--border-color);
-  opacity: 0;
-  transition: opacity 0.2s ease;
-}
-
-.message:hover .message-actions,
-.flowbot-message:hover .message-actions,
-.openclaw-message-container:hover .message-actions,
-.tool-call-message:hover .message-actions {
-  opacity: 1;
 }
 
 .action-btn {
