@@ -60,11 +60,15 @@ public class OpenClawWebSocketClient {
     private final Map<String, Integer> processedEvents = new ConcurrentHashMap<>();
     // 事件去重缓存过期时间（毫秒）
     private static final long EVENT_DEDUP_EXPIRY_MS = 300000; // 5分钟
-    
+
     // 延迟清理的调度器
     private final Map<String, ScheduledFuture<?>> delayedCleanups = new ConcurrentHashMap<>();
     // 延迟清理时间（毫秒）- 给子代理足够的时间发送事件
     private static final long DELAYED_CLEANUP_MS = 15000; // 15秒
+
+    // 每个会话的序列号计数器（当 OpenClaw Gateway 的 seq 缺失时使用）
+    // key: sessionId, value: 下一个序列号
+    private final Map<String, AtomicInteger> sessionSeqCounters = new ConcurrentHashMap<>();
 
     /**
      * 响应处理器接口
@@ -427,6 +431,14 @@ public class OpenClawWebSocketClient {
     }
 
     /**
+     * 获取下一个序列号（当 OpenClaw Gateway 的 seq 缺失时使用）
+     */
+    private int getNextSeq(String sessionId) {
+        return sessionSeqCounters.computeIfAbsent(sessionId, k -> new AtomicInteger(0))
+                .getAndIncrement();
+    }
+
+    /**
      * WebSocket 消息处理器
      */
     private class OpenClawGatewayHandler extends TextWebSocketHandler {
@@ -434,6 +446,8 @@ public class OpenClawWebSocketClient {
         private boolean connected = false;
         // 跟踪已发送 start 事件的工具调用（OpenClaw 有时会跳过 start 直接发 update/result）
         private final Set<String> startedToolCalls = ConcurrentHashMap.newKeySet();
+        // 本地序列号计数器（当 Gateway 的 seq 缺失时使用）
+        private final AtomicInteger localSeqCounter = new AtomicInteger(0);
 
         public OpenClawGatewayHandler(String sessionId) {
             this.sessionId = sessionId;
@@ -712,9 +726,15 @@ public class OpenClawWebSocketClient {
                 }
             }
             
-            log.debug("[OpenClaw WS] Agent event received: stream={}, sessionKeyFromPayload={}, runId={}, seq={}", 
+            log.debug("[OpenClaw WS] Agent event received: stream={}, sessionKeyFromPayload={}, runId={}, seq={}",
                     stream, sessionKeyFromPayload, runId, seq);
-            
+
+            // 如果 seq 缺失或为负数，使用本地递增计数器
+            if (seq < 0) {
+                seq = localSeqCounter.getAndIncrement();
+                log.debug("[OpenClaw WS] Using local seq: {} (Gateway seq was missing)", seq);
+            }
+
             ResponseHandler handler = null;
             String targetSessionId = null;
             
@@ -872,6 +892,9 @@ public class OpenClawWebSocketClient {
             if (closedTimeout != null) {
                 closedTimeout.cancel(false);
             }
+
+            // 清理序列号计数器
+            sessionSeqCounters.remove(sessionId);
 
             if (!status.equals(CloseStatus.NORMAL)) {
                 ResponseHandler handler = responseHandlers.remove(sessionId);
