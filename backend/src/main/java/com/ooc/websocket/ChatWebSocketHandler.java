@@ -1488,9 +1488,9 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                 contentBuilder.get().append(event.content());
                 String currentContent = contentBuilder.get().toString();
 
-                log.info("Appending OpenClaw content for task {}: newChars={}, totalChars={}",
+                log.info("Appending OpenClaw content for task {}: newChars={}, totalChars={}, seq={}",
                         task.getTaskId(),
-                        event.content().length(), currentContent.length());
+                        event.content().length(), currentContent.length(), event.seq());
 
                 // 更新消息内容
                 ChatRoom.Message updatedMsg = streamingMessage.get().toBuilder()
@@ -1498,10 +1498,11 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
                         .build();
                 streamingMessage.set(updatedMsg);
 
-                // 广播增量更新
+                // 广播增量更新（包含序列号用于前端排序）
                 broadcastToRoom(roomId, WebSocketMessage.builder()
                         .type("stream_delta")
                         .roomId(roomId)
+                        .seq(event.seq())
                         .message(ChatRoom.Message.builder()
                                 .id(messageId)
                                 .content(event.content())

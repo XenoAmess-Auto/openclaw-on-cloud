@@ -956,28 +956,28 @@ public class OpenClawPluginService {
                         private final StringBuilder fullContent = new StringBuilder();
 
                         @Override
-                        public void onTextChunk(String text) {
+                        public void onTextChunk(String text, int seq) {
                             fullContent.append(text);
-                            sink.next(new StreamEvent("message", text, null, null, null, false));
+                            sink.next(new StreamEvent("message", text, null, null, null, false, seq));
                         }
 
                         @Override
-                        public void onToolStart(String toolName, String toolCallId, Map<String, Object> args) {
-                            log.info("[OpenClaw WS] Tool start: {} ({})", toolName, toolCallId);
-                            sink.next(new StreamEvent("tool_start", null, toolName, args != null ? args.toString() : "", toolCallId, false));
+                        public void onToolStart(String toolName, String toolCallId, Map<String, Object> args, int seq) {
+                            log.info("[OpenClaw WS] Tool start: {} ({}) seq={}", toolName, toolCallId, seq);
+                            sink.next(new StreamEvent("tool_start", null, toolName, args != null ? args.toString() : "", toolCallId, false, seq));
                         }
 
                         @Override
-                        public void onToolUpdate(String toolCallId, Object partialResult) {
+                        public void onToolUpdate(String toolCallId, Object partialResult, int seq) {
                             // 可选：处理工具执行中的更新
-                            log.debug("[OpenClaw WS] Tool update: {}", toolCallId);
+                            log.debug("[OpenClaw WS] Tool update: {} seq={}", toolCallId, seq);
                         }
 
                         @Override
-                        public void onToolResult(String toolCallId, Object result, boolean isError) {
-                            log.info("[OpenClaw WS] Tool result: {} (error={})", toolCallId, isError);
+                        public void onToolResult(String toolCallId, Object result, boolean isError, int seq) {
+                            log.info("[OpenClaw WS] Tool result: {} (error={}) seq={}", toolCallId, isError, seq);
                             String resultStr = result != null ? result.toString() : "";
-                            sink.next(new StreamEvent("tool_result", resultStr, null, null, toolCallId, false, isError));
+                            sink.next(new StreamEvent("tool_result", resultStr, null, null, toolCallId, false, isError, seq));
                         }
 
                         @Override
@@ -1063,11 +1063,22 @@ public class OpenClawPluginService {
             String toolInput,
             String messageId,
             boolean completed,
-            boolean isError
+            boolean isError,
+            int seq
     ) {
-        // 简化构造函数，用于非工具调用事件
+        // 简化构造函数，用于非工具调用事件（向后兼容，默认seq=0）
         public StreamEvent(String type, String content, String toolName, String toolInput, String messageId, boolean completed) {
-            this(type, content, toolName, toolInput, messageId, completed, false);
+            this(type, content, toolName, toolInput, messageId, completed, false, 0);
+        }
+
+        // 带序列号的构造函数
+        public StreamEvent(String type, String content, String toolName, String toolInput, String messageId, boolean completed, int seq) {
+            this(type, content, toolName, toolInput, messageId, completed, false, seq);
+        }
+
+        // 带错误标志的构造函数（向后兼容，默认seq=0）
+        public StreamEvent(String type, String content, String toolName, String toolInput, String messageId, boolean completed, boolean isError) {
+            this(type, content, toolName, toolInput, messageId, completed, isError, 0);
         }
     }
 

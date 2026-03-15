@@ -25,4 +25,5 @@ public class WebSocketMessage {
     private List<ChatRoom.Message> messages;
     private List<com.ooc.websocket.Attachment> attachments; // 附件列表
     private Boolean hasMore; // 是否还有更多历史消息
+    private Integer seq; // 序列号，用于流式消息排序
 }

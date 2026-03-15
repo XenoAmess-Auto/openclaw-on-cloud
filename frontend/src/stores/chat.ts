@@ -483,6 +483,10 @@ export const useChatStore = defineStore('chat', () => {
             break
           }
         }
+        // 初始化 deltaBuffer
+        if (!data.message.deltaBuffer) {
+          data.message.deltaBuffer = []
+        }
         messages.value.push(data.message)
         break
       case 'stream_delta':
@@ -492,15 +496,31 @@ export const useChatStore = defineStore('chat', () => {
           console.log('[WebSocket] stream_delta ignored - room mismatch:', data.roomId, '!=', currentRoom.value?.id)
           break
         }
-        // 追加到最新消息
+        // 使用序列号排序组装内容
         {
           const index = messages.value.findIndex(m => m.id === data.message.id)
           if (index !== -1) {
             // 创建新对象以确保响应式更新
             const updatedMsg = { ...messages.value[index] }
-            updatedMsg.content = (updatedMsg.content || '') + (data.message.content || '')
+            
+            // 初始化 deltaBuffer（如果还没有）
+            if (!updatedMsg.deltaBuffer) {
+              updatedMsg.deltaBuffer = [] as Array<{seq: number; content: string}>
+            }
+            
+            // 添加新的 delta 片段（使用 seq 或递增生成）
+            const seq = data.seq ?? updatedMsg.deltaBuffer.length
+            updatedMsg.deltaBuffer.push({
+              seq: seq,
+              content: data.message.content || ''
+            })
+            
+            // 按序列号排序并组装内容
+            updatedMsg.deltaBuffer.sort((a, b) => a.seq - b.seq)
+            updatedMsg.content = updatedMsg.deltaBuffer.map(d => d.content).join('')
+            
             messages.value.splice(index, 1, updatedMsg)
-            console.log('[WebSocket] stream_delta - appended content, total length:', updatedMsg.content.length)
+            console.log('[WebSocket] stream_delta - appended content with seq:', seq, 'total length:', updatedMsg.content.length)
           } else {
             console.warn('[WebSocket] stream_delta - message not found:', data.message.id)
           }
@@ -599,11 +619,26 @@ export const useChatStore = defineStore('chat', () => {
               console.log('[WebSocket] stream_end - preserved existing replyToMessageId:', existingMsg.replyToMessageId)
             }
 
+            // 如果有 deltaBuffer，使用它组装最终内容（确保顺序正确）
+            if (existingMsg.deltaBuffer && existingMsg.deltaBuffer.length > 0) {
+              existingMsg.deltaBuffer.sort((a, b) => a.seq - b.seq)
+              const assembledContent = existingMsg.deltaBuffer.map(d => d.content).join('')
+              if (assembledContent.length > (mergedMessage.content || '').length) {
+                mergedMessage.content = assembledContent
+                console.log('[WebSocket] stream_end - using assembled content from deltaBuffer:', assembledContent.length)
+              }
+            }
+
+            // 清理 deltaBuffer 释放内存
+            delete mergedMessage.deltaBuffer
+
             // 使用 splice 确保响应式更新
             messages.value.splice(index, 1, mergedMessage)
             console.log('[WebSocket] stream_end - message replaced at index:', index)
           } else {
             // 找不到消息，追加为新消息（可能是 WebSocket 重连后的新流式消息）
+            // 清理 deltaBuffer（如果有）
+            delete data.message.deltaBuffer
             messages.value.push(data.message)
             console.log('[WebSocket] stream_end - message appended (not found in existing):', data.message.id)
           }

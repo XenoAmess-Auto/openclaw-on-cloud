@@ -52,6 +52,7 @@ export interface Message {
   mentionAll?: boolean
   mentionHere?: boolean
   attachments?: Attachment[]
+  deltaBuffer?: Array<{seq: number; content: string}> // 流式消息片段缓冲区
 }
 
 export interface MentionRecord {

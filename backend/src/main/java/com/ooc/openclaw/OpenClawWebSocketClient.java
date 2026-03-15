@@ -70,10 +70,10 @@ public class OpenClawWebSocketClient {
      * 响应处理器接口
      */
     public interface ResponseHandler {
-        void onTextChunk(String text);
-        void onToolStart(String toolName, String toolCallId, Map<String, Object> args);
-        void onToolUpdate(String toolCallId, Object partialResult);
-        void onToolResult(String toolCallId, Object result, boolean isError);
+        void onTextChunk(String text, int seq);
+        void onToolStart(String toolName, String toolCallId, Map<String, Object> args, int seq);
+        void onToolUpdate(String toolCallId, Object partialResult, int seq);
+        void onToolResult(String toolCallId, Object result, boolean isError, int seq);
         void onComplete();
         void onError(String error);
     }
@@ -789,15 +789,15 @@ public class OpenClawWebSocketClient {
                     // delta 和 text 不应该同时使用，因为它们代表相同的内容
                     // 注意：runId + seq 的去重逻辑已经在前面处理过了
                     if (delta != null && !delta.isEmpty()) {
-                        handler.onTextChunk(delta);
-                        log.debug("[OpenClaw WS] Sent delta: {} chars", delta.length());
+                        handler.onTextChunk(delta, seq);
+                        log.debug("[OpenClaw WS] Sent delta: {} chars, seq={}", delta.length(), seq);
                     }
                     // 注意：不再使用 text 字段，因为它包含的是累积内容
                     // 使用 text 会导致内容被重复追加（delta 追加了增量，text 又追加了累积）
                     break;
 
                 case "tool":
-                    handleToolEvent(data, handler);
+                    handleToolEvent(data, handler, seq);
                     break;
 
                 case "lifecycle":
@@ -809,7 +809,7 @@ public class OpenClawWebSocketClient {
             }
         }
 
-        private void handleToolEvent(JsonNode data, ResponseHandler handler) {
+        private void handleToolEvent(JsonNode data, ResponseHandler handler, int seq) {
             String phase = data.path("phase").asText();
             String toolName = data.path("name").asText();
             String toolCallId = data.path("toolCallId").asText();
@@ -825,7 +825,7 @@ public class OpenClawWebSocketClient {
                         args.put(entry.getKey(), entry.getValue());
                     });
                 }
-                handler.onToolStart(toolName, toolCallId, args);
+                handler.onToolStart(toolName, toolCallId, args, seq);
                 startedToolCalls.add(toolCallId);
             }
 
@@ -839,21 +839,21 @@ public class OpenClawWebSocketClient {
                             args.put(entry.getKey(), entry.getValue());
                         });
                     }
-                    log.info("[OpenClaw WS] Tool start: {} ({})", toolName, toolCallId);
-                    handler.onToolStart(toolName, toolCallId, args);
+                    log.info("[OpenClaw WS] Tool start: {} ({}) seq={}", toolName, toolCallId, seq);
+                    handler.onToolStart(toolName, toolCallId, args, seq);
                     startedToolCalls.add(toolCallId);
                     break;
 
                 case "update":
                     Object partialResult = data.path("partialResult");
-                    handler.onToolUpdate(toolCallId, partialResult);
+                    handler.onToolUpdate(toolCallId, partialResult, seq);
                     break;
 
                 case "result":
                     Object result = data.path("result");
                     boolean isError = data.path("isError").asBoolean(false);
-                    log.info("[OpenClaw WS] Tool result: {} (error={})", toolName, isError);
-                    handler.onToolResult(toolCallId, result, isError);
+                    log.info("[OpenClaw WS] Tool result: {} (error={}) seq={}", toolName, isError, seq);
+                    handler.onToolResult(toolCallId, result, isError, seq);
                     startedToolCalls.remove(toolCallId); // 清理
                     break;
 
