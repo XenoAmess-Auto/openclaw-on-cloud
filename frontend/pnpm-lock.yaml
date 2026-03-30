@@ -30,8 +30,8 @@ importers:
         specifier: ^8.0.1
         version: 8.0.1(@capacitor/core@8.2.0)
       '@capacitor/status-bar':
-        specifier: ^8.0.1
-        version: 8.0.1(@capacitor/core@8.2.0)
+        specifier: ^8.0.2
+        version: 8.0.2(@capacitor/core@8.2.0)
       '@capacitor/toast':
         specifier: ^8.0.1
         version: 8.0.1(@capacitor/core@8.2.0)
@@ -179,8 +179,8 @@ packages:
     peerDependencies:
       '@capacitor/core': '>=8.0.0'
 
-  '@capacitor/status-bar@8.0.1':
-    resolution: {integrity: sha512-OR59dlbwvmrV5dKsC9lvwv48QaGbqcbSTBpk+9/WXWxXYSdXXdzJZU9p8oyNPAkuJhCdnSa3XmU43fZRPBJJ5w==}
+  '@capacitor/status-bar@8.0.2':
+    resolution: {integrity: sha512-WXs8YB8B9eEaPZz+bcdY6t2nForF1FLoj/JU0Dl9RRgQnddnS98FEEyDooQhaY7wivr000j4+SC1FyeJkrFO7A==}
     peerDependencies:
       '@capacitor/core': '>=8.0.0'
 
@@ -863,6 +863,7 @@ packages:
   '@xmldom/xmldom@0.8.11':
     resolution: {integrity: sha512-cQzWCtO6C8TQiYl1ruKNn2U6Ao4o4WBBcbL61yJl84x+j5sOWWFU9X7DpND8XZG3daDppSsigMdfAIl2upQBRw==}
     engines: {node: '>=10.0.0'}
+    deprecated: this version has critical issues, please update to the latest version
 
   abbrev@2.0.0:
     resolution: {integrity: sha512-6/mh1E2u2YgEsCHdY0Yx5oW+61gZU+1vXaoiHHrpKeuRNNgFvS+/jrwHiQhB5apAf5oB7UB7E19ol2R2LKH8hQ==}
@@ -2257,7 +2258,7 @@ snapshots:
     dependencies:
       '@capacitor/core': 8.2.0
 
-  '@capacitor/status-bar@8.0.1(@capacitor/core@8.2.0)':
+  '@capacitor/status-bar@8.0.2(@capacitor/core@8.2.0)':
     dependencies:
       '@capacitor/core': 8.2.0
 
