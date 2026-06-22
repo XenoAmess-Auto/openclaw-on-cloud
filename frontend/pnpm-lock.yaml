@@ -12,8 +12,8 @@ importers:
         specifier: ^8.4.1
         version: 8.4.1(@capacitor/core@8.4.1)
       '@capacitor/cli':
-        specifier: ^8.4.0
-        version: 8.4.0
+        specifier: ^8.4.1
+        version: 8.4.1
       '@capacitor/core':
         specifier: ^8.4.1
         version: 8.4.1
@@ -151,8 +151,8 @@ packages:
     peerDependencies:
       '@capacitor/core': ^8.4.0
 
-  '@capacitor/cli@8.4.0':
-    resolution: {integrity: sha512-5Z9RKHxiqJYRTLrfMeZmzR4qrlg5B85MxsWZ5goyXsLkO3bgpW9a1qV/6fR1SX9s5gwLza5y7PZVwITl/hDJ7g==}
+  '@capacitor/cli@8.4.1':
+    resolution: {integrity: sha512-t7F2s7fFHCq113xgrggrmK6ctV0/8E5YfLNVLfPHp4GCTDO+tly9fZvWPf2/sOI8lMm18dLT43qbXLRTz/OZgw==}
     engines: {node: '>=22.0.0'}
     hasBin: true
 
@@ -1847,13 +1847,8 @@ packages:
     engines: {node: '>=10'}
     hasBin: true
 
-  semver@7.8.2:
-    resolution: {integrity: sha512-c8jsqUZm3omBOI66G90z1Dyw5z622G8oLG+omfsHBJf3CWQTlOcwOjvOG6wtiNfW6anKm/eA39LMwMtMez2TiQ==}
-    engines: {node: '>=10'}
-    hasBin: true
-
-  semver@7.8.4:
-    resolution: {integrity: sha512-rUCObTnP32Q08R2uuIrt7r9PlEonuTmtuXYcW6s5kjdlj3xbnwe+21yXptAUYcMAABLkYYTtnmzb3w3EDZfueA==}
+  semver@7.8.5:
+    resolution: {integrity: sha512-Y7/KDsb8LjooZpwaqGyulO6DQlksgCncchHGk+sZIY4SBvUocMBEFH5Ur1fI4dV+Jvl0w6cjvucaIi40puRioA==}
     engines: {node: '>=10'}
     hasBin: true
 
@@ -2231,7 +2226,7 @@ snapshots:
     dependencies:
       '@capacitor/core': 8.4.1
 
-  '@capacitor/cli@8.4.0':
+  '@capacitor/cli@8.4.1':
     dependencies:
       '@ionic/cli-framework-output': 2.2.8
       '@ionic/utils-subprocess': 3.0.1
@@ -2246,7 +2241,7 @@ snapshots:
       plist: 3.1.1
       prompts: 2.4.2
       rimraf: 6.1.3
-      semver: 7.8.2
+      semver: 7.8.5
       tar: 7.5.16
       tslib: 2.8.1
       xml2js: 0.6.2
@@ -2720,7 +2715,7 @@ snapshots:
       '@typescript-eslint/visitor-keys': 8.61.0
       debug: 4.4.3
       minimatch: 10.2.5
-      semver: 7.8.4
+      semver: 7.8.5
       tinyglobby: 0.2.17
       ts-api-utils: 2.5.0(typescript@5.9.3)
       typescript: 5.9.3
@@ -3251,7 +3246,7 @@ snapshots:
       '@one-ini/wasm': 0.1.1
       commander: 10.0.1
       minimatch: 9.0.9
-      semver: 7.8.2
+      semver: 7.8.5
 
   elementtree@0.1.7:
     dependencies:
@@ -3742,7 +3737,7 @@ snapshots:
 
   node-abi@3.87.0:
     dependencies:
-      semver: 7.8.4
+      semver: 7.8.5
 
   node-addon-api@6.1.0: {}
 
@@ -3970,9 +3965,7 @@ snapshots:
 
   semver@7.7.4: {}
 
-  semver@7.8.2: {}
-
-  semver@7.8.4: {}
+  semver@7.8.5: {}
 
   sharp@0.32.6:
     dependencies:
@@ -3980,7 +3973,7 @@ snapshots:
       detect-libc: 2.1.2
       node-addon-api: 6.1.0
       prebuild-install: 7.1.3
-      semver: 7.8.2
+      semver: 7.8.5
       simple-get: 4.0.1
       tar-fs: 3.1.1
       tunnel-agent: 0.6.0
