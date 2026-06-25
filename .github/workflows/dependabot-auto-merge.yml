@@ -47,17 +47,14 @@ jobs:
 
       - name: Approve dependabot PR
         if: steps.check.outputs.should_merge == 'true'
-        run: |
-          echo "MY_GH_TOKEN length: ${#MY_GH_TOKEN}"
-          echo "MY_GH_TOKEN first 4: ${MY_GH_TOKEN:0:4}"
-          GH_TOKEN="$MY_GH_TOKEN" gh pr review --approve "$PR_URL"
+        run: gh pr review --approve "$PR_URL"
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
-          MY_GH_TOKEN: ${{ secrets.MYTOKEN }}
+          GH_TOKEN: ${{ secrets.MYTOKEN }}
 
       - name: Enable auto-merge
         if: steps.check.outputs.should_merge == 'true'
-        run: GH_TOKEN="$MY_GH_TOKEN" gh pr merge --auto --rebase "$PR_URL"
+        run: gh pr merge --auto --rebase "$PR_URL"
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
-          MY_GH_TOKEN: ${{ secrets.MYTOKEN }}
+          GH_TOKEN: ${{ secrets.MYTOKEN }}
