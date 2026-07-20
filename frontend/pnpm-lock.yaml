@@ -30,8 +30,8 @@ importers:
         specifier: ^8.0.2
         version: 8.0.2(@capacitor/core@8.4.2)
       '@capacitor/status-bar':
-        specifier: ^8.0.2
-        version: 8.0.2(@capacitor/core@8.4.2)
+        specifier: ^8.0.3
+        version: 8.0.3(@capacitor/core@8.4.2)
       '@capacitor/toast':
         specifier: ^8.0.1
         version: 8.0.1(@capacitor/core@8.4.2)
@@ -179,8 +179,8 @@ packages:
     peerDependencies:
       '@capacitor/core': '>=8.0.0'
 
-  '@capacitor/status-bar@8.0.2':
-    resolution: {integrity: sha512-WXs8YB8B9eEaPZz+bcdY6t2nForF1FLoj/JU0Dl9RRgQnddnS98FEEyDooQhaY7wivr000j4+SC1FyeJkrFO7A==}
+  '@capacitor/status-bar@8.0.3':
+    resolution: {integrity: sha512-csSpfNeN49Hx9JaQBSJEIiEbOLtXg3kcc2IpScq2fu5L520h3AWEvsxoH8Srk1jxfRKepaJ4S4sqSC3foI4AgA==}
     peerDependencies:
       '@capacitor/core': '>=8.0.0'
 
@@ -2310,7 +2310,7 @@ snapshots:
     dependencies:
       '@capacitor/core': 8.4.2
 
-  '@capacitor/status-bar@8.0.2(@capacitor/core@8.4.2)':
+  '@capacitor/status-bar@8.0.3(@capacitor/core@8.4.2)':
     dependencies:
       '@capacitor/core': 8.4.2
 
