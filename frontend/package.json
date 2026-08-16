@@ -18,7 +18,7 @@
     "mobile:build": "pnpm build && pnpm android:sync && pnpm android:build"
   },
   "dependencies": {
-    "@capacitor/android": "^8.4.2",
+    "@capacitor/android": "^8.5.0",
     "@capacitor/cli": "^8.5.0",
     "@capacitor/core": "^8.5.0",
     "@capacitor/network": "^8.0.1",
