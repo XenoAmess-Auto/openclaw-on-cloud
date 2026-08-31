@@ -48,7 +48,7 @@
     "@types/marked": "^6.0.0",
     "@types/node": "^22.20.1",
     "@typescript-eslint/eslint-plugin": "^8.67.0",
-    "@typescript-eslint/parser": "^8.67.0",
+    "@typescript-eslint/parser": "^8.68.0",
     "@vitejs/plugin-vue": "^5.2.1",
     "@vue/test-utils": "^2.5.0",
     "@vue/tsconfig": "^0.9.1",
