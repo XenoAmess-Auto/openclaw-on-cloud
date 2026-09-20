@@ -12,8 +12,8 @@ importers:
         specifier: ^8.5.1
         version: 8.5.1(@capacitor/core@8.5.2)
       '@capacitor/cli':
-        specifier: ^8.5.1
-        version: 8.5.1(supports-color@7.2.0)
+        specifier: ^8.5.2
+        version: 8.5.2(supports-color@7.2.0)
       '@capacitor/core':
         specifier: ^8.5.2
         version: 8.5.2
@@ -151,8 +151,8 @@ packages:
     peerDependencies:
       '@capacitor/core': ^8.5.0
 
-  '@capacitor/cli@8.5.1':
-    resolution: {integrity: sha512-LKQFSyLg1QbTN6CGDoFqeRtAlj8C3c9OymP8OuhwlmkbSQwh9i1HQjwUCaNyVem2XkY9rv0v2UOfVlgoxH5pAw==}
+  '@capacitor/cli@8.5.2':
+    resolution: {integrity: sha512-O2kpA5ZPJUAmliDCcmpMf8xnJwMezxlFPUrlyOAjbL3U9MFNY3l4ZpPI/UXwvyPmR8ETcVF9pFr+VdWq61rqTQ==}
     engines: {node: '>=22.0.0'}
     hasBin: true
 
@@ -2238,7 +2238,7 @@ snapshots:
     dependencies:
       '@capacitor/core': 8.5.2
 
-  '@capacitor/cli@8.5.1(supports-color@7.2.0)':
+  '@capacitor/cli@8.5.2(supports-color@7.2.0)':
     dependencies:
       '@ionic/cli-framework-output': 2.2.8(supports-color@7.2.0)
       '@ionic/utils-subprocess': 3.0.1(supports-color@7.2.0)
