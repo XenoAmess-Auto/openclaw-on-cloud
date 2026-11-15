@@ -19,7 +19,7 @@
   },
   "dependencies": {
     "@capacitor/android": "^8.6.2",
-    "@capacitor/cli": "^8.6.0",
+    "@capacitor/cli": "^8.6.2",
     "@capacitor/core": "^8.6.2",
     "@capacitor/network": "^8.0.1",
     "@capacitor/preferences": "^8.0.1",
